@@ -8,8 +8,10 @@ const GALLERY_ROUTE_PATTERNS = {
   GALLERY_DETAIL: "/galleries/[id]",
   GALLERY_PHOTOS: "/galleries/[id]/photos",
   GALLERY_SETTINGS: "/galleries/[id]/settings",
+  GALLERY_SETTINGS_TAB: "/galleries/[id]/settings/[tab]",
   ORDER_DETAIL: "/galleries/[id]/orders/[orderId]",
   ORDER_SETTINGS: "/galleries/[id]/orders/[orderId]/settings",
+  ORDER_SETTINGS_TAB: "/galleries/[id]/orders/[orderId]/settings/[tab]",
 } as const;
 
 /**
@@ -43,9 +45,13 @@ export function useGalleryRoute() {
     // Match against known route patterns
     const isGalleryDetail = matchRoutePattern(GALLERY_ROUTE_PATTERNS.GALLERY_DETAIL, pathname);
     const isGalleryPhotos = matchRoutePattern(GALLERY_ROUTE_PATTERNS.GALLERY_PHOTOS, pathname);
-    const isGallerySettings = matchRoutePattern(GALLERY_ROUTE_PATTERNS.GALLERY_SETTINGS, pathname);
+    const isGallerySettings =
+      matchRoutePattern(GALLERY_ROUTE_PATTERNS.GALLERY_SETTINGS, pathname) ||
+      matchRoutePattern(GALLERY_ROUTE_PATTERNS.GALLERY_SETTINGS_TAB, pathname);
     const isOrderDetail = matchRoutePattern(GALLERY_ROUTE_PATTERNS.ORDER_DETAIL, pathname);
-    const isOrderSettings = matchRoutePattern(GALLERY_ROUTE_PATTERNS.ORDER_SETTINGS, pathname);
+    const isOrderSettings =
+      matchRoutePattern(GALLERY_ROUTE_PATTERNS.ORDER_SETTINGS, pathname) ||
+      matchRoutePattern(GALLERY_ROUTE_PATTERNS.ORDER_SETTINGS_TAB, pathname);
 
     // Determine if we're on an order page (either detail or settings)
     // Only consider it an order page if:

@@ -2058,7 +2058,7 @@ class ApiService {
      * Add a watermark to user's collection
      */
     add: async (data: { url: string; name?: string }): Promise<{ message: string; watermark: { url: string; name: string; createdAt: string } }> => {
-      if (!data || !data.url) {
+      if (!data?.url) {
         throw new Error("Watermark URL is required");
       }
       return await this._request("/watermarks/add", {

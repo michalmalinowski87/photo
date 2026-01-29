@@ -1,30 +1,22 @@
-import type { GetServerSideProps } from "next";
 import { useRouter } from "next/router";
-
-import { GallerySettingsForm } from "../../../components/galleries/GallerySettingsForm";
+import { useEffect } from "react";
 
 // Prevent static generation - this page uses client hooks
-export const getServerSideProps: GetServerSideProps = () => {
-  return Promise.resolve({ props: {} });
-};
+export const dynamic = "force-dynamic";
 
 export default function GallerySettings() {
   const router = useRouter();
   const { id: galleryId } = router.query;
 
-  // Auth is handled by AuthProvider/ProtectedRoute - no initialization needed
+  // Redirect to general tab by default
+  useEffect(() => {
+    if (router.isReady && galleryId) {
+      const galleryIdStr = Array.isArray(galleryId) ? galleryId[0] : galleryId;
+      if (galleryIdStr) {
+        void router.replace(`/galleries/${galleryIdStr}/settings/general`);
+      }
+    }
+  }, [router, galleryId]);
 
-  const galleryIdStr = Array.isArray(galleryId) ? (galleryId[0] ?? "") : (galleryId ?? "");
-
-  if (!galleryIdStr) {
-    return null;
-  }
-
-  return (
-    <GallerySettingsForm
-      galleryId={galleryIdStr}
-      cancelLabel="Anuluj"
-      cancelHref={`/galleries/${galleryIdStr}`}
-    />
-  );
+  return null;
 }

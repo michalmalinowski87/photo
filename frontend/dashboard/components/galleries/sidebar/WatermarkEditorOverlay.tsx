@@ -1,15 +1,17 @@
+import { useQueryClient } from "@tanstack/react-query";
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { Modal } from "../../ui/modal";
-import Button from "../../ui/button/Button";
-import { useUpdateGallery, useUploadWatermark } from "../../../hooks/mutations/useGalleryMutations";
+
 import { useUpdateBusinessInfo, useUploadGlobalWatermark } from "../../../hooks/mutations/useAuthMutations";
+import { useUpdateGallery, useUploadWatermark } from "../../../hooks/mutations/useGalleryMutations";
+import { useBusinessInfo } from "../../../hooks/queries/useAuth";
 import { useGallery } from "../../../hooks/queries/useGalleries";
 import { useToast } from "../../../hooks/useToast";
 import { formatApiError } from "../../../lib/api-service";
-import { useBusinessInfo } from "../../../hooks/queries/useAuth";
-import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../lib/react-query";
 import type { Gallery } from "../../../types";
+import Button from "../../ui/button/Button";
+import { Modal } from "../../ui/modal";
+
 import { WatermarkPatternSelector, type WatermarkPatternId } from "./WatermarkPatternSelector";
 
 interface WatermarkEditorOverlayProps {
@@ -59,6 +61,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
   const [selectedPattern, setSelectedPattern] = useState<WatermarkPatternId>("none");
   const [customWatermarkUrl, setCustomWatermarkUrl] = useState<string | null>(null);
   const [opacity, setOpacity] = useState(0.4);
+  const [isLoadingWatermarks, setIsLoadingWatermarks] = useState(true);
   const wasRemovedRef = useRef(false); // Track if watermark was explicitly removed
   const noneSelectedRef = useRef(false); // Track if "none" was explicitly selected
   const userSelectedWatermarkRef = useRef(false); // Track if user manually selected a watermark
@@ -71,12 +74,14 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
       setSelectedPattern(settings.pattern);
       setCustomWatermarkUrl(settings.customWatermarkUrl);
       setOpacity(settings.opacity);
+      setIsLoadingWatermarks(true); // Start with loading state when opening
       wasRemovedRef.current = false; // Reset removal flag when opening
       noneSelectedRef.current = false; // Reset "none" selection flag when opening
       userSelectedWatermarkRef.current = false; // Reset user selection flag when opening
       hasInitializedRef.current = true;
     } else if (!isOpen) {
       hasInitializedRef.current = false;
+      setIsLoadingWatermarks(false); // Reset loading state when closing
       wasRemovedRef.current = false;
       noneSelectedRef.current = false;
       userSelectedWatermarkRef.current = false;
@@ -240,10 +245,35 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
       <div className="flex flex-col h-full max-h-[95vh]">
         {/* Header */}
         <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Ustawienia znaku wodnego</h2>
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Ustawienia znaku wodnego</h2>
         </div>
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 relative">
+          {isLoadingWatermarks && (
+            <div className="absolute inset-0 flex items-center justify-center bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm z-50">
+              <div className="flex flex-col items-center justify-center gap-6 opacity-60">
+                {/* Subtle loading indicator */}
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
+                    style={{ animationDelay: "0s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accent rounded-full animate-pulse"
+                    style={{ animationDelay: "0.4s" }}
+                  ></div>
+                </div>
+                {/* Loading message */}
+                <p className="text-base text-gray-600 dark:text-gray-400 font-medium">
+                  Ładowanie znaków wodnych...
+                </p>
+              </div>
+            </div>
+          )}
           <WatermarkPatternSelector
             selectedPattern={selectedPattern}
             customWatermarkUrl={customWatermarkUrl}
@@ -273,6 +303,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
               isProcessing: false, // Can be enhanced if we track processing state
             }}
             isOpen={isOpen}
+            onLoadingStateChange={setIsLoadingWatermarks}
           />
         </div>
 

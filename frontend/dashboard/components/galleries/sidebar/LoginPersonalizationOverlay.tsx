@@ -126,6 +126,8 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
       window.addEventListener("resize", updateDimensions);
       return () => window.removeEventListener("resize", updateDimensions);
     }
+    
+    return undefined;
   }, [isOpen]);
 
   const handleLayoutChange = useCallback((layout: LoginPageLayout) => {

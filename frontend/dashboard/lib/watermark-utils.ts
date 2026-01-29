@@ -160,7 +160,8 @@ async function loadWatermarkImage(url: string): Promise<HTMLImageElement> {
 
 /**
  * Apply uploaded watermark to image
- * Tiles the watermark across the entire image with opacity
+ * Tiles the watermark in a clean grid pattern (left-to-right, top-to-bottom)
+ * Fits as many rows and columns as the image allows
  */
 export async function applyWatermark(
   imageBlob: Blob,
@@ -192,42 +193,58 @@ export async function applyWatermark(
       // Clamp opacity to valid range (0.0 to 1.0)
       const clampedOpacity = Math.min(1.0, Math.max(0.0, opacity));
 
-      // Calculate tile spacing
-      const watermarkWidth = watermarkImage.width;
-      const watermarkHeight = watermarkImage.height;
+      // Get watermark dimensions
+      let watermarkWidth = watermarkImage.width;
+      let watermarkHeight = watermarkImage.height;
       
-      // Spacing: allow some overlap for better coverage
-      const spacingX = watermarkWidth * 0.8;
-      const spacingY = watermarkHeight * 0.8;
+      // Validate watermark dimensions
+      if (watermarkWidth <= 0 || watermarkHeight <= 0) {
+        reject(new Error(`Invalid watermark dimensions: ${watermarkWidth}x${watermarkHeight}`));
+        return;
+      }
       
-      // Calculate diagonal coverage (for rotated patterns)
-      const diagonal = Math.sqrt(canvas.width ** 2 + canvas.height ** 2);
+      // Check if canvas is smaller than watermark * 3 (means watermark is too large to fit 3 columns/rows)
+      // If canvas < watermark * 3, scale watermark down to 33% of longest edge
+      // This ensures we can fit at least 3 columns and 3 rows (works well for both landscape and portrait)
+      const imageLongestEdge = Math.max(canvas.width, canvas.height);
+      const watermarkLargestDimension = Math.max(watermarkWidth, watermarkHeight);
+      const needsScaling = canvas.width < watermarkWidth * 3 || canvas.height < watermarkHeight * 3;
+      
+      if (needsScaling) {
+        // Scale down to 33% of image's longest edge, maintaining aspect ratio
+        const targetSize = imageLongestEdge * 0.33;
+        const scale = targetSize / watermarkLargestDimension;
+        watermarkWidth = watermarkWidth * scale;
+        watermarkHeight = watermarkHeight * scale;
+      }
+      
+      // Calculate how many watermarks we need to cover the entire canvas (including partial ones at edges)
+      // Use Math.ceil to ensure we cover the entire area, even if the last watermark extends beyond the edge
+      const cols = Math.ceil(canvas.width / watermarkWidth);
+      const rows = Math.ceil(canvas.height / watermarkHeight);
+      
+      // Ensure at least 1 column and 1 row
+      const finalCols = Math.max(1, cols);
+      const finalRows = Math.max(1, rows);
+      
+      // No gaps between watermarks - place them directly adjacent to each other
+      // Start from top-left (0,0)
+      // Watermarks that extend beyond canvas edges will be automatically clipped by the canvas
 
-      // Rotate context to -45 degrees for diagonal tiling
-      ctx.save();
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate((-45 * Math.PI) / 180);
-
-      // Set opacity for watermark (real alpha)
+      // Set opacity for watermark
       ctx.globalAlpha = clampedOpacity;
 
-      // Tile the watermark across the entire image
-      const startX = -diagonal / 2;
-      const startY = -diagonal / 2;
-      const endX = diagonal / 2;
-      const endY = diagonal / 2;
-
-      for (let x = startX; x < endX; x += spacingX) {
-        for (let y = startY; y < endY; y += spacingY) {
-          ctx.drawImage(
-            watermarkImage,
-            x - watermarkWidth / 2,
-            y - watermarkHeight / 2
-          );
+      // Tile the watermark across the entire canvas (like CSS background-repeat: repeat)
+      // Draw watermarks until we've covered the entire area, including edges
+      let drawnCount = 0;
+      for (let row = 0; row < finalRows; row++) {
+        for (let col = 0; col < finalCols; col++) {
+          const x = col * watermarkWidth;
+          const y = row * watermarkHeight;
+          ctx.drawImage(watermarkImage, x, y, watermarkWidth, watermarkHeight);
+          drawnCount++;
         }
       }
-
-      ctx.restore();
 
       // Convert canvas to blob
       // Note: This will fail if the canvas is tainted (image loaded without CORS)

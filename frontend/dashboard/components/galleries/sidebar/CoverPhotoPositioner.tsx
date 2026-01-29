@@ -138,7 +138,6 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
       }
 
       const container = containerRef.current;
-      const coverArea = coverAreaRef.current;
       const imageContainer = imageRef.current;
 
       // Check if click is on the form pane
@@ -166,6 +165,8 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
+    
+    return undefined;
   }, [showTransformBox, isDragging, isResizing]);
 
   // Handle image drag start
@@ -433,6 +434,8 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         document.body.style.cursor = "";
       };
     }
+    
+    return undefined;
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
   // Touch event handlers
@@ -516,6 +519,8 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         document.removeEventListener("touchend", handleTouchEnd);
       };
     }
+    
+    return undefined;
   }, [isDragging, handleTouchMove, handleTouchEnd]);
 
   // Update scale when initialPosition changes

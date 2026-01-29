@@ -80,8 +80,10 @@ const GALLERY_ROUTES = [
   "/galleries/[id]",
   "/galleries/[id]/photos",
   "/galleries/[id]/settings",
+  "/galleries/[id]/settings/[tab]",
   "/galleries/[id]/orders/[orderId]",
   "/galleries/[id]/orders/[orderId]/settings",
+  "/galleries/[id]/orders/[orderId]/settings/[tab]",
 ];
 
 export default function App(props: AppProps) {

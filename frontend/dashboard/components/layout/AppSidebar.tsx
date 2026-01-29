@@ -64,7 +64,11 @@ const navItems: NavItem[] = [
   {
     name: "Ustawienia",
     icon: <Settings size={20} />,
-    path: "/settings",
+    subItems: [
+      { name: "Konto", path: "/settings/account" },
+      { name: "Bezpieczeństwo", path: "/settings/security" },
+      { name: "Galeria", path: "/settings/gallery" },
+    ],
   },
   {
     name: "Strona główna",
@@ -100,7 +104,17 @@ const AppSidebar = () => {
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const isActive = useCallback((path: string) => router.pathname === path, [router.pathname]);
+  const isActive = useCallback((path: string): boolean => {
+    // For exact matches
+    if (router.pathname === path) return true;
+    // For dynamic routes, check if asPath matches
+    if (router.asPath === path) return true;
+    // For settings routes, check if we're on any settings page
+    if (path.startsWith("/settings/") && router.asPath.startsWith("/settings/")) {
+      return router.asPath === path;
+    }
+    return false;
+  }, [router.pathname, router.asPath]);
 
   // Prefetch all navigation routes when sidebar is visible/expanded
   // This ensures all navigation links are ready for instant navigation
@@ -160,22 +174,30 @@ const AppSidebar = () => {
     let submenuMatched = false;
     navItems.forEach((nav, index) => {
       if (nav.subItems) {
-        nav.subItems.forEach((subItem) => {
-          if (isActive(subItem.path)) {
-            setOpenSubmenu({
-              type: "main",
-              index,
-            });
-            submenuMatched = true;
+        // Check if any sub-item is active
+        const hasActiveSubItem = nav.subItems.some((subItem) => {
+          // For settings routes, check if we're on any settings page
+          if (subItem.path.startsWith("/settings/")) {
+            return router.asPath.startsWith("/settings/");
           }
+          // For other routes, use the isActive function
+          return isActive(subItem.path);
         });
+        
+        if (hasActiveSubItem) {
+          setOpenSubmenu({
+            type: "main",
+            index,
+          });
+          submenuMatched = true;
+        }
       }
     });
 
     if (!submenuMatched) {
       setOpenSubmenu(null);
     }
-  }, [router.pathname, isActive]);
+  }, [router.pathname, router.asPath, isActive]);
 
   useEffect(() => {
     if (openSubmenu !== null) {

@@ -38,7 +38,7 @@ export function getWatermarkConfig(
   if (gallery?.watermarkUrl) {
     const position = gallery.watermarkPosition as any;
     return {
-      url: gallery.watermarkUrl as string,
+      url: gallery.watermarkUrl,
       opacity: position?.opacity ?? 0.7,
       isDefault: false,
     };

@@ -8,6 +8,7 @@ import {
   useUpdateGalleryClientPassword,
   useUpdateGalleryPricingPackage,
 } from "../../hooks/mutations/useGalleryMutations";
+import { useBusinessInfo } from "../../hooks/queries/useAuth";
 import { useGallery, useGalleryDeliveredOrders } from "../../hooks/queries/useGalleries";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
@@ -15,8 +16,9 @@ import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../lib/cur
 import { generatePassword } from "../../lib/password";
 import Button from "../ui/button/Button";
 import Input from "../ui/input/InputField";
-import { WatermarkPersonalizationOverlay } from "./sidebar/WatermarkPersonalizationOverlay";
+
 import { LoginPersonalizationOverlay } from "./sidebar/LoginPersonalizationOverlay";
+import { WatermarkEditorOverlay } from "./sidebar/WatermarkEditorOverlay";
 
 interface SettingsForm {
   galleryName: string;
@@ -33,6 +35,7 @@ interface GallerySettingsFormProps {
   onCancel?: () => void;
   cancelLabel?: string;
   cancelHref?: string;
+  defaultTab?: "general" | "package" | "personalize";
 }
 
 export function GallerySettingsForm({
@@ -40,12 +43,36 @@ export function GallerySettingsForm({
   onCancel,
   cancelLabel = "Anuluj",
   cancelHref,
+  defaultTab,
 }: GallerySettingsFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  
+  // Get active tab from URL or defaultTab prop
+  const urlTab = router.query.tab as string | undefined;
+  const activeTabFromUrl = urlTab as "general" | "package" | "personalize" | undefined;
+  const initialTab = activeTabFromUrl || defaultTab || "general";
+  // #region agent log
+  fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      location: "GallerySettingsForm.tsx:urlTab",
+      message: "URL tab and derived state",
+      data: { urlTab, activeTabFromUrl, initialTab, pathname: router.pathname, asPath: router.asPath, isReady: router.isReady },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      runId: "post-fix",
+      hypothesisId: "H2-H4",
+    }),
+  }).catch(() => {});
+  // #endregion
 
   // Use React Query hooks
-  const { data: gallery, isLoading: galleryLoading } = useGallery(galleryId);
+  const { data: businessInfo } = useBusinessInfo();
+  const galleryQuery = useGallery(galleryId);
+  const gallery = galleryQuery.data;
+  const galleryLoading = galleryQuery.isLoading;
 
   // Don't fetch gallery here - GalleryLayoutWrapper handles all gallery fetching
   // This component should only read from the store, not trigger fetches
@@ -75,8 +102,33 @@ export function GallerySettingsForm({
   });
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"general" | "package" | "personalize">("general");
-  const [showWatermarkPersonalizationOverlay, setShowWatermarkPersonalizationOverlay] = useState(false);
+  const [activeTab, setActiveTab] = useState<"general" | "package" | "personalize">(initialTab);
+  // Use URL as source of truth for which content to show (avoids stale view on sidebar nav)
+  const effectiveTab: "general" | "package" | "personalize" =
+    activeTabFromUrl || activeTab || "general";
+
+  // Update activeTab when URL changes
+  useEffect(() => {
+    // #region agent log
+    fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "GallerySettingsForm.tsx:useEffect-sync-tab",
+        message: "Effect run: sync tab from URL",
+        data: { activeTabFromUrl, activeTab, willSet: Boolean(activeTabFromUrl && activeTabFromUrl !== activeTab) },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        hypothesisId: "H2-H4",
+      }),
+    }).catch(() => {});
+    // #endregion
+    if (activeTabFromUrl && activeTabFromUrl !== activeTab) {
+      setActiveTab(activeTabFromUrl);
+    }
+  }, [activeTabFromUrl, activeTab]);
+  
+  const [showWatermarkEditorOverlay, setShowWatermarkEditorOverlay] = useState(false);
   const [showLoginPersonalizationOverlay, setShowLoginPersonalizationOverlay] = useState(false);
   const [errors, setErrors] = useState<{
     galleryName?: string;
@@ -343,6 +395,23 @@ export function GallerySettingsForm({
   }
 
   // Show locked form if gallery is delivered - but allow gallery name and extra price editing
+  // #region agent log
+  if (typeof window !== "undefined") {
+    fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "GallerySettingsForm.tsx:branch",
+        message: "Which branch renders",
+        data: { hasDeliveredOrders, effectiveTab },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        runId: "post-fix",
+        hypothesisId: "H1-H5",
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
   if (hasDeliveredOrders) {
     const handleUpdateLockedSettings = async (): Promise<void> => {
       if (!galleryId) {
@@ -362,28 +431,10 @@ export function GallerySettingsForm({
         return;
       }
 
-      // Validate extra price
-      if (settingsForm.extraPriceCents < 0) {
-        setErrors({ extraPriceCents: "Cena za dodatkowe zdjęcie nie może być ujemna" });
-        showToast("error", "Błąd", "Cena za dodatkowe zdjęcie nie może być ujemna");
-        return;
-      }
-
       try {
         const currentGalleryName =
           typeof gallery?.galleryName === "string" ? gallery.galleryName : "";
         const galleryNameChanged = settingsForm.galleryName.trim() !== currentGalleryName.trim();
-
-        const currentPkg = gallery?.pricingPackage as
-          | {
-              packageName?: string;
-              includedCount?: number;
-              extraPriceCents?: number;
-              packagePriceCents?: number;
-            }
-          | undefined;
-        const extraPriceChanged =
-          settingsForm.extraPriceCents !== (currentPkg?.extraPriceCents ?? 0);
 
         // Update gallery name if changed
         if (galleryNameChanged) {
@@ -393,28 +444,7 @@ export function GallerySettingsForm({
           });
         }
 
-        // Update pricing package if extra price changed
-        if (extraPriceChanged) {
-          const trimmedPackageName = currentPkg?.packageName?.trim();
-          const packageName =
-            trimmedPackageName && trimmedPackageName.length > 0 ? trimmedPackageName : undefined;
-          const includedCount = currentPkg?.includedCount ?? 0;
-          const extraPriceCents = Number(settingsForm.extraPriceCents) || 0;
-          const packagePriceCents = currentPkg?.packagePriceCents ?? 0;
-
-          await updatePricingPackageMutation.mutateAsync({
-            galleryId,
-            pricingPackage: {
-              packageName,
-              includedCount,
-              extraPriceCents,
-              packagePriceCents,
-            },
-          });
-        }
-
-        // Show success if at least one change was made
-        if (galleryNameChanged || extraPriceChanged) {
+        if (galleryNameChanged) {
           showToast("success", "Sukces", "Ustawienia zostały zaktualizowane");
         }
       } catch (err) {
@@ -424,9 +454,7 @@ export function GallerySettingsForm({
 
     const canSaveLockedSettings = (() => {
       const trimmedName = settingsForm.galleryName.trim();
-      const nameValid = trimmedName.length > 0 && trimmedName.length <= 100;
-      const extraPriceValid = settingsForm.extraPriceCents >= 0;
-      return nameValid && extraPriceValid;
+      return trimmedName.length > 0 && trimmedName.length <= 100;
     })();
 
     return (
@@ -447,72 +475,75 @@ export function GallerySettingsForm({
             </div>
             <p className="text-base text-gray-500 dark:text-gray-400">
               Galeria ma dostarczone zlecenia, dlatego większość ustawień jest zablokowana. Możesz
-              jednak zmienić nazwę galerii oraz cenę za dodatkowe zdjęcie w dowolnym momencie.
+              jednak zmienić nazwę galerii w dowolnym momencie.
             </p>
           </div>
 
           <div className="space-y-2">
-            <div>
-              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Nazwa galerii <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="text"
-                placeholder="Nazwa galerii"
-                value={settingsForm.galleryName}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value.length <= 100) {
-                    setSettingsForm({ ...settingsForm, galleryName: value });
-                    // Clear error when user starts typing
-                    if (errors.galleryName) {
-                      setErrors({ ...errors, galleryName: undefined });
-                    }
-                  }
-                }}
-                maxLength={100}
-                required
-                error={!!errors.galleryName}
-                errorMessage={errors.galleryName}
-              />
-            </div>
-
-            <div className="space-y-2 opacity-60">
+            {(effectiveTab === "general" || effectiveTab === "package") && (
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Email logowania
+                  Nazwa galerii <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  type="email"
-                  placeholder={galleryLoading ? "Ładowanie danych..." : "Email klienta"}
-                  value={galleryLoading ? "" : (settingsForm.clientEmail ?? "")}
-                  disabled={true}
+                  type="text"
+                  placeholder="Nazwa galerii"
+                  value={settingsForm.galleryName}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value.length <= 100) {
+                      setSettingsForm({ ...settingsForm, galleryName: value });
+                      if (errors.galleryName) {
+                        setErrors({ ...errors, galleryName: undefined });
+                      }
+                    }
+                  }}
+                  maxLength={100}
+                  required
+                  error={!!errors.galleryName}
+                  errorMessage={errors.galleryName}
                 />
               </div>
+            )}
 
-              <div>
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Hasło klienta (opcjonalne)
-                </label>
-                <div className="flex gap-2 items-start">
-                  <div className="flex-1">
-                    <Input type="password" placeholder="Nowe hasło" value="" disabled={true} />
-                  </div>
-                  <Button
-                    type="button"
+            {effectiveTab === "general" && (
+              <div className="space-y-2 opacity-60">
+                <div>
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Email logowania
+                  </label>
+                  <Input
+                    type="email"
+                    placeholder={galleryLoading ? "Ładowanie danych..." : "Email klienta"}
+                    value={galleryLoading ? "" : (settingsForm.clientEmail ?? "")}
                     disabled={true}
-                    className="bg-gray-400 hover:bg-gray-400 text-white whitespace-nowrap h-11 cursor-not-allowed"
-                  >
-                    Generuj
-                  </Button>
+                  />
+                </div>
+                <div>
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Hasło klienta (opcjonalne)
+                  </label>
+                  <div className="flex gap-2 items-start">
+                    <div className="flex-1">
+                      <Input type="password" placeholder="Nowe hasło" value="" disabled={true} />
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={true}
+                      className="bg-gray-400 hover:bg-gray-400 text-white whitespace-nowrap h-11 cursor-not-allowed"
+                    >
+                      Generuj
+                    </Button>
+                  </div>
                 </div>
               </div>
+            )}
 
+            {effectiveTab === "package" && (
               <div className="border-t border-gray-400 dark:border-gray-700 pt-3">
                 <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2.5">
                   Pakiet cenowy
                 </h3>
-
                 <div className="space-y-2">
                   <div>
                     <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -525,7 +556,6 @@ export function GallerySettingsForm({
                       disabled={true}
                     />
                   </div>
-
                   <div>
                     <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Liczba zdjęć w pakiecie
@@ -537,7 +567,6 @@ export function GallerySettingsForm({
                       disabled={true}
                     />
                   </div>
-
                   <div>
                     <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                       Cena pakietu (PLN)
@@ -551,41 +580,17 @@ export function GallerySettingsForm({
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div>
-              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Cena za dodatkowe zdjęcie (PLN)
-              </label>
-              <Input
-                type="text"
-                placeholder="0.00"
-                value={extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)}
-                onChange={(e) => {
-                  const formatted = formatCurrencyInput(e.target.value);
-                  setExtraPriceInput(formatted);
-                  const cents = plnToCents(formatted);
-                  setSettingsForm({
-                    ...settingsForm,
-                    extraPriceCents: cents,
-                  });
-                  // Clear error when user starts typing
-                  if (errors.extraPriceCents) {
-                    setErrors({ ...errors, extraPriceCents: undefined });
-                  }
-                }}
-                onBlur={() => {
-                  // Clear input state on blur if empty, let it use cents value
-                  if (!extraPriceInput || extraPriceInput === "") {
-                    setExtraPriceInput(null);
-                  }
-                }}
-                error={!!errors.extraPriceCents}
-                errorMessage={errors.extraPriceCents}
-              />
-            </div>
+            {effectiveTab === "personalize" && (
+              <p className="text-base text-gray-600 dark:text-gray-400">
+                Galeria ma dostarczone zlecenia. Personalizacja (szablon logowania, znak wodny) nie
+                jest już edytowalna.
+              </p>
+            )}
           </div>
 
+          {(effectiveTab === "general" || effectiveTab === "package") && (
           <div className="flex justify-end gap-3 mt-4">
             {showCancelButton && (
               <Button variant="outline" onClick={handleCancel} disabled={saving}>
@@ -601,57 +606,44 @@ export function GallerySettingsForm({
               {saving ? "Zapisywanie..." : "Zapisz"}
             </Button>
           </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // Check if watermark is set
-  const hasWatermark = Boolean(gallery?.watermarkUrl);
+  // Check if any watermark is set (gallery-specific or user default) – show warning only when neither is set
+  const hasGalleryWatermark = Boolean(gallery?.watermarkUrl);
+  const hasUserDefaultWatermark = Boolean(businessInfo?.defaultWatermarkUrl);
+  const hasWatermark = hasGalleryWatermark || hasUserDefaultWatermark;
+
+  const hasCoverPhoto = Boolean(
+    gallery?.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string"
+  );
+  // #region agent log
+  if (typeof window !== "undefined") {
+    fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "GallerySettingsForm.tsx:main-return",
+        message: "Main return: effectiveTab used for content",
+        data: { effectiveTab, activeTabFromUrl },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        runId: "post-fix",
+        hypothesisId: "H2-H4",
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
 
   return (
     <div className="space-y-4">
       <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
 
-      {/* Sub-settings tabs */}
-      <div className="flex gap-2 border-b border-gray-300 dark:border-gray-700">
-        <button
-          onClick={() => setActiveTab("general")}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === "general"
-              ? "border-b-2 border-photographer-accent text-photographer-accent"
-              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-          }`}
-        >
-          Ogólne
-        </button>
-        <button
-          onClick={() => setActiveTab("package")}
-          className={`px-4 py-2 font-medium transition-colors ${
-            activeTab === "package"
-              ? "border-b-2 border-photographer-accent text-photographer-accent"
-              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-          }`}
-        >
-          Pakiet
-        </button>
-        <button
-          onClick={() => setActiveTab("personalize")}
-          className={`px-4 py-2 font-medium transition-colors flex items-center gap-2 ${
-            activeTab === "personalize"
-              ? "border-b-2 border-photographer-accent text-photographer-accent"
-              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
-          }`}
-        >
-          Personalizacja
-          {!hasWatermark && (
-            <AlertTriangle size={18} className="text-orange-500 dark:text-orange-400" />
-          )}
-        </button>
-      </div>
-
       <div className="p-8 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        {activeTab === "general" && (
+        {effectiveTab === "general" && (
           <div className="space-y-2">
             <div>
               <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -728,9 +720,10 @@ export function GallerySettingsForm({
               </Button>
             </div>
           </div>
+        </div>
         )}
 
-        {activeTab === "package" && (
+        {effectiveTab === "package" && (
           <div className="space-y-2">
             <div className="border-b border-gray-400 dark:border-gray-700 pb-3 mb-3">
               <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2.5">
@@ -787,39 +780,6 @@ export function GallerySettingsForm({
 
               <div>
                 <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Cena za dodatkowe zdjęcie (PLN)
-                </label>
-                <Input
-                  type="text"
-                  placeholder="0.00"
-                  value={extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)}
-                  onChange={(e) => {
-                    const formatted = formatCurrencyInput(e.target.value);
-                    setExtraPriceInput(formatted);
-                    const cents = plnToCents(formatted);
-                    setSettingsForm({
-                      ...settingsForm,
-                      extraPriceCents: cents,
-                    });
-                    // Clear error when user starts typing
-                    if (errors.extraPriceCents) {
-                      setErrors({ ...errors, extraPriceCents: undefined });
-                    }
-                  }}
-                  onBlur={() => {
-                    // Clear input state on blur if empty, let it use cents value
-                    if (!extraPriceInput || extraPriceInput === "") {
-                      setExtraPriceInput(null);
-                    }
-                  }}
-                  required
-                  error={!!errors.extraPriceCents}
-                  errorMessage={errors.extraPriceCents}
-                />
-              </div>
-
-              <div>
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Cena pakietu (PLN) <span className="text-red-500">*</span>
                 </label>
                 <Input
@@ -834,13 +794,11 @@ export function GallerySettingsForm({
                       ...settingsForm,
                       packagePriceCents: cents,
                     });
-                    // Clear error when user starts typing
                     if (errors.packagePriceCents) {
                       setErrors({ ...errors, packagePriceCents: undefined });
                     }
                   }}
                   onBlur={() => {
-                    // Clear input state on blur if empty, let it use cents value
                     if (!packagePriceInput || packagePriceInput === "") {
                       setPackagePriceInput(null);
                     }
@@ -850,50 +808,127 @@ export function GallerySettingsForm({
                   errorMessage={errors.packagePriceCents}
                 />
               </div>
+
+              <div>
+                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Cena za dodatkowe zdjęcie (PLN)
+                </label>
+                <Input
+                  type="text"
+                  placeholder="0.00"
+                  value={extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)}
+                  onChange={(e) => {
+                    const formatted = formatCurrencyInput(e.target.value);
+                    setExtraPriceInput(formatted);
+                    const cents = plnToCents(formatted);
+                    setSettingsForm({
+                      ...settingsForm,
+                      extraPriceCents: cents,
+                    });
+                    if (errors.extraPriceCents) {
+                      setErrors({ ...errors, extraPriceCents: undefined });
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!extraPriceInput || extraPriceInput === "") {
+                      setExtraPriceInput(null);
+                    }
+                  }}
+                  error={!!errors.extraPriceCents}
+                  errorMessage={errors.extraPriceCents}
+                />
+              </div>
             </div>
           </div>
+        </div>
         )}
 
-        {activeTab === "personalize" && (
+        {effectiveTab === "personalize" && (
           <div className="space-y-6">
             <p className="text-base text-gray-600 dark:text-gray-400">
-              Dostosuj wygląd galerii i zabezpiecz zdjęcia znakiem wodnym.
+              Wybierz, co chcesz spersonalizować:
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
               <button
-                onClick={() => setShowLoginPersonalizationOverlay(true)}
-                className="p-6 border-2 border-gray-400 dark:border-gray-700 rounded-lg hover:border-photographer-accent dark:hover:border-photographer-accent transition-colors text-left"
+                type="button"
+                onClick={() => hasCoverPhoto && setShowLoginPersonalizationOverlay(true)}
+                disabled={!hasCoverPhoto}
+                className={`relative p-10 md:p-12 rounded-2xl border-2 transition-all duration-300 ${
+                  hasCoverPhoto
+                    ? "border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-photographer-accent dark:hover:border-photographer-accent active:scale-[0.98]"
+                    : "border-gray-300 dark:border-gray-600 bg-gray-100/50 dark:bg-gray-800/30 cursor-not-allowed opacity-75"
+                }`}
               >
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Szablon logowania
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Wybierz układ strony logowania i dostosuj pozycję zdjęcia okładkowego
-                </p>
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="w-20 h-20 rounded-full flex items-center justify-center bg-photographer-muted dark:bg-gray-700">
+                    <svg
+                      className="w-10 h-10 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
+                      Szablon logowania
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {hasCoverPhoto
+                        ? "Wybierz układ strony logowania i dostosuj pozycję zdjęcia okładkowego"
+                        : "Aby aktywować tę opcję, wgraj okładkę galerii"}
+                    </div>
+                  </div>
+                </div>
               </button>
               <button
-                onClick={() => setShowWatermarkPersonalizationOverlay(true)}
-                className="p-6 border-2 border-gray-400 dark:border-gray-700 rounded-lg hover:border-photographer-accent dark:hover:border-photographer-accent transition-colors text-left relative"
+                onClick={() => setShowWatermarkEditorOverlay(true)}
+                className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-photographer-accent dark:hover:border-photographer-accent transition-all duration-300 active:scale-[0.98]"
               >
                 {!hasWatermark && (
                   <div className="absolute top-2 right-2">
                     <AlertTriangle size={20} className="text-orange-500 dark:text-orange-400" />
                   </div>
                 )}
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Znak wodny
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {hasWatermark
-                    ? "Zarządzaj znakiem wodnym na zdjęciach"
-                    : "Dodaj znak wodny, aby zabezpieczyć zdjęcia"}
-                </p>
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="w-20 h-20 rounded-full flex items-center justify-center bg-photographer-muted dark:bg-gray-700">
+                    <svg
+                      className="w-10 h-10 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
+                      Znak wodny
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {hasWatermark
+                        ? "Zarządzaj znakiem wodnym na zdjęciach"
+                        : "Dodaj znak wodny, aby zabezpieczyć zdjęcia przed nieautoryzowanym użyciem"}
+                    </div>
+                  </div>
+                </div>
               </button>
             </div>
           </div>
         )}
 
-        {(activeTab === "general" || activeTab === "package") && (
+        {(effectiveTab === "general" || effectiveTab === "package") && (
           <div className="flex justify-end gap-3 mt-4">
           {showCancelButton && (
             <Button variant="outline" onClick={handleCancel} disabled={saving}>
@@ -912,30 +947,29 @@ export function GallerySettingsForm({
         )}
       </div>
 
-      {/* Watermark Personalization Overlay */}
-      {gallery && (
-        <WatermarkPersonalizationOverlay
-          isOpen={showWatermarkPersonalizationOverlay}
-          onClose={() => setShowWatermarkPersonalizationOverlay(false)}
+      {/* Watermark Editor Overlay (gallery-specific) */}
+      {gallery ? (
+        <WatermarkEditorOverlay
+          isOpen={showWatermarkEditorOverlay}
+          onClose={() => setShowWatermarkEditorOverlay(false)}
           galleryId={galleryId}
           gallery={gallery}
-          coverPhotoUrl={
-            gallery.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string"
-              ? gallery.coverPhotoUrl
-              : undefined
-          }
         />
-      )}
+      ) : null}
 
-      {/* Login Personalization Overlay */}
-      {gallery && gallery.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string" && (
+      {/* Login Personalization Overlay - render when gallery exists so Szablon logowania works */}
+      {gallery ? (
         <LoginPersonalizationOverlay
           isOpen={showLoginPersonalizationOverlay}
           onClose={() => setShowLoginPersonalizationOverlay(false)}
           galleryId={galleryId}
-          coverPhotoUrl={gallery.coverPhotoUrl}
+          coverPhotoUrl={
+            gallery.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string"
+              ? gallery.coverPhotoUrl
+              : ""
+          }
         />
-      )}
+      ) : null}
     </div>
   );
 }

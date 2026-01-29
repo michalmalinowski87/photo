@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Modal } from "../../ui/modal";
-import { LoginPersonalizationOverlay } from "./LoginPersonalizationOverlay";
-import { WatermarkEditorOverlay } from "./WatermarkEditorOverlay";
+
 import { useGallery } from "../../../hooks/queries/useGalleries";
 import type { Gallery } from "../../../types";
+import { Modal } from "../../ui/modal";
+
+import { LoginPersonalizationOverlay } from "./LoginPersonalizationOverlay";
+import { WatermarkEditorOverlay } from "./WatermarkEditorOverlay";
 
 interface WatermarkPersonalizationOverlayProps {
   isOpen: boolean;

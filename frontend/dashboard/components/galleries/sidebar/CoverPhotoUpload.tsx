@@ -78,7 +78,7 @@ export const CoverPhotoUpload = () => {
 
       // Skip if we've already handled this success (prevent duplicate handling)
       if (handledSuccessRef.current === coverUrl) {
-        return;
+        return undefined;
       }
 
       if (uploadCoverPhotoMutation.data.warning) {
@@ -113,6 +113,8 @@ export const CoverPhotoUpload = () => {
         handledSuccessRef.current = null;
       }
     }
+    
+    return undefined;
   }, [
     uploadCoverPhotoMutation.isSuccess,
     uploadCoverPhotoMutation.data,
@@ -129,46 +131,18 @@ export const CoverPhotoUpload = () => {
       hasCloudFrontUrl &&
       gallery?.coverPhotoUrl
     ) {
-      // #region agent log
-      fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: "CoverPhotoUpload.tsx:120",
-          message: "Fallback condition met - showing overlay",
-          data: { galleryCoverUrl: gallery.coverPhotoUrl },
-          timestamp: Date.now(),
-          sessionId: "debug-session",
-          runId: "run1",
-          hypothesisId: "D",
-        }),
-      }).catch(() => {});
-      // #endregion
       // Reset the flag
       justUploadedRef.current = false;
 
       // Small delay to ensure the toast is shown first
       const timer = setTimeout(() => {
-        // #region agent log
-        fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            location: "CoverPhotoUpload.tsx:127",
-            message: "Fallback timer fired - showing overlay",
-            data: { galleryCoverUrl: gallery.coverPhotoUrl },
-            timestamp: Date.now(),
-            sessionId: "debug-session",
-            runId: "run1",
-            hypothesisId: "D",
-          }),
-        }).catch(() => {});
-        // #endregion
         setUploadedCoverPhotoUrl(gallery.coverPhotoUrl as string);
         setShowPersonalizationOverlay(true);
       }, 500);
       return () => clearTimeout(timer);
     }
+    
+    return undefined;
   }, [
     hasCloudFrontUrl,
     gallery?.coverPhotoUrl,
@@ -442,7 +416,7 @@ export const CoverPhotoUpload = () => {
 
       {/* Login Personalization Overlay */}
       {galleryId &&
-        (uploadedCoverPhotoUrl || (showPersonalizationOverlay && gallery?.coverPhotoUrl)) && (
+        (uploadedCoverPhotoUrl || (showPersonalizationOverlay && gallery?.coverPhotoUrl)) ? (
           <LoginPersonalizationOverlay
             isOpen={showPersonalizationOverlay}
             onClose={() => {
@@ -453,7 +427,7 @@ export const CoverPhotoUpload = () => {
             galleryId={galleryId}
             coverPhotoUrl={uploadedCoverPhotoUrl || (gallery?.coverPhotoUrl as string) || ""}
           />
-        )}
+        ) : null}
     </div>
   );
 };

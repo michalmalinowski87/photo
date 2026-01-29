@@ -1,48 +1,20 @@
-import { useState, useEffect } from "react";
-
-import Button from "../components/ui/button/Button";
-import Input from "../components/ui/input/InputField";
-import { DeleteAccountModal } from "../components/ui/modal/DeleteAccountModal";
-import { DeletionPendingBanner } from "../components/ui/modal/DeletionPendingBanner";
-import { useAuth } from "../context/AuthProvider";
-import { useChangePassword, useUpdateBusinessInfo } from "../hooks/mutations/useAuthMutations";
-import { useRequestDeletion, useCancelDeletion } from "../hooks/mutations/useUserDeletionMutations";
-import { useBusinessInfo, useDeletionStatus } from "../hooks/queries/useAuth";
-import { useToast } from "../hooks/useToast";
-import { formatApiError } from "../lib/api-service";
-import { GallerySettingsTab } from "../components/settings/GallerySettingsTab";
+import { useRouter } from "next/router";
+import { useEffect } from "react";
 
 // Prevent static generation - this page uses client hooks
 export const dynamic = "force-dynamic";
 
-interface PasswordForm {
-  currentPassword: string;
-  newPassword: string;
-  confirmPassword: string;
-}
-
-interface BusinessForm {
-  businessName: string;
-  email: string;
-  phone: string;
-  address: string;
-  nip: string;
-}
-
 export default function Settings() {
-  const { showToast } = useToast();
-  const { user } = useAuth();
+  const router = useRouter();
 
-  // React Query hooks
-  const { data: businessInfo, isLoading: loading } = useBusinessInfo();
-  const { data: deletionStatus } = useDeletionStatus();
-  const changePasswordMutation = useChangePassword();
-  const updateBusinessInfoMutation = useUpdateBusinessInfo();
-  const requestDeletionMutation = useRequestDeletion();
-  const cancelDeletionMutation = useCancelDeletion();
+  // Redirect to account tab by default
+  useEffect(() => {
+    if (router.isReady) {
+      router.replace("/settings/account");
+    }
+  }, [router]);
 
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"account" | "security" | "gallery">("account");
+  return null;
 
   const [loginEmail, setLoginEmail] = useState<string>("");
   const [passwordForm, setPasswordForm] = useState<PasswordForm>({

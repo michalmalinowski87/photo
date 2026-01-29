@@ -169,12 +169,13 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
     orderDeliveryStatus !== "PREPARING_DELIVERY" &&
     orderDeliveryStatus !== "DELIVERED";
 
-  // Early return: don't render if gallery doesn't exist or should hide
+  // Early return: don't render if gallery doesn't exist
   // Check gallery FIRST to prevent any computation or rendering with stale data
   // This is critical to prevent flash of stale cache data after gallery deletion
   // Also check if galleryId from URL doesn't match current gallery (indicates deletion/navigation)
+  // Never hide the entire section for height: critical buttons (Opublikuj, Wyślij do klienta) must always be visible
   const galleryIdMismatch = galleryIdStr && gallery?.galleryId !== galleryIdStr;
-  if (!gallery || shouldHideSecondaryElements || galleryIdMismatch) {
+  if (!gallery || galleryIdMismatch) {
     return null;
   }
 
@@ -228,64 +229,91 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
   // Don't hide during refetches if we're in a processing state (mutation pending or refetching after send)
   const shouldShowShareButton = shouldShowShareButtonComputed;
 
-  return (
-    <div className="py-3 border-b border-gray-400 dark:border-gray-800">
-      <div className="text-sm text-gray-600 dark:text-gray-400 mb-1.5">Adres www galerii:</div>
-      <a
-        href={displayGalleryUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-2 p-2.5 bg-transparent dark:bg-transparent rounded text-sm break-all text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-2.5 transition-colors no-underline"
-      >
-        <span className="flex-1">{displayGalleryUrl}</span>
-        <ExternalLink size={16} className="flex-shrink-0" />
-      </a>
-      <Button
-        variant="outline"
-        size="md"
-        onClick={handleCopyClick}
-        className={`w-full transition-all duration-500 ease-in-out ${
-          urlCopied
-            ? "!bg-green-500 hover:!bg-green-600 !border-green-500 hover:!border-green-600 !text-white shadow-md"
-            : ""
-        }`}
-        startIcon={
-          !urlCopied ? (
-            <span className="relative inline-flex items-center justify-center w-5 h-5 flex-shrink-0">
-              <Copy size={20} />
-            </span>
-          ) : null
-        }
-      >
-        <span className="relative inline-flex items-center h-5 min-w-[60px]">
-          <span
-            className={`absolute left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out whitespace-nowrap ${
-              urlCopied ? "opacity-0 scale-90" : "opacity-100 scale-100"
-            }`}
-          >
-            Kopiuj URL
-          </span>
-          <span
-            className={`absolute left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out whitespace-nowrap ${
-              urlCopied ? "opacity-100 scale-100" : "opacity-0 scale-90"
-            }`}
-          >
-            Skopiowano URL
-          </span>
-        </span>
-      </Button>
+  const buttonSize = shouldHideSecondaryElements ? "sm" : "md";
+  const buttonSpacing = shouldHideSecondaryElements ? "mt-1.5" : "mt-2.5";
+  const iconSize = shouldHideSecondaryElements ? 18 : 20;
 
-      {/* Publish Gallery Button - Show when not paid, disabled if no photos */}
+  return (
+    <div
+      className={`border-b border-gray-400 dark:border-gray-800 ${
+        shouldHideSecondaryElements ? "py-2" : "py-3"
+      }`}
+    >
+      {/* URL: full layout when space available, compact one-liner when height limited */}
+      {shouldHideSecondaryElements ? (
+        <div className="flex items-center gap-2 min-w-0 mb-1.5">
+          <span className="text-sm text-gray-600 dark:text-gray-400 flex-shrink-0">URL:</span>
+          <a
+            href={displayGalleryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 min-w-0 flex-1 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors no-underline truncate"
+            title={displayGalleryUrl}
+          >
+            <span className="truncate">{displayGalleryUrl}</span>
+            <ExternalLink size={14} className="flex-shrink-0" />
+          </a>
+        </div>
+      ) : (
+        <>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1.5">Adres www galerii:</div>
+          <a
+            href={displayGalleryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 p-2.5 bg-transparent dark:bg-transparent rounded text-sm break-all text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-2.5 transition-colors no-underline"
+          >
+            <span className="flex-1">{displayGalleryUrl}</span>
+            <ExternalLink size={16} className="flex-shrink-0" />
+          </a>
+          <Button
+            variant="outline"
+            size="md"
+            onClick={handleCopyClick}
+            className={`w-full transition-all duration-500 ease-in-out ${
+              urlCopied
+                ? "!bg-green-500 hover:!bg-green-600 !border-green-500 hover:!border-green-600 !text-white shadow-md"
+                : ""
+            }`}
+            startIcon={
+              !urlCopied ? (
+                <span className="relative inline-flex items-center justify-center w-5 h-5 flex-shrink-0">
+                  <Copy size={20} />
+                </span>
+              ) : null
+            }
+          >
+            <span className="relative inline-flex items-center h-5 min-w-[60px]">
+              <span
+                className={`absolute left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out whitespace-nowrap ${
+                  urlCopied ? "opacity-0 scale-90" : "opacity-100 scale-100"
+                }`}
+              >
+                Kopiuj URL
+              </span>
+              <span
+                className={`absolute left-1/2 -translate-x-1/2 transition-all duration-500 ease-in-out whitespace-nowrap ${
+                  urlCopied ? "opacity-100 scale-100" : "opacity-0 scale-90"
+                }`}
+              >
+                Skopiowano URL
+              </span>
+            </span>
+          </Button>
+        </>
+      )}
+
+      {/* Critical: Publish Gallery Button - always visible, smaller when height limited */}
       {shouldShowPublishButton &&
         (!hasPhotos ? (
           <Tooltip content="Najpierw prześlij zdjęcia" side="top" align="center" fullWidth>
             <Button
               variant="primary"
-              size="md"
+              size={buttonSize}
               onClick={handlePublishClick}
               disabled={!hasPhotos}
-              className="w-full mt-2.5"
-              startIcon={<Plus size={20} />}
+              className={`w-full ${buttonSpacing}`}
+              startIcon={<Plus size={iconSize} />}
             >
               Opublikuj galerię
             </Button>
@@ -293,37 +321,37 @@ export const GalleryUrlSection = ({ shouldHideSecondaryElements }: GalleryUrlSec
         ) : (
           <Button
             variant="primary"
-            size="md"
+            size={buttonSize}
             onClick={handlePublishClick}
             disabled={!hasPhotos}
-            className="w-full mt-2.5"
-            startIcon={<Plus size={20} />}
+            className={`w-full ${buttonSpacing}`}
+            startIcon={<Plus size={iconSize} />}
           >
             Opublikuj galerię
           </Button>
         ))}
 
-      {/* Share Button - Show when published and ready to send */}
+      {/* Critical: Share / Wyślij do klienta - always visible, smaller when height limited */}
       {shouldShowShareButton && (
         <>
           {hasClientSelectingOrder || sendLinkLoading || isProcessingAfterSendRef.current ? (
             <Button
               variant="outline"
-              size="md"
+              size={buttonSize}
               disabled
-              className="w-full mt-2.5 transition-opacity duration-300"
-              startIcon={<Share2 size={20} />}
+              className={`w-full ${buttonSpacing} transition-opacity duration-300`}
+              startIcon={<Share2 size={iconSize} />}
             >
               {sendLinkLoading ? "Wysyłanie..." : "Udostępniono klientowi"}
             </Button>
           ) : (
             <Button
               variant="primary"
-              size="md"
+              size={buttonSize}
               onClick={handleSendLink}
               disabled={sendLinkLoading}
-              className="w-full mt-2.5 transition-opacity duration-300"
-              startIcon={<Share2 size={20} />}
+              className={`w-full ${buttonSpacing} transition-opacity duration-300`}
+              startIcon={<Share2 size={iconSize} />}
             >
               {hasExistingOrders ? "Wyślij link przypominający" : "Udostępnij klientowi"}
             </Button>

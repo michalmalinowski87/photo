@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
-import { Upload, X } from "lucide-react";
-import { applyWatermark } from "../../../lib/watermark-utils";
-import { useWatermarks } from "../../../hooks/queries/useWatermarks";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "../../../lib/react-query";
+import { Upload, X } from "lucide-react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+
+import { useWatermarks } from "../../../hooks/queries/useWatermarks";
 import api from "../../../lib/api-service";
+import { queryKeys } from "../../../lib/react-query";
+import { applyWatermark } from "../../../lib/watermark-utils";
 
 export type WatermarkPatternId = "none" | "custom";
 
@@ -31,6 +32,7 @@ interface WatermarkPatternSelectorProps {
     isProcessing: boolean;
   };
   isOpen?: boolean; // Track if overlay is open to force updates on reopen
+  onLoadingStateChange?: (isLoading: boolean) => void; // Callback to notify parent of loading state
 }
 
 export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> = ({
@@ -44,10 +46,13 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
   onRemoveWatermark,
   uploadStatus = { isUploading: false, isProcessing: false },
   isOpen = true,
+  onLoadingStateChange,
 }) => {
   const queryClient = useQueryClient();
-  const { data: watermarksData } = useWatermarks();
+  const { data: watermarksData, isLoading: isLoadingWatermarks, isFetching: isFetchingWatermarks } = useWatermarks();
   const [customWatermarks, setCustomWatermarks] = useState<CustomWatermark[]>([]);
+  const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(new Set());
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
   const [isGeneratingWatermark, setIsGeneratingWatermark] = useState(false);
   const [uploadingWatermarkId, setUploadingWatermarkId] = useState<string | null>(null);
   const [deletingWatermarkId, setDeletingWatermarkId] = useState<string | null>(null);
@@ -58,6 +63,105 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
   const currentPatternRef = useRef<WatermarkPatternId | null>(null);
   const currentCustomUrlRef = useRef<string | null>(null);
   const watermarkImageCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const loadingStartTimeRef = useRef<number | null>(null);
+  const hasNotifiedReadyRef = useRef(false);
+
+  // Track when overlay opens to start loading timer
+  useEffect(() => {
+    if (isOpen && loadingStartTimeRef.current === null) {
+      loadingStartTimeRef.current = Date.now();
+      hasNotifiedReadyRef.current = false;
+    } else if (!isOpen) {
+      loadingStartTimeRef.current = null;
+      hasNotifiedReadyRef.current = false;
+    }
+  }, [isOpen]);
+
+  // Track loading state and notify parent
+  useEffect(() => {
+    if (!isOpen) {
+      // When overlay closes, reset loading state
+      if (onLoadingStateChange) {
+        onLoadingStateChange(false);
+      }
+      return undefined;
+    }
+    
+    // Watermarks are considered "ready" when:
+    // 1. Query is not loading/fetching (initial load is complete)
+    // 2. All watermark images with URLs have either loaded or failed
+    // 3. Minimum loading time has passed (prevents blink from cached data)
+    const watermarksWithUrls = customWatermarks.filter(w => w.url && w.url !== "");
+    const allImagesResolved = watermarksWithUrls.length === 0 || 
+      watermarksWithUrls.every(w => loadedImageIds.has(w.id) || failedImageIds.has(w.id));
+    
+    // Only consider ready if we've received data (even if empty) and all images are resolved
+    const hasData = watermarksData !== undefined;
+    const queryReady = hasData && !isLoadingWatermarks && !isFetchingWatermarks;
+    
+    // Ensure minimum loading time of 300ms to prevent blink
+    const minLoadingTime = 300;
+    const timeSinceOpen = loadingStartTimeRef.current ? Date.now() - loadingStartTimeRef.current : 0;
+    const minTimeElapsed = timeSinceOpen >= minLoadingTime;
+    
+    const isReady = queryReady && allImagesResolved && minTimeElapsed;
+    
+    // Set up a timeout to check again after minimum loading time if not ready yet
+    let timeoutId: NodeJS.Timeout | undefined;
+    
+    // If minimum time hasn't elapsed yet, always show loading (prevents blink)
+    if (!minTimeElapsed) {
+      if (onLoadingStateChange && !hasNotifiedReadyRef.current) {
+        onLoadingStateChange(true);
+      }
+      // Set up timeout to re-check after minimum time
+      if (loadingStartTimeRef.current) {
+        const remainingTime = minLoadingTime - timeSinceOpen;
+        if (remainingTime > 0) {
+          timeoutId = setTimeout(() => {
+            // Re-evaluate after minimum time
+            const watermarksWithUrlsNow = customWatermarks.filter(w => w.url && w.url !== "");
+            const allImagesResolvedNow = watermarksWithUrlsNow.length === 0 || 
+              watermarksWithUrlsNow.every(w => loadedImageIds.has(w.id) || failedImageIds.has(w.id));
+            const isReadyNow = queryReady && allImagesResolvedNow;
+            
+            if (isReadyNow && !hasNotifiedReadyRef.current && onLoadingStateChange) {
+              hasNotifiedReadyRef.current = true;
+              onLoadingStateChange(false);
+            }
+          }, remainingTime);
+        }
+      }
+    } else {
+      // Minimum time has elapsed, check if actually ready
+      if (isReady && !hasNotifiedReadyRef.current) {
+        hasNotifiedReadyRef.current = true;
+        if (onLoadingStateChange) {
+          onLoadingStateChange(false);
+        }
+      } else if (!isReady && !hasNotifiedReadyRef.current) {
+        // Still not ready, keep loading state active
+        if (onLoadingStateChange) {
+          onLoadingStateChange(true);
+        }
+      }
+    }
+    
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [isOpen, isLoadingWatermarks, isFetchingWatermarks, watermarksData, customWatermarks, loadedImageIds, failedImageIds, onLoadingStateChange]);
+
+  // Reset loaded/failed image tracking when watermarks data changes or overlay opens
+  useEffect(() => {
+    if (isOpen && watermarksData) {
+      // Reset tracking when new data arrives
+      setLoadedImageIds(new Set());
+      setFailedImageIds(new Set());
+    }
+  }, [isOpen, watermarksData]);
 
   // Load watermarks from API
   useEffect(() => {
@@ -316,6 +420,37 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
       if (!file.type.startsWith("image/")) {
         return;
       }
+      
+      // Check if we've reached the maximum limit (9 watermarks)
+      const currentCount = customWatermarks.filter(w => w.url && w.url !== "").length;
+      if (currentCount >= 9) {
+        return; // Don't allow upload if already at limit
+      }
+
+      // Create a temporary watermark entry immediately to show upload status
+      // This replaces the upload button with the processing overlay in the grid
+      const tempId = `temp-${Date.now()}`;
+      const now = new Date().toISOString();
+      const tempWatermark: CustomWatermark = {
+        id: tempId,
+        url: "", // Don't use blob URL to avoid broken image display
+        name: file.name,
+        createdAt: now, // Set to current time so it appears at the end (rightmost)
+      };
+      setCustomWatermarks(prev => {
+        // Add temp watermark and sort by createdAt ascending (oldest first = left, newest last = right)
+        // CSS grid flows left-to-right, so newest items at end of array appear on the right
+        const updated = [...prev, tempWatermark];
+        return updated.sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (!a.createdAt && b.createdAt) return 1; // Temp goes after (rightmost)
+          if (a.createdAt && !b.createdAt) return -1; // Real watermark goes before temp
+          if (!a.createdAt && !b.createdAt) return 0;
+          return aTime - bTime; // Ascending: oldest first (left), newest last (right)
+        });
+      });
+      setUploadingWatermarkId(tempId);
 
       // Validate file size (max 600x600px)
       const img = new Image();
@@ -325,33 +460,11 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
         URL.revokeObjectURL(url);
         if (img.width > 600 || img.height > 600) {
           alert("Plik nie może być większy niż 600x600 px");
+          // Remove temp watermark on validation error
+          setCustomWatermarks(prev => prev.filter(w => w.id !== tempId));
+          setUploadingWatermarkId(null);
           return;
         }
-        
-        // Create a temporary watermark entry to show upload status
-        // Use current timestamp so it appears at the end (rightmost) when sorted
-        const tempId = `temp-${Date.now()}`;
-        const now = new Date().toISOString();
-        const tempWatermark: CustomWatermark = {
-          id: tempId,
-          url: "", // Don't use blob URL to avoid broken image display
-          name: file.name,
-          createdAt: now, // Set to current time so it appears at the end (rightmost)
-        };
-        setCustomWatermarks(prev => {
-          // Add temp watermark and sort by createdAt ascending (oldest first = left, newest last = right)
-          // CSS grid flows left-to-right, so newest items at end of array appear on the right
-          const updated = [...prev, tempWatermark];
-          return updated.sort((a, b) => {
-            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            if (!a.createdAt && b.createdAt) return 1; // Temp goes after (rightmost)
-            if (a.createdAt && !b.createdAt) return -1; // Real watermark goes before temp
-            if (!a.createdAt && !b.createdAt) return 0;
-            return aTime - bTime; // Ascending: oldest first (left), newest last (right)
-          });
-        });
-        setUploadingWatermarkId(tempId);
         
         // Upload first, then invalidate query to refresh (temp watermark will be replaced by API watermark)
         void onCustomWatermarkUpload(file).then(() => {
@@ -371,11 +484,14 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
       img.onerror = () => {
         URL.revokeObjectURL(url);
         alert("Nieprawidłowy plik obrazu");
+        // Remove temp watermark on error
+        setCustomWatermarks(prev => prev.filter(w => w.id !== tempId));
+        setUploadingWatermarkId(null);
       };
       
       img.src = url;
     },
-    [onCustomWatermarkUpload]
+    [onCustomWatermarkUpload, customWatermarks, queryClient]
   );
 
   const handleFileInputChange = useCallback(
@@ -475,6 +591,13 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
     });
   }, [customWatermarks]);
 
+  // Count actual watermarks (excluding temporary placeholders without URLs)
+  const actualWatermarkCount = customWatermarks.filter(w => w.url && w.url !== "").length;
+  const canUploadMore = actualWatermarkCount < 9;
+  // Check if we're uploading a new watermark - only show upload button if not uploading
+  // (the temp watermark in the grid will show the processing overlay)
+  const isUploadingNewWatermark = uploadingWatermarkId !== null && customWatermarks.some(w => w.id === uploadingWatermarkId && !w.url);
+
   return (
     <div className="space-y-6">
       {/* Watermark Selection */}
@@ -482,10 +605,6 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
           Wybierz znak wodny
         </h3>
-        <p className="text-xs text-photographer-mutedText dark:text-gray-400 mb-3">
-          Wybierz jeden z przesłanych znaków wodnych lub pozostaw bez znaku wodnego
-        </p>
-        
         <div className="grid grid-cols-5 gap-3">
           {/* None option */}
           <button
@@ -541,8 +660,12 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
                       src={thumbnailUrl}
                       alt={watermark.name}
                       className="w-full h-full object-cover"
+                      onLoad={() => {
+                        setLoadedImageIds(prev => new Set(prev).add(watermark.id));
+                      }}
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
+                        setFailedImageIds(prev => new Set(prev).add(watermark.id));
                       }}
                     />
                   ) : shouldShowPlaceholder ? (
@@ -574,30 +697,32 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
             );
           })}
 
-          {/* Upload watermark button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className={`
-              relative aspect-square rounded-lg border-2 border-dashed overflow-hidden
-              transition-all hover:scale-105 flex flex-col items-center justify-center
-              border-photographer-border dark:border-gray-600 hover:border-photographer-accent dark:hover:border-photographer-accent
-            `}
-          >
-            <Upload className="w-6 h-6 text-photographer-mutedText dark:text-gray-400 mb-1" />
-            <span className="text-sm font-medium text-photographer-text dark:text-gray-400 text-center px-2">
-              Dodaj znak wodny
-            </span>
-            <span className="text-[8px] text-photographer-mutedText dark:text-gray-500 opacity-70 text-center px-2 mt-0.5">
-              PNG lub SVG, max. 600x600 px
-            </span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/svg+xml"
-              onChange={handleFileInputChange}
-              className="hidden"
-            />
-          </button>
+          {/* Upload watermark button - only show if less than 9 watermarks and not currently uploading */}
+          {canUploadMore && !isUploadingNewWatermark && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className={`
+                relative aspect-square rounded-lg border-2 border-dashed overflow-hidden
+                transition-all hover:scale-105 flex flex-col items-center justify-center
+                border-photographer-border dark:border-gray-600 hover:border-photographer-accent dark:hover:border-photographer-accent
+              `}
+            >
+              <Upload className="w-6 h-6 text-photographer-mutedText dark:text-gray-400 mb-1" />
+              <span className="text-sm font-medium text-photographer-text dark:text-gray-400 text-center px-2">
+                Dodaj znak wodny
+              </span>
+              <span className="text-[8px] text-photographer-mutedText dark:text-gray-500 opacity-70 text-center px-2 mt-0.5">
+                PNG lub SVG, max. 600x600 px
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/svg+xml"
+                onChange={handleFileInputChange}
+                className="hidden"
+              />
+            </button>
+          )}
         </div>
       </div>
 

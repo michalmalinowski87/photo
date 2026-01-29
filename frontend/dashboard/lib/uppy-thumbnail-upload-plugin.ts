@@ -1,8 +1,9 @@
 import Uppy, { BasePlugin } from "@uppy/core";
 import imageCompression from "browser-image-compression";
-import { applyDefaultWatermark, applyWatermark } from "./watermark-utils";
-import { getWatermarkConfig } from "./watermark-resolver";
+
 import api from "./api-service";
+import { getWatermarkConfig } from "./watermark-resolver";
+import { applyDefaultWatermark, applyWatermark } from "./watermark-utils";
 
 /**
  * Custom Uppy plugin to upload three-tier optimized images to S3
