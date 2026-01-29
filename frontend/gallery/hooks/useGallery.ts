@@ -20,7 +20,8 @@ interface GalleryImagesApiResponse {
     bigThumbUrlFallback?: string;
     thumbUrl?: string;
     thumbUrlFallback?: string;
-    url: string;
+    /** Original URL — never sent to gallery app (clients); only dashboard/owners receive it */
+    url?: string;
     size?: number;
     lastModified?: string;
     width?: number;
@@ -78,10 +79,10 @@ export function useGalleryImages(
 
       const apiData = response.data as GalleryImagesApiResponse;
 
-      // Map API response to our ImageData format
+      // Map API response to our ImageData format (url is never sent to gallery app by backend)
       const mappedImages: ImageData[] = apiData.images.map((img) => ({
         key: img.key,
-        url: img.url, // Full quality URL
+        ...(img.url != null && { url: img.url }),
         previewUrl: img.previewUrl || img.previewUrlFallback,
         thumbnailUrl: img.thumbUrl || img.thumbUrlFallback,
         thumbUrl: img.thumbUrl || img.thumbUrlFallback,

@@ -394,13 +394,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						);
 					}
 
-					// Always generate presigned URL for original photo (ultimate fallback)
-					// Note: original may not exist in S3 if it was deleted, but we still have metadata
-					// Client-side fallback will handle missing original gracefully
+					// Original URL only for owners (dashboard). NEVER expose original to gallery app (clients).
+					if (!access.isClient) {
 						presignedUrlPromises.push(
 							generatePresignedUrl(originalKey)
 								.then(url => { originalUrl = url; })
 						);
+					}
 
 					// Wait for all presigned URL generations to complete
 					await Promise.all(presignedUrlPromises);
@@ -418,7 +418,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					? new Date(imageRecord.lastModified).toISOString()
 					: undefined;
 
-				return {
+				const imageItem: Record<string, unknown> = {
 					key: filename, // Original filename (PNG/JPEG)
 					previewUrl,    // CloudFront WebP preview URL (1400px) from previews folder
 					previewUrlFallback, // S3 presigned URL fallback for preview
@@ -426,10 +426,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					bigThumbUrlFallback, // S3 presigned URL fallback for big thumb
 					thumbUrl,      // CloudFront WebP thumb URL (600px) from thumbs folder
 					thumbUrlFallback, // S3 presigned URL fallback for thumb
-					url: originalUrl, // S3 presigned URL for original photo (ultimate fallback, may be null if deleted)
 					size,
 					lastModified
 				};
+				// Original URL only for owners. NEVER expose to gallery app (client access).
+				if (!access.isClient) {
+					imageItem.url = originalUrl; // S3 presigned URL for original (ultimate fallback)
+				}
+				return imageItem;
 			})
 		);
 

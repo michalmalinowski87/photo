@@ -2,7 +2,10 @@ import { useState, useEffect } from "react";
 
 import { useAuth } from "../../context/AuthProvider";
 import { useUpdateBusinessInfo } from "../../hooks/mutations/useAuthMutations";
-import { useRequestDeletion, useCancelDeletion } from "../../hooks/mutations/useUserDeletionMutations";
+import {
+  useRequestDeletion,
+  useCancelDeletion,
+} from "../../hooks/mutations/useUserDeletionMutations";
 import { useBusinessInfo, useDeletionStatus } from "../../hooks/queries/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
@@ -228,11 +231,7 @@ export default function SettingsAccount() {
           </div>
 
           <div className="flex justify-end">
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={updateBusinessInfoMutation.isPending}
-            >
+            <Button type="submit" variant="primary" disabled={updateBusinessInfoMutation.isPending}>
               {updateBusinessInfoMutation.isPending ? "Zapisywanie..." : "Zapisz informacje"}
             </Button>
           </div>
@@ -240,9 +239,7 @@ export default function SettingsAccount() {
       </div>
 
       <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
-          Usuń konto
-        </h2>
+        <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">Usuń konto</h2>
         <p className="text-base text-gray-600 dark:text-gray-400 mb-4">
           Usunięcie konta jest operacją nieodwracalną. Wszystkie dane zostaną trwale usunięte.
         </p>

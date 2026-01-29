@@ -1,7 +1,11 @@
-import { Settings, ChevronDown } from "lucide-react";
+import { Settings, ChevronDown, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
+
+import { useBusinessInfo } from "../../../hooks/queries/useAuth";
+import { useGallery } from "../../../hooks/queries/useGalleries";
+import { shouldShowWatermarkWarningForGallery } from "../../../lib/watermark-warning";
 
 interface GallerySettingsLinkProps {
   galleryId: string;
@@ -12,17 +16,28 @@ interface GallerySettingsLinkProps {
 export const GallerySettingsLink = ({
   galleryId,
   orderId,
-  hasDeliveredOrders: _hasDeliveredOrders,
+  hasDeliveredOrders,
 }: GallerySettingsLinkProps) => {
   const router = useRouter();
+  const { data: businessInfo } = useBusinessInfo();
+  const { data: gallery } = useGallery(galleryId || undefined);
+  const showWatermarkWarning =
+    gallery !== undefined &&
+    gallery !== null &&
+    businessInfo !== undefined &&
+    businessInfo !== null &&
+    !hasDeliveredOrders &&
+    shouldShowWatermarkWarningForGallery(gallery, businessInfo);
+
   const isOnOrderPage = router.pathname?.includes("/orders/");
   const [isExpanded, setIsExpanded] = useState(false);
   const [subMenuHeight, setSubMenuHeight] = useState(0);
   const subMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const basePath = isOnOrderPage && orderId
-    ? `/galleries/${galleryId}/orders/${orderId}/settings`
-    : `/galleries/${galleryId}/settings`;
+  const basePath =
+    isOnOrderPage && orderId
+      ? `/galleries/${galleryId}/orders/${orderId}/settings`
+      : `/galleries/${galleryId}/settings`;
 
   const subItems = [
     { name: "Ogólne", path: `${basePath}/general` },
@@ -32,7 +47,8 @@ export const GallerySettingsLink = ({
 
   // Check if any sub-item is active
   const isAnySubItemActive = subItems.some((item) => {
-    const pathMatch = router.pathname === `/galleries/[id]/settings/[tab]` ||
+    const pathMatch =
+      router.pathname === `/galleries/[id]/settings/[tab]` ||
       router.pathname === `/galleries/[id]/orders/[orderId]/settings/[tab]`;
     const tabMatch = router.query.tab === item.path.split("/").pop();
     return pathMatch && tabMatch;
@@ -59,7 +75,8 @@ export const GallerySettingsLink = ({
   };
 
   const isActive = (path: string) => {
-    const pathMatch = router.pathname === `/galleries/[id]/settings/[tab]` ||
+    const pathMatch =
+      router.pathname === `/galleries/[id]/settings/[tab]` ||
       router.pathname === `/galleries/[id]/orders/[orderId]/settings/[tab]`;
     const tabMatch = router.query.tab === path.split("/").pop();
     return pathMatch && tabMatch;
@@ -77,10 +94,19 @@ export const GallerySettingsLink = ({
       >
         <Settings size={20} />
         <span className="flex-1 text-left">Ustawienia</span>
+        {showWatermarkWarning && (
+          <span
+            title="Znak wodny nie został ustawiony"
+            aria-label="Znak wodny nie został ustawiony"
+          >
+            <AlertTriangle
+              size={18}
+              className="text-orange-500 dark:text-orange-400 flex-shrink-0"
+            />
+          </span>
+        )}
         <ChevronDown
-          className={`w-5 h-5 transition-transform duration-200 ${
-            isExpanded ? "rotate-180" : ""
-          }`}
+          className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
         />
       </button>
       <div
@@ -101,6 +127,11 @@ export const GallerySettingsLink = ({
                 }`}
               >
                 <span>{item.name}</span>
+                {item.name === "Personalizacja" && showWatermarkWarning && (
+                  <span title="Znak wodny nie został ustawiony" className="ml-auto flex-shrink-0">
+                    <AlertTriangle size={18} className="text-orange-500 dark:text-orange-400" />
+                  </span>
+                )}
               </Link>
             </li>
           ))}

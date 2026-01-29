@@ -27,12 +27,15 @@ export const GalleryNavigation = () => {
   const { isNonSelectionGallery } = useGalleryType();
   const orderIdStr: string | undefined = Array.isArray(orderId) ? orderId[0] : orderId;
 
-  // Check if there are delivered orders
+  // Check if gallery has any order in Delivered or Preparing Delivery (don't show watermark warning in those cases)
   const hasDeliveredOrders = React.useMemo(() => {
     if (!gallery?.galleryId || !orders || orders.length === 0) {
       return false;
     }
-    return orders.some((o: { deliveryStatus?: string }) => o.deliveryStatus === "DELIVERED");
+    return orders.some(
+      (o: { deliveryStatus?: string }) =>
+        o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
+    );
   }, [gallery?.galleryId, orders]);
 
   // Show loading if we're on a gallery route and React Query is loading

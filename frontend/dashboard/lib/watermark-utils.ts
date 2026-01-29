@@ -3,7 +3,6 @@
  * Supports both uploaded watermarks and default system "PREVIEW" watermark
  */
 
-
 /**
  * Generate default "PREVIEW" SVG watermark text
  * Returns SVG string that can be used to create an image
@@ -116,14 +115,22 @@ export async function applyDefaultWatermark(imageBlob: Blob): Promise<Blob> {
             if (blob) {
               resolve(blob);
             } else {
-              reject(new Error("Failed to convert canvas to blob - canvas may be tainted. CORS configuration required."));
+              reject(
+                new Error(
+                  "Failed to convert canvas to blob - canvas may be tainted. CORS configuration required."
+                )
+              );
             }
           },
           "image/webp",
           0.92
         );
       } catch (error) {
-        reject(new Error(`Canvas export failed: ${error instanceof Error ? error.message : String(error)}. This usually means the watermark image was loaded without CORS headers.`));
+        reject(
+          new Error(
+            `Canvas export failed: ${error instanceof Error ? error.message : String(error)}. This usually means the watermark image was loaded without CORS headers.`
+          )
+        );
       }
     };
 
@@ -144,16 +151,162 @@ async function loadWatermarkImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    
+
     img.onload = () => {
       resolve(img);
     };
-    
+
     img.onerror = (error) => {
       console.error("Failed to load watermark image:", url, error);
-      reject(new Error(`Failed to load watermark image from ${url}. CORS configuration required on CloudFront for canvas operations.`));
+      reject(
+        new Error(
+          `Failed to load watermark image from ${url}. CORS configuration required on CloudFront for canvas operations.`
+        )
+      );
     };
-    
+
+    img.src = url;
+  });
+}
+
+/**
+ * Apply exactly one watermark scaled to fully cover the image (cover + center).
+ * Used for thumb and bigThumb when "watermark thumbnails" is enabled.
+ */
+export async function applyFullCoverWatermark(
+  imageBlob: Blob,
+  watermarkUrl: string,
+  opacity: number = 0.7
+): Promise<Blob> {
+  const watermarkImage = await loadWatermarkImage(watermarkUrl);
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(imageBlob);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        reject(new Error("Failed to get canvas context"));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0);
+
+      const clampedOpacity = Math.min(1.0, Math.max(0.0, opacity));
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const ww = watermarkImage.width;
+      const wh = watermarkImage.height;
+
+      if (ww <= 0 || wh <= 0) {
+        reject(new Error(`Invalid watermark dimensions: ${ww}x${wh}`));
+        return;
+      }
+
+      // Scale to cover (like background-size: cover), then center
+      const scale = Math.max(cw / ww, ch / wh);
+      const sw = ww * scale;
+      const sh = wh * scale;
+      const sx = (cw - sw) / 2;
+      const sy = (ch - sh) / 2;
+
+      ctx.globalAlpha = clampedOpacity;
+      ctx.drawImage(watermarkImage, sx, sy, sw, sh);
+
+      try {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Failed to convert canvas to blob"));
+          },
+          "image/webp",
+          0.92
+        );
+      } catch (error) {
+        reject(
+          new Error(
+            `Canvas export failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        );
+      }
+    };
+
+    img.onerror = (error) => {
+      URL.revokeObjectURL(url);
+      reject(error);
+    };
+    img.src = url;
+  });
+}
+
+/**
+ * Apply one default "PREVIEW" watermark scaled to fully cover the image (for thumb/bigThumb when watermark thumbnails is on).
+ */
+export async function applyDefaultWatermarkFullCover(imageBlob: Blob): Promise<Blob> {
+  const svgString = generateDefaultWatermarkSVG();
+  const watermarkImage = await svgToImage(svgString);
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(imageBlob);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        reject(new Error("Failed to get canvas context"));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0);
+      ctx.globalCompositeOperation = "multiply";
+
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const ww = watermarkImage.width;
+      const wh = watermarkImage.height;
+      const scale = Math.max(cw / ww, ch / wh);
+      const sw = ww * scale;
+      const sh = wh * scale;
+      const sx = (cw - sw) / 2;
+      const sy = (ch - sh) / 2;
+
+      ctx.drawImage(watermarkImage, sx, sy, sw, sh);
+
+      try {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Failed to convert canvas to blob"));
+          },
+          "image/webp",
+          0.92
+        );
+      } catch (error) {
+        reject(
+          new Error(
+            `Canvas export failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        );
+      }
+    };
+
+    img.onerror = (error) => {
+      URL.revokeObjectURL(url);
+      reject(error);
+    };
     img.src = url;
   });
 }
@@ -196,20 +349,20 @@ export async function applyWatermark(
       // Get watermark dimensions
       let watermarkWidth = watermarkImage.width;
       let watermarkHeight = watermarkImage.height;
-      
+
       // Validate watermark dimensions
       if (watermarkWidth <= 0 || watermarkHeight <= 0) {
         reject(new Error(`Invalid watermark dimensions: ${watermarkWidth}x${watermarkHeight}`));
         return;
       }
-      
+
       // Check if canvas is smaller than watermark * 3 (means watermark is too large to fit 3 columns/rows)
       // If canvas < watermark * 3, scale watermark down to 33% of longest edge
       // This ensures we can fit at least 3 columns and 3 rows (works well for both landscape and portrait)
       const imageLongestEdge = Math.max(canvas.width, canvas.height);
       const watermarkLargestDimension = Math.max(watermarkWidth, watermarkHeight);
       const needsScaling = canvas.width < watermarkWidth * 3 || canvas.height < watermarkHeight * 3;
-      
+
       if (needsScaling) {
         // Scale down to 33% of image's longest edge, maintaining aspect ratio
         const targetSize = imageLongestEdge * 0.33;
@@ -217,16 +370,16 @@ export async function applyWatermark(
         watermarkWidth = watermarkWidth * scale;
         watermarkHeight = watermarkHeight * scale;
       }
-      
+
       // Calculate how many watermarks we need to cover the entire canvas (including partial ones at edges)
       // Use Math.ceil to ensure we cover the entire area, even if the last watermark extends beyond the edge
       const cols = Math.ceil(canvas.width / watermarkWidth);
       const rows = Math.ceil(canvas.height / watermarkHeight);
-      
+
       // Ensure at least 1 column and 1 row
       const finalCols = Math.max(1, cols);
       const finalRows = Math.max(1, rows);
-      
+
       // No gaps between watermarks - place them directly adjacent to each other
       // Start from top-left (0,0)
       // Watermarks that extend beyond canvas edges will be automatically clipped by the canvas
@@ -254,14 +407,22 @@ export async function applyWatermark(
             if (blob) {
               resolve(blob);
             } else {
-              reject(new Error("Failed to convert canvas to blob - canvas may be tainted. CORS configuration required."));
+              reject(
+                new Error(
+                  "Failed to convert canvas to blob - canvas may be tainted. CORS configuration required."
+                )
+              );
             }
           },
           "image/webp",
           0.92
         );
       } catch (error) {
-        reject(new Error(`Canvas export failed: ${error instanceof Error ? error.message : String(error)}. This usually means the watermark image was loaded without CORS headers.`));
+        reject(
+          new Error(
+            `Canvas export failed: ${error instanceof Error ? error.message : String(error)}. This usually means the watermark image was loaded without CORS headers.`
+          )
+        );
       }
     };
 

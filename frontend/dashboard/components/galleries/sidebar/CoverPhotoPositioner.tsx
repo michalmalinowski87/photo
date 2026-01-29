@@ -127,7 +127,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
       if (isDragging || isResizing) return;
 
       const target = e.target as HTMLElement;
-      
+
       // If container or coverArea refs are not available, hide transform box
       if (!containerRef.current || !coverAreaRef.current) {
         setShowTransformBox(false);
@@ -145,7 +145,8 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
       // Check if click is on the image container or its children (handles, transform box)
       const isImage = imageContainer?.contains(target) || target.closest("[data-image-container]");
       // Check if click is on resize handles or transform box
-      const isHandleOrBox = target.closest("[data-resize-handle]") || target.closest("[data-transform-box]");
+      const isHandleOrBox =
+        target.closest("[data-resize-handle]") || target.closest("[data-transform-box]");
       // Check if click is inside the container
       const isInsideContainer = container.contains(target);
 
@@ -165,7 +166,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-    
+
     return undefined;
   }, [showTransformBox, isDragging, isResizing]);
 
@@ -434,7 +435,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         document.body.style.cursor = "";
       };
     }
-    
+
     return undefined;
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
@@ -519,7 +520,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         document.removeEventListener("touchend", handleTouchEnd);
       };
     }
-    
+
     return undefined;
   }, [isDragging, handleTouchMove, handleTouchEnd]);
 
@@ -556,8 +557,10 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
   // Track if we've initialized from initialPosition to avoid resetting during user interaction
   const hasInitializedRef = useRef(false);
-  const lastInitialPositionRef = useRef<{ x?: number; y?: number; scale?: number; objectPosition?: string } | undefined>(undefined);
-  
+  const lastInitialPositionRef = useRef<
+    { x?: number; y?: number; scale?: number; objectPosition?: string } | undefined
+  >(undefined);
+
   // Update position when initialPosition changes (only on mount or when modal reopens)
   // Don't update during user interaction (dragging/resizing)
   useEffect(() => {
@@ -565,26 +568,29 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
     if (isDragging || isResizing) {
       return;
     }
-    
+
     // Check if initialPosition actually changed (not just a reference change)
-    const currentPos = initialPosition ? { 
-      x: initialPosition.x, 
-      y: initialPosition.y, 
-      scale: initialPosition.scale,
-      objectPosition: initialPosition.objectPosition 
-    } : undefined;
-    
+    const currentPos = initialPosition
+      ? {
+          x: initialPosition.x,
+          y: initialPosition.y,
+          scale: initialPosition.scale,
+          objectPosition: initialPosition.objectPosition,
+        }
+      : undefined;
+
     const lastPos = lastInitialPositionRef.current;
-    const positionChanged = !lastPos || 
-      lastPos.x !== currentPos?.x || 
-      lastPos.y !== currentPos?.y || 
+    const positionChanged =
+      !lastPos ||
+      lastPos.x !== currentPos?.x ||
+      lastPos.y !== currentPos?.y ||
       lastPos.scale !== currentPos?.scale ||
       lastPos.objectPosition !== currentPos?.objectPosition;
-    
+
     if (!positionChanged && hasInitializedRef.current) {
       return; // Position hasn't changed, skip update
     }
-    
+
     // Use x, y directly if available (new format)
     if (initialPosition?.x !== undefined && initialPosition?.y !== undefined) {
       setImageState({ x: initialPosition.x, y: initialPosition.y });
@@ -615,7 +621,14 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         lastInitialPositionRef.current = currentPos;
       }
     }
-  }, [initialPosition?.x, initialPosition?.y, initialPosition?.scale, initialPosition?.objectPosition, isDragging, isResizing]);
+  }, [
+    initialPosition?.x,
+    initialPosition?.y,
+    initialPosition?.scale,
+    initialPosition?.objectPosition,
+    isDragging,
+    isResizing,
+  ]);
 
   const imagePos = getImagePosition();
 
@@ -626,7 +639,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
       const coverArea = coverAreaRef.current;
       const coverAreaRect = coverArea.getBoundingClientRect();
-      
+
       // Get click position relative to cover area
       const clickX = e.clientX - coverAreaRect.left;
       const clickY = e.clientY - coverAreaRect.top;
@@ -652,10 +665,10 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         // Click is on the image (even though form is on top) - show transform box and start dragging
         e.preventDefault();
         e.stopPropagation();
-        
+
         setShowTransformBox(true);
         setIsDragging(true);
-        
+
         const currentPos = getImagePosition();
         dragStartRef.current = {
           x: clickX,
@@ -675,7 +688,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
     switch (layout) {
       case "split":
         return (
-          <div 
+          <div
             className="absolute right-0 top-0 bottom-0 w-[36%] bg-white flex items-center justify-center px-6 py-10 form-pane-overlay"
             onMouseDown={handleFormPaneMouseDown}
           >
@@ -737,7 +750,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
       case "centered":
         return (
-          <div 
+          <div
             className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center px-6 py-10 form-pane-overlay z-10"
             onMouseDown={handleFormPaneMouseDown}
           >
@@ -768,7 +781,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
       case "full-cover":
         return (
-          <div 
+          <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center px-6 py-10 form-pane-overlay z-10"
             onMouseDown={handleFormPaneMouseDown}
           >

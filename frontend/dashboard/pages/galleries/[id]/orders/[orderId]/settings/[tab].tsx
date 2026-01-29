@@ -27,7 +27,12 @@ export default function OrderSettingsTab() {
   const orderIdStr = Array.isArray(orderId) ? orderId[0] : orderId;
   const tabStr = Array.isArray(tab) ? tab[0] : tab;
 
-  if (!galleryIdStr || typeof galleryIdStr !== "string" || !orderIdStr || typeof orderIdStr !== "string") {
+  if (
+    !galleryIdStr ||
+    typeof galleryIdStr !== "string" ||
+    !orderIdStr ||
+    typeof orderIdStr !== "string"
+  ) {
     return null;
   }
 

@@ -126,7 +126,7 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
       window.addEventListener("resize", updateDimensions);
       return () => window.removeEventListener("resize", updateDimensions);
     }
-    
+
     return undefined;
   }, [isOpen]);
 
@@ -253,7 +253,7 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
                   style={{ width: previewWidth, height: previewHeight }}
                 >
                   <CoverPhotoPositioner
-                    key={`${selectedLayout}-${isOpen ? 'open' : 'closed'}`}
+                    key={`${selectedLayout}-${isOpen ? "open" : "closed"}`}
                     coverPhotoUrl={coverPhotoUrl}
                     layout={selectedLayout}
                     galleryName={

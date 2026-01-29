@@ -47,12 +47,23 @@ export interface Gallery {
     objectPosition?: string;
   };
   watermarkUrl?: string; // Only used for custom watermarks
+  /** When true, stamp thumb and bigThumb with one full-cover watermark; when false, only preview is watermarked */
+  watermarkThumbnails?: boolean;
   watermarkPosition?: {
     // New pattern-based system
     pattern?: string; // Watermark pattern ID: "none", "sample", "podglad", "tile-ph", "custom"
     opacity?: number; // Opacity 0.1-1.0
     // Legacy: old positioning system (for backward compatibility)
-    corner?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "top" | "bottom" | "left" | "right" | "center";
+    corner?:
+      | "top-left"
+      | "top-right"
+      | "bottom-left"
+      | "bottom-right"
+      | "top"
+      | "bottom"
+      | "left"
+      | "right"
+      | "center";
     offsetX?: number;
     offsetY?: number;
     x?: number;

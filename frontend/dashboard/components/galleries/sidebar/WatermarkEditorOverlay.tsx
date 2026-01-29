@@ -1,7 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import React, { useState, useCallback, useEffect, useRef } from "react";
 
-import { useUpdateBusinessInfo, useUploadGlobalWatermark } from "../../../hooks/mutations/useAuthMutations";
+import {
+  useUpdateBusinessInfo,
+  useUploadGlobalWatermark,
+} from "../../../hooks/mutations/useAuthMutations";
 import { useUpdateGallery, useUploadWatermark } from "../../../hooks/mutations/useGalleryMutations";
 import { useBusinessInfo } from "../../../hooks/queries/useAuth";
 import { useGallery } from "../../../hooks/queries/useGalleries";
@@ -39,7 +42,8 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
   const isGlobalWatermark = !galleryId || galleryId === "";
   const effectiveGallery = currentGallery || gallery;
 
-  // Get current watermark settings
+  // Get current watermark settings.
+  // For gallery: when gallery has no override, show global options so user can preview and override.
   const getInitialSettings = useCallback(() => {
     if (isGlobalWatermark) {
       const pos = businessInfo?.defaultWatermarkPosition as any;
@@ -47,13 +51,39 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
         pattern: (pos?.pattern as WatermarkPatternId) || "none",
         customWatermarkUrl: businessInfo?.defaultWatermarkUrl || null,
         opacity: pos?.opacity ?? 0.4,
+        watermarkThumbnails: businessInfo?.defaultWatermarkThumbnails ?? false,
       };
     } else {
-      const pos = effectiveGallery?.watermarkPosition as any;
+      const galleryPos = effectiveGallery?.watermarkPosition as any;
+      const galleryPattern = galleryPos?.pattern as WatermarkPatternId | undefined;
+      const hasGalleryExplicitNone = galleryPattern === "none";
+      const hasGalleryCustom = Boolean(effectiveGallery?.watermarkUrl);
+
+      if (hasGalleryExplicitNone) {
+        return {
+          pattern: "none" as WatermarkPatternId,
+          customWatermarkUrl: null,
+          opacity: 0.4,
+          watermarkThumbnails: false,
+        };
+      }
+      if (hasGalleryCustom) {
+        return {
+          pattern: (galleryPattern as WatermarkPatternId) || "custom",
+          customWatermarkUrl: effectiveGallery?.watermarkUrl || null,
+          opacity: galleryPos?.opacity ?? 0.4,
+          watermarkThumbnails: effectiveGallery?.watermarkThumbnails ?? false,
+        };
+      }
+      // Gallery has no override: show global options so user can preview and override
+      const globalPos = businessInfo?.defaultWatermarkPosition as any;
       return {
-        pattern: (pos?.pattern as WatermarkPatternId) || (effectiveGallery?.watermarkUrl ? "custom" : "none"),
-        customWatermarkUrl: effectiveGallery?.watermarkUrl || null,
-        opacity: pos?.opacity ?? 0.4,
+        pattern:
+          (globalPos?.pattern as WatermarkPatternId) ||
+          (businessInfo?.defaultWatermarkUrl ? "custom" : "none"),
+        customWatermarkUrl: businessInfo?.defaultWatermarkUrl || null,
+        opacity: globalPos?.opacity ?? 0.4,
+        watermarkThumbnails: businessInfo?.defaultWatermarkThumbnails ?? false,
       };
     }
   }, [isGlobalWatermark, businessInfo, effectiveGallery]);
@@ -61,10 +91,12 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
   const [selectedPattern, setSelectedPattern] = useState<WatermarkPatternId>("none");
   const [customWatermarkUrl, setCustomWatermarkUrl] = useState<string | null>(null);
   const [opacity, setOpacity] = useState(0.4);
+  const [watermarkThumbnails, setWatermarkThumbnails] = useState(false);
   const [isLoadingWatermarks, setIsLoadingWatermarks] = useState(true);
   const wasRemovedRef = useRef(false); // Track if watermark was explicitly removed
   const noneSelectedRef = useRef(false); // Track if "none" was explicitly selected
   const userSelectedWatermarkRef = useRef(false); // Track if user manually selected a watermark
+  const userChangedThumbnailsRef = useRef(false); // Track if user toggled "watermark thumbnails" this session
 
   // Initialize settings when overlay opens (only once when it first opens)
   const hasInitializedRef = useRef(false);
@@ -74,10 +106,12 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
       setSelectedPattern(settings.pattern);
       setCustomWatermarkUrl(settings.customWatermarkUrl);
       setOpacity(settings.opacity);
+      setWatermarkThumbnails(settings.watermarkThumbnails ?? false);
       setIsLoadingWatermarks(true); // Start with loading state when opening
       wasRemovedRef.current = false; // Reset removal flag when opening
       noneSelectedRef.current = false; // Reset "none" selection flag when opening
       userSelectedWatermarkRef.current = false; // Reset user selection flag when opening
+      userChangedThumbnailsRef.current = false; // Reset so we can sync from server when data arrives
       hasInitializedRef.current = true;
     } else if (!isOpen) {
       hasInitializedRef.current = false;
@@ -85,8 +119,31 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
       wasRemovedRef.current = false;
       noneSelectedRef.current = false;
       userSelectedWatermarkRef.current = false;
+      userChangedThumbnailsRef.current = false;
     }
   }, [isOpen, getInitialSettings]);
+
+  // Sync watermarkThumbnails from server when overlay is open and source data updates
+  const galleryPatternFromPos =
+    effectiveGallery?.watermarkPosition &&
+    typeof effectiveGallery.watermarkPosition === "object" &&
+    "pattern" in effectiveGallery.watermarkPosition
+      ? (effectiveGallery.watermarkPosition as { pattern?: string }).pattern
+      : undefined;
+  const galleryHasNoOverride =
+    !effectiveGallery?.watermarkUrl && galleryPatternFromPos !== "none";
+  const sourceThumbnails =
+    isGlobalWatermark
+      ? businessInfo?.defaultWatermarkThumbnails
+      : effectiveGallery?.watermarkThumbnails ??
+        (galleryHasNoOverride ? businessInfo?.defaultWatermarkThumbnails : undefined);
+  useEffect(() => {
+    if (!isOpen || userChangedThumbnailsRef.current) return;
+    // Only sync when we have a defined value from the server (true or false)
+    if (typeof sourceThumbnails !== "boolean") return;
+    const value = sourceThumbnails;
+    setWatermarkThumbnails((prev) => (prev !== value ? value : prev));
+  }, [isOpen, sourceThumbnails]);
 
   // Handle custom watermark upload
   const handleCustomWatermarkUpload = useCallback(
@@ -115,7 +172,14 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
         showToast("error", "Błąd", formatApiError(error as Error));
       }
     },
-    [galleryId, uploadWatermarkMutation, uploadGlobalWatermarkMutation, showToast, isGlobalWatermark, queryClient]
+    [
+      galleryId,
+      uploadWatermarkMutation,
+      uploadGlobalWatermarkMutation,
+      showToast,
+      isGlobalWatermark,
+      queryClient,
+    ]
   );
 
   // Handle save
@@ -127,10 +191,9 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
             pattern: selectedPattern,
             opacity,
           } as any,
-          // Explicitly set defaultWatermarkUrl: clear it when "none", set it when "custom"
-          defaultWatermarkUrl: selectedPattern === "custom" && customWatermarkUrl
-            ? customWatermarkUrl
-            : "", // Clear when "none" or no URL (empty string clears in DB)
+          defaultWatermarkUrl:
+            selectedPattern === "custom" && customWatermarkUrl ? customWatermarkUrl : "",
+          defaultWatermarkThumbnails: watermarkThumbnails,
         });
       } else {
         await updateGalleryMutation.mutateAsync({
@@ -140,10 +203,9 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
               pattern: selectedPattern,
               opacity,
             } as any,
-            // Explicitly set watermarkUrl: clear it when "none", set it when "custom"
-            watermarkUrl: selectedPattern === "custom" && customWatermarkUrl
-              ? customWatermarkUrl
-              : "", // Clear when "none" or no URL (empty string removes in DB)
+            watermarkUrl:
+              selectedPattern === "custom" && customWatermarkUrl ? customWatermarkUrl : "",
+            watermarkThumbnails,
           },
         });
       }
@@ -158,6 +220,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
     selectedPattern,
     customWatermarkUrl,
     opacity,
+    watermarkThumbnails,
     updateGalleryMutation,
     updateBusinessInfoMutation,
     galleryId,
@@ -175,6 +238,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
             opacity: 0.4,
           } as any,
           defaultWatermarkUrl: undefined,
+          defaultWatermarkThumbnails: false,
         });
       } else {
         await updateGalleryMutation.mutateAsync({
@@ -185,6 +249,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
               opacity: 0.4,
             } as any,
             watermarkUrl: undefined,
+            watermarkThumbnails: false,
           },
         });
       }
@@ -200,30 +265,24 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
       showToast("error", "Błąd", formatApiError(error as Error));
       throw error; // Re-throw so caller knows it failed
     }
-  }, [
-    isGlobalWatermark,
-    updateGalleryMutation,
-    updateBusinessInfoMutation,
-    galleryId,
-    showToast,
-  ]);
+  }, [isGlobalWatermark, updateGalleryMutation, updateBusinessInfoMutation, galleryId, showToast]);
 
   // Update custom watermark URL when it changes from backend (only on initial load, not after user selections)
   useEffect(() => {
     if (wasRemovedRef.current) {
       return;
     }
-    
+
     // Don't override if user explicitly selected "none"
     if (noneSelectedRef.current || selectedPattern === "none") {
       return;
     }
-    
+
     // Don't override if user has manually selected a watermark
     if (userSelectedWatermarkRef.current) {
       return;
     }
-    
+
     if (isGlobalWatermark && businessInfo?.defaultWatermarkUrl) {
       setCustomWatermarkUrl(businessInfo.defaultWatermarkUrl);
       if (selectedPattern !== "custom") {
@@ -238,14 +297,24 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
         }
       }
     }
-  }, [isGlobalWatermark, businessInfo?.defaultWatermarkUrl, effectiveGallery?.watermarkUrl, selectedPattern, customWatermarkUrl]);
+  }, [
+    isGlobalWatermark,
+    businessInfo?.defaultWatermarkUrl,
+    effectiveGallery?.watermarkUrl,
+    selectedPattern,
+    customWatermarkUrl,
+  ]);
+
+  const showThumbsBlock = selectedPattern !== "none";
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} closeOnClickOutside={false} className="max-w-6xl">
       <div className="flex flex-col h-full max-h-[95vh]">
         {/* Header */}
         <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">Ustawienia znaku wodnego</h2>
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
+            Ustawienia znaku wodnego
+          </h2>
         </div>
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-4 relative">
@@ -299,12 +368,41 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
             }}
             onRemoveWatermark={handleRemoveWatermark}
             uploadStatus={{
-              isUploading: uploadWatermarkMutation.isPending || uploadGlobalWatermarkMutation.isPending,
+              isUploading:
+                uploadWatermarkMutation.isPending || uploadGlobalWatermarkMutation.isPending,
               isProcessing: false, // Can be enhanced if we track processing state
             }}
             isOpen={isOpen}
             onLoadingStateChange={setIsLoadingWatermarks}
+            showThumbPreview={showThumbsBlock && watermarkThumbnails}
           />
+          {/* Watermark thumbnails: when on, thumb and bigThumb get one full-cover watermark; when off, only preview is watermarked */}
+          {showThumbsBlock && (
+            <div className="mt-6 flex flex-col gap-2 rounded-lg border border-photographer-border dark:border-gray-600 bg-photographer-bgSecondary dark:bg-gray-800/50 p-4">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="watermark-thumbnails"
+                  checked={watermarkThumbnails}
+                  onChange={(e) => {
+                    userChangedThumbnailsRef.current = true;
+                    setWatermarkThumbnails(e.target.checked);
+                  }}
+                  className="h-4 w-4 rounded border-gray-400 text-photographer-accent focus:ring-photographer-accent dark:border-gray-500 dark:bg-gray-700"
+                />
+                <label
+                  htmlFor="watermark-thumbnails"
+                  className="text-sm font-medium text-photographer-text dark:text-gray-200 cursor-pointer"
+                >
+                  Znak wodny na miniaturkach
+                </label>
+              </div>
+              <p className="text-xs text-photographer-mutedText dark:text-gray-400 pl-7">
+                Gdy włączone: miniatury i większe podglądy mają jeden znak wodny na całość. Gdy
+                wyłączone: tylko duży podgląd (pełny ekran) ma znak wodny.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

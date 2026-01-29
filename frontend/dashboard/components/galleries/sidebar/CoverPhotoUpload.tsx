@@ -113,7 +113,7 @@ export const CoverPhotoUpload = () => {
         handledSuccessRef.current = null;
       }
     }
-    
+
     return undefined;
   }, [
     uploadCoverPhotoMutation.isSuccess,
@@ -141,7 +141,7 @@ export const CoverPhotoUpload = () => {
       }, 500);
       return () => clearTimeout(timer);
     }
-    
+
     return undefined;
   }, [
     hasCloudFrontUrl,
@@ -416,18 +416,18 @@ export const CoverPhotoUpload = () => {
 
       {/* Login Personalization Overlay */}
       {galleryId &&
-        (uploadedCoverPhotoUrl || (showPersonalizationOverlay && gallery?.coverPhotoUrl)) ? (
-          <LoginPersonalizationOverlay
-            isOpen={showPersonalizationOverlay}
-            onClose={() => {
-              setShowPersonalizationOverlay(false);
-              setUploadedCoverPhotoUrl(null);
-              justUploadedRef.current = false;
-            }}
-            galleryId={galleryId}
-            coverPhotoUrl={uploadedCoverPhotoUrl || (gallery?.coverPhotoUrl as string) || ""}
-          />
-        ) : null}
+      (uploadedCoverPhotoUrl || (showPersonalizationOverlay && gallery?.coverPhotoUrl)) ? (
+        <LoginPersonalizationOverlay
+          isOpen={showPersonalizationOverlay}
+          onClose={() => {
+            setShowPersonalizationOverlay(false);
+            setUploadedCoverPhotoUrl(null);
+            justUploadedRef.current = false;
+          }}
+          galleryId={galleryId}
+          coverPhotoUrl={uploadedCoverPhotoUrl || (gallery?.coverPhotoUrl as string) || ""}
+        />
+      ) : null}
     </div>
   );
 };

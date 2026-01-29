@@ -15,9 +15,11 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useBusinessInfo } from "../../hooks/queries/useAuth";
 import { useGalleries } from "../../hooks/queries/useGalleries";
 import { useSidebar } from "../../hooks/useSidebar";
 import { getPublicLandingUrl } from "../../lib/public-env";
+import { shouldShowWatermarkWarningGlobal } from "../../lib/watermark-warning";
 
 type NavItem = {
   name: string;
@@ -81,6 +83,11 @@ const navItems: NavItem[] = [
 const AppSidebar = () => {
   const { isExpanded, isMobileOpen } = useSidebar();
   const router = useRouter();
+  const { data: businessInfo } = useBusinessInfo();
+  const showWatermarkWarning =
+    businessInfo !== undefined &&
+    businessInfo !== null &&
+    shouldShowWatermarkWarningGlobal(businessInfo);
 
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: "main";
@@ -104,17 +111,20 @@ const AppSidebar = () => {
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const isActive = useCallback((path: string): boolean => {
-    // For exact matches
-    if (router.pathname === path) return true;
-    // For dynamic routes, check if asPath matches
-    if (router.asPath === path) return true;
-    // For settings routes, check if we're on any settings page
-    if (path.startsWith("/settings/") && router.asPath.startsWith("/settings/")) {
-      return router.asPath === path;
-    }
-    return false;
-  }, [router.pathname, router.asPath]);
+  const isActive = useCallback(
+    (path: string): boolean => {
+      // For exact matches
+      if (router.pathname === path) return true;
+      // For dynamic routes, check if asPath matches
+      if (router.asPath === path) return true;
+      // For settings routes, check if we're on any settings page
+      if (path.startsWith("/settings/") && router.asPath.startsWith("/settings/")) {
+        return router.asPath === path;
+      }
+      return false;
+    },
+    [router.pathname, router.asPath]
+  );
 
   // Prefetch all navigation routes when sidebar is visible/expanded
   // This ensures all navigation links are ready for instant navigation
@@ -183,7 +193,7 @@ const AppSidebar = () => {
           // For other routes, use the isActive function
           return isActive(subItem.path);
         });
-        
+
         if (hasActiveSubItem) {
           setOpenSubmenu({
             type: "main",
@@ -249,6 +259,13 @@ const AppSidebar = () => {
                     <AlertTriangle
                       size={20}
                       className="text-orange-500 dark:text-orange-400 flex-shrink-0"
+                    />
+                  )}
+                  {nav.name === "Ustawienia" && showWatermarkWarning && (
+                    <AlertTriangle
+                      size={20}
+                      className="text-orange-500 dark:text-orange-400 flex-shrink-0"
+                      title="Znak wodny nie został ustawiony"
                     />
                   )}
                   <ChevronDown
@@ -327,6 +344,13 @@ const AppSidebar = () => {
                         <AlertTriangle
                           size={18}
                           className="ml-auto text-orange-500 dark:text-orange-400 flex-shrink-0"
+                        />
+                      )}
+                      {subItem.name === "Galeria" && showWatermarkWarning && (
+                        <AlertTriangle
+                          size={18}
+                          className="ml-auto text-orange-500 dark:text-orange-400 flex-shrink-0"
+                          title="Znak wodny nie został ustawiony"
                         />
                       )}
                     </Link>

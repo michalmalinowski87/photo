@@ -77,12 +77,13 @@ export function CarouselView({
       >
         {images.map((image, index) => {
           const imageUrl = image.previewUrl || image.bigThumbUrl || image.thumbnailUrl || image.url;
-          const fullImageUrl = image.url;
+          // Best available; original never exposed in gallery app
+          const fullImageUrl = image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
           const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
 
           return (
             <div
-              key={`${image.key || image.url || 'image'}-${index}`}
+              key={`${image.key || image.previewUrl || image.url || 'image'}-${index}`}
               className="flex-shrink-0 w-[85vw] md:w-[70vw] lg:w-[60vw] xl:w-[50vw]"
               style={{ scrollSnapAlign: "start" }}
             >
@@ -96,13 +97,13 @@ export function CarouselView({
               >
                 <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
                   <Image
-                    src={imageUrl}
+                    src={imageUrl ?? ""}
                     alt={image.alt || `Image ${index + 1}`}
                     fill
                     className="object-contain"
                     priority={index < 3}
                     loading={index < 3 ? undefined : "lazy"}
-                    unoptimized={imageUrl.startsWith("http")}
+                    unoptimized={(imageUrl ?? "").startsWith("http")}
                     sizes="(max-width: 768px) 85vw, (max-width: 1024px) 70vw, 60vw"
                   />
                 </div>

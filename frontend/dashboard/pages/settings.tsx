@@ -204,115 +204,118 @@ export default function Settings() {
                 </h2>
 
                 <form onSubmit={handleBusinessInfoUpdate}>
-              <div className="mb-1.5">
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Email kontaktowy
-                </label>
-                <Input
-                  type="email"
-                  placeholder="email@example.com"
-                  value={businessForm.email}
-                  onChange={(e) =>
-                    setBusinessForm({
-                      ...businessForm,
-                      email: e.target.value,
-                    })
-                  }
-                />
+                  <div className="mb-1.5">
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Email kontaktowy
+                    </label>
+                    <Input
+                      type="email"
+                      placeholder="email@example.com"
+                      value={businessForm.email}
+                      onChange={(e) =>
+                        setBusinessForm({
+                          ...businessForm,
+                          email: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="mb-1.5">
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Nazwa firmy
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Nazwa firmy"
+                      value={businessForm.businessName}
+                      onChange={(e) =>
+                        setBusinessForm({
+                          ...businessForm,
+                          businessName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="mb-1.5">
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Telefon
+                    </label>
+                    <Input
+                      type="tel"
+                      placeholder="+48 123 456 789"
+                      value={businessForm.phone}
+                      onChange={(e) =>
+                        setBusinessForm({
+                          ...businessForm,
+                          phone: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="mb-1.5">
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Adres
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Ulica, kod pocztowy, miasto"
+                      value={businessForm.address}
+                      onChange={(e) =>
+                        setBusinessForm({
+                          ...businessForm,
+                          address: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="mb-1.5">
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      NIP
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="NIP"
+                      value={businessForm.nip}
+                      onChange={(e) =>
+                        setBusinessForm({
+                          ...businessForm,
+                          nip: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={updateBusinessInfoMutation.isPending}
+                    >
+                      {updateBusinessInfoMutation.isPending
+                        ? "Zapisywanie..."
+                        : "Zapisz informacje"}
+                    </Button>
+                  </div>
+                </form>
               </div>
 
-              <div className="mb-1.5">
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Nazwa firmy
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Nazwa firmy"
-                  value={businessForm.businessName}
-                  onChange={(e) =>
-                    setBusinessForm({
-                      ...businessForm,
-                      businessName: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="mb-1.5">
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Telefon
-                </label>
-                <Input
-                  type="tel"
-                  placeholder="+48 123 456 789"
-                  value={businessForm.phone}
-                  onChange={(e) =>
-                    setBusinessForm({
-                      ...businessForm,
-                      phone: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="mb-1.5">
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Adres
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Ulica, kod pocztowy, miasto"
-                  value={businessForm.address}
-                  onChange={(e) =>
-                    setBusinessForm({
-                      ...businessForm,
-                      address: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="mb-1.5">
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  NIP
-                </label>
-                <Input
-                  type="text"
-                  placeholder="NIP"
-                  value={businessForm.nip}
-                  onChange={(e) =>
-                    setBusinessForm({
-                      ...businessForm,
-                      nip: e.target.value,
-                    })
-                  }
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  disabled={updateBusinessInfoMutation.isPending}
-                >
-                  {updateBusinessInfoMutation.isPending ? "Zapisywanie..." : "Zapisz informacje"}
+              {/* Delete Account Section */}
+              <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+                <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
+                  Usuń konto
+                </h2>
+                <p className="text-base text-gray-600 dark:text-gray-400 mb-4">
+                  Usunięcie konta jest operacją nieodwracalną. Wszystkie dane zostaną trwale
+                  usunięte.
+                </p>
+                <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
+                  Usuń konto
                 </Button>
               </div>
-            </form>
-          </div>
-
-          {/* Delete Account Section */}
-          <div className="p-6 bg-white border border-gray-400 rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5">
-              Usuń konto
-            </h2>
-            <p className="text-base text-gray-600 dark:text-gray-400 mb-4">
-              Usunięcie konta jest operacją nieodwracalną. Wszystkie dane zostaną trwale usunięte.
-            </p>
-            <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
-              Usuń konto
-            </Button>
-          </div>
             </>
           )}
 
@@ -390,7 +393,11 @@ export default function Settings() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button type="submit" variant="primary" disabled={changePasswordMutation.isPending}>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={changePasswordMutation.isPending}
+                    >
                       {changePasswordMutation.isPending ? "Zapisywanie..." : "Zmień hasło"}
                     </Button>
                   </div>

@@ -123,7 +123,8 @@ router.get('/business-info', async (req: Request, res: Response) => {
 			tutorialNextStepsDisabled: userData.tutorialNextStepsDisabled === true,
 			tutorialClientSendDisabled: userData.tutorialClientSendDisabled === true,
 			defaultWatermarkUrl,
-			defaultWatermarkPosition: userData.defaultWatermarkPosition || undefined
+			defaultWatermarkPosition: userData.defaultWatermarkPosition || undefined,
+			defaultWatermarkThumbnails: userData.defaultWatermarkThumbnails === true
 		};
 
 		return res.json(businessInfo);
@@ -151,7 +152,7 @@ router.put('/business-info', async (req: Request, res: Response) => {
 		return res.status(401).json({ error: 'Unauthorized' });
 	}
 
-	const { businessName, email, phone, address, nip, welcomePopupShown, tutorialNextStepsDisabled, tutorialClientSendDisabled, defaultWatermarkUrl, defaultWatermarkPosition } = req.body;
+	const { businessName, email, phone, address, nip, welcomePopupShown, tutorialNextStepsDisabled, tutorialClientSendDisabled, defaultWatermarkUrl, defaultWatermarkPosition, defaultWatermarkThumbnails } = req.body;
 
 	if (email !== undefined && email !== '' && email !== null) {
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -239,6 +240,11 @@ router.put('/business-info', async (req: Request, res: Response) => {
 			updateExpressions.push('defaultWatermarkUrl = :defaultWatermarkUrl');
 			expressionAttributeValues[':defaultWatermarkUrl'] = defaultWatermarkUrl.trim();
 		}
+	}
+
+	if (defaultWatermarkThumbnails !== undefined) {
+		updateExpressions.push('defaultWatermarkThumbnails = :defaultWatermarkThumbnails');
+		expressionAttributeValues[':defaultWatermarkThumbnails'] = Boolean(defaultWatermarkThumbnails);
 	}
 
 	if (defaultWatermarkPosition !== undefined) {

@@ -1099,7 +1099,7 @@ export function useUploadWatermark() {
 
       // Step 3: Get S3 URL and add to watermark collection (don't set as default)
       const s3Url = presignResponse.url.split("?")[0]; // Remove query params
-      
+
       // Add watermark to collection with S3 URL (backend will convert to CloudFront in list endpoint)
       try {
         await api.watermarks.add({ url: s3Url, name: file.name });

@@ -9,11 +9,13 @@ import {
   useUpdateGalleryPricingPackage,
 } from "../../hooks/mutations/useGalleryMutations";
 import { useBusinessInfo } from "../../hooks/queries/useAuth";
+import { useOrders } from "../../hooks/queries/useOrders";
 import { useGallery, useGalleryDeliveredOrders } from "../../hooks/queries/useGalleries";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../lib/currency";
 import { generatePassword } from "../../lib/password";
+import { shouldShowWatermarkWarningForGallery } from "../../lib/watermark-warning";
 import Button from "../ui/button/Button";
 import Input from "../ui/input/InputField";
 
@@ -47,26 +49,11 @@ export function GallerySettingsForm({
 }: GallerySettingsFormProps) {
   const router = useRouter();
   const { showToast } = useToast();
-  
+
   // Get active tab from URL or defaultTab prop
   const urlTab = router.query.tab as string | undefined;
   const activeTabFromUrl = urlTab as "general" | "package" | "personalize" | undefined;
   const initialTab = activeTabFromUrl || defaultTab || "general";
-  // #region agent log
-  fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      location: "GallerySettingsForm.tsx:urlTab",
-      message: "URL tab and derived state",
-      data: { urlTab, activeTabFromUrl, initialTab, pathname: router.pathname, asPath: router.asPath, isReady: router.isReady },
-      timestamp: Date.now(),
-      sessionId: "debug-session",
-      runId: "post-fix",
-      hypothesisId: "H2-H4",
-    }),
-  }).catch(() => {});
-  // #endregion
 
   // Use React Query hooks
   const { data: businessInfo } = useBusinessInfo();
@@ -80,6 +67,12 @@ export function GallerySettingsForm({
   const { data: deliveredOrders = [], isLoading: checkingDelivered } =
     useGalleryDeliveredOrders(galleryId);
   const hasDeliveredOrders = deliveredOrders.length > 0;
+
+  const { data: orders = [] } = useOrders(galleryId);
+  const hasDeliveredOrPreparingDelivery = orders.some(
+    (o) =>
+      o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
+  );
 
   // Use React Query mutations for data operations
   const updateGalleryMutation = useUpdateGallery();
@@ -109,25 +102,11 @@ export function GallerySettingsForm({
 
   // Update activeTab when URL changes
   useEffect(() => {
-    // #region agent log
-    fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "GallerySettingsForm.tsx:useEffect-sync-tab",
-        message: "Effect run: sync tab from URL",
-        data: { activeTabFromUrl, activeTab, willSet: Boolean(activeTabFromUrl && activeTabFromUrl !== activeTab) },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        hypothesisId: "H2-H4",
-      }),
-    }).catch(() => {});
-    // #endregion
     if (activeTabFromUrl && activeTabFromUrl !== activeTab) {
       setActiveTab(activeTabFromUrl);
     }
   }, [activeTabFromUrl, activeTab]);
-  
+
   const [showWatermarkEditorOverlay, setShowWatermarkEditorOverlay] = useState(false);
   const [showLoginPersonalizationOverlay, setShowLoginPersonalizationOverlay] = useState(false);
   const [errors, setErrors] = useState<{
@@ -394,24 +373,6 @@ export function GallerySettingsForm({
     );
   }
 
-  // Show locked form if gallery is delivered - but allow gallery name and extra price editing
-  // #region agent log
-  if (typeof window !== "undefined") {
-    fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "GallerySettingsForm.tsx:branch",
-        message: "Which branch renders",
-        data: { hasDeliveredOrders, effectiveTab },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        runId: "post-fix",
-        hypothesisId: "H1-H5",
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
   if (hasDeliveredOrders) {
     const handleUpdateLockedSettings = async (): Promise<void> => {
       if (!galleryId) {
@@ -591,53 +552,40 @@ export function GallerySettingsForm({
           </div>
 
           {(effectiveTab === "general" || effectiveTab === "package") && (
-          <div className="flex justify-end gap-3 mt-4">
-            {showCancelButton && (
-              <Button variant="outline" onClick={handleCancel} disabled={saving}>
-                {cancelLabel}
+            <div className="flex justify-end gap-3 mt-4">
+              {showCancelButton && (
+                <Button variant="outline" onClick={handleCancel} disabled={saving}>
+                  {cancelLabel}
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={handleUpdateLockedSettings}
+                disabled={!canSaveLockedSettings || saving}
+                startIcon={<Save size={20} />}
+              >
+                {saving ? "Zapisywanie..." : "Zapisz"}
               </Button>
-            )}
-            <Button
-              variant="primary"
-              onClick={handleUpdateLockedSettings}
-              disabled={!canSaveLockedSettings || saving}
-              startIcon={<Save size={20} />}
-            >
-              {saving ? "Zapisywanie..." : "Zapisz"}
-            </Button>
-          </div>
+            </div>
           )}
         </div>
       </div>
     );
   }
 
-  // Check if any watermark is set (gallery-specific or user default) – show warning only when neither is set
-  const hasGalleryWatermark = Boolean(gallery?.watermarkUrl);
-  const hasUserDefaultWatermark = Boolean(businessInfo?.defaultWatermarkUrl);
-  const hasWatermark = hasGalleryWatermark || hasUserDefaultWatermark;
+  // Show warning only when data is ready and user did not set Znak Wodny (never acknowledged); hide when they explicitly chose "Brak Znaku Wodnego"; hide when gallery has Delivered or Preparing Delivery orders
+  const showWatermarkWarning =
+    gallery !== undefined &&
+    gallery !== null &&
+    businessInfo !== undefined &&
+    businessInfo !== null &&
+    !hasDeliveredOrPreparingDelivery &&
+    shouldShowWatermarkWarningForGallery(gallery, businessInfo);
+  const hasWatermark = Boolean(gallery?.watermarkUrl || businessInfo?.defaultWatermarkUrl);
 
   const hasCoverPhoto = Boolean(
     gallery?.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string"
   );
-  // #region agent log
-  if (typeof window !== "undefined") {
-    fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "GallerySettingsForm.tsx:main-return",
-        message: "Main return: effectiveTab used for content",
-        data: { effectiveTab, activeTabFromUrl },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        runId: "post-fix",
-        hypothesisId: "H2-H4",
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
-
   return (
     <div className="space-y-4">
       <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">Ustawienia galerii</h1>
@@ -649,78 +597,78 @@ export function GallerySettingsForm({
               <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                 Nazwa galerii <span className="text-red-500">*</span>
               </label>
-            <Input
-              type="text"
-              placeholder="Nazwa galerii"
-              value={settingsForm.galleryName}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value.length <= 100) {
-                  setSettingsForm({ ...settingsForm, galleryName: value });
-                  // Clear error when user starts typing
-                  if (errors.galleryName) {
-                    setErrors({ ...errors, galleryName: undefined });
+              <Input
+                type="text"
+                placeholder="Nazwa galerii"
+                value={settingsForm.galleryName}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value.length <= 100) {
+                    setSettingsForm({ ...settingsForm, galleryName: value });
+                    // Clear error when user starts typing
+                    if (errors.galleryName) {
+                      setErrors({ ...errors, galleryName: undefined });
+                    }
                   }
-                }
-              }}
-              maxLength={100}
-              required
-              error={!!errors.galleryName}
-              errorMessage={errors.galleryName}
-            />
-          </div>
-
-          <div>
-            <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Email logowania <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="email"
-              placeholder={galleryLoading ? "Ładowanie danych..." : "Email klienta"}
-              value={galleryLoading ? "" : (settingsForm.clientEmail ?? "")}
-              onChange={(e) => {
-                setSettingsForm({ ...settingsForm, clientEmail: e.target.value });
-                // Clear error when user starts typing
-                if (errors.clientEmail) {
-                  setErrors({ ...errors, clientEmail: undefined });
-                }
-              }}
-              disabled={galleryLoading}
-              required
-              error={!!errors.clientEmail}
-              errorMessage={errors.clientEmail}
-            />
-          </div>
-
-          <div>
-            <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Hasło klienta (opcjonalne)
-            </label>
-            <div className="flex gap-2 items-start">
-              <div className="flex-1">
-                <Input
-                  type="password"
-                  placeholder="Nowe hasło"
-                  value={settingsForm.clientPassword}
-                  onChange={(e) =>
-                    setSettingsForm({ ...settingsForm, clientPassword: e.target.value })
-                  }
-                  hint="Pozostaw puste aby nie zmieniać hasła"
-                />
-              </div>
-              <Button
-                type="button"
-                onClick={() => {
-                  const newPassword = generatePassword();
-                  setSettingsForm({ ...settingsForm, clientPassword: newPassword });
                 }}
-                className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap h-11"
-              >
-                Generuj
-              </Button>
+                maxLength={100}
+                required
+                error={!!errors.galleryName}
+                errorMessage={errors.galleryName}
+              />
+            </div>
+
+            <div>
+              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Email logowania <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="email"
+                placeholder={galleryLoading ? "Ładowanie danych..." : "Email klienta"}
+                value={galleryLoading ? "" : (settingsForm.clientEmail ?? "")}
+                onChange={(e) => {
+                  setSettingsForm({ ...settingsForm, clientEmail: e.target.value });
+                  // Clear error when user starts typing
+                  if (errors.clientEmail) {
+                    setErrors({ ...errors, clientEmail: undefined });
+                  }
+                }}
+                disabled={galleryLoading}
+                required
+                error={!!errors.clientEmail}
+                errorMessage={errors.clientEmail}
+              />
+            </div>
+
+            <div>
+              <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Hasło klienta (opcjonalne)
+              </label>
+              <div className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <Input
+                    type="password"
+                    placeholder="Nowe hasło"
+                    value={settingsForm.clientPassword}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, clientPassword: e.target.value })
+                    }
+                    hint="Pozostaw puste aby nie zmieniać hasła"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const newPassword = generatePassword();
+                    setSettingsForm({ ...settingsForm, clientPassword: newPassword });
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white whitespace-nowrap h-11"
+                >
+                  Generuj
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
         )}
 
         {effectiveTab === "package" && (
@@ -730,117 +678,117 @@ export function GallerySettingsForm({
                 Pakiet cenowy
               </h3>
 
-            <div className="space-y-2">
-              <div>
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Nazwa pakietu
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Nazwa pakietu"
-                  value={settingsForm.packageName}
-                  onChange={(e) => {
-                    setSettingsForm({ ...settingsForm, packageName: e.target.value });
-                    // Clear error when user starts typing
-                    if (errors.packageName) {
-                      setErrors({ ...errors, packageName: undefined });
-                    }
-                  }}
-                  required
-                  error={!!errors.packageName}
-                  errorMessage={errors.packageName}
-                />
-              </div>
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Nazwa pakietu
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Nazwa pakietu"
+                    value={settingsForm.packageName}
+                    onChange={(e) => {
+                      setSettingsForm({ ...settingsForm, packageName: e.target.value });
+                      // Clear error when user starts typing
+                      if (errors.packageName) {
+                        setErrors({ ...errors, packageName: undefined });
+                      }
+                    }}
+                    required
+                    error={!!errors.packageName}
+                    errorMessage={errors.packageName}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Liczba zdjęć w pakiecie <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={settingsForm.includedCount}
-                  onChange={(e) => {
-                    const value = Number.parseInt(e.target.value, 10) || 0;
-                    setSettingsForm({
-                      ...settingsForm,
-                      includedCount: value,
-                    });
-                    // Clear error when user starts typing
-                    if (errors.includedCount) {
-                      setErrors({ ...errors, includedCount: undefined });
-                    }
-                  }}
-                  min="0"
-                  required
-                  error={!!errors.includedCount}
-                  errorMessage={errors.includedCount}
-                />
-              </div>
+                <div>
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Liczba zdjęć w pakiecie <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={settingsForm.includedCount}
+                    onChange={(e) => {
+                      const value = Number.parseInt(e.target.value, 10) || 0;
+                      setSettingsForm({
+                        ...settingsForm,
+                        includedCount: value,
+                      });
+                      // Clear error when user starts typing
+                      if (errors.includedCount) {
+                        setErrors({ ...errors, includedCount: undefined });
+                      }
+                    }}
+                    min="0"
+                    required
+                    error={!!errors.includedCount}
+                    errorMessage={errors.includedCount}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Cena pakietu (PLN) <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="text"
-                  placeholder="0.00"
-                  value={packagePriceInput ?? centsToPlnString(settingsForm.packagePriceCents)}
-                  onChange={(e) => {
-                    const formatted = formatCurrencyInput(e.target.value);
-                    setPackagePriceInput(formatted);
-                    const cents = plnToCents(formatted);
-                    setSettingsForm({
-                      ...settingsForm,
-                      packagePriceCents: cents,
-                    });
-                    if (errors.packagePriceCents) {
-                      setErrors({ ...errors, packagePriceCents: undefined });
-                    }
-                  }}
-                  onBlur={() => {
-                    if (!packagePriceInput || packagePriceInput === "") {
-                      setPackagePriceInput(null);
-                    }
-                  }}
-                  required
-                  error={!!errors.packagePriceCents}
-                  errorMessage={errors.packagePriceCents}
-                />
-              </div>
+                <div>
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Cena pakietu (PLN) <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="0.00"
+                    value={packagePriceInput ?? centsToPlnString(settingsForm.packagePriceCents)}
+                    onChange={(e) => {
+                      const formatted = formatCurrencyInput(e.target.value);
+                      setPackagePriceInput(formatted);
+                      const cents = plnToCents(formatted);
+                      setSettingsForm({
+                        ...settingsForm,
+                        packagePriceCents: cents,
+                      });
+                      if (errors.packagePriceCents) {
+                        setErrors({ ...errors, packagePriceCents: undefined });
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!packagePriceInput || packagePriceInput === "") {
+                        setPackagePriceInput(null);
+                      }
+                    }}
+                    required
+                    error={!!errors.packagePriceCents}
+                    errorMessage={errors.packagePriceCents}
+                  />
+                </div>
 
-              <div>
-                <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  Cena za dodatkowe zdjęcie (PLN)
-                </label>
-                <Input
-                  type="text"
-                  placeholder="0.00"
-                  value={extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)}
-                  onChange={(e) => {
-                    const formatted = formatCurrencyInput(e.target.value);
-                    setExtraPriceInput(formatted);
-                    const cents = plnToCents(formatted);
-                    setSettingsForm({
-                      ...settingsForm,
-                      extraPriceCents: cents,
-                    });
-                    if (errors.extraPriceCents) {
-                      setErrors({ ...errors, extraPriceCents: undefined });
-                    }
-                  }}
-                  onBlur={() => {
-                    if (!extraPriceInput || extraPriceInput === "") {
-                      setExtraPriceInput(null);
-                    }
-                  }}
-                  error={!!errors.extraPriceCents}
-                  errorMessage={errors.extraPriceCents}
-                />
+                <div>
+                  <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Cena za dodatkowe zdjęcie (PLN)
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="0.00"
+                    value={extraPriceInput ?? centsToPlnString(settingsForm.extraPriceCents)}
+                    onChange={(e) => {
+                      const formatted = formatCurrencyInput(e.target.value);
+                      setExtraPriceInput(formatted);
+                      const cents = plnToCents(formatted);
+                      setSettingsForm({
+                        ...settingsForm,
+                        extraPriceCents: cents,
+                      });
+                      if (errors.extraPriceCents) {
+                        setErrors({ ...errors, extraPriceCents: undefined });
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!extraPriceInput || extraPriceInput === "") {
+                        setExtraPriceInput(null);
+                      }
+                    }}
+                    error={!!errors.extraPriceCents}
+                    errorMessage={errors.extraPriceCents}
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
         )}
 
         {effectiveTab === "personalize" && (
@@ -891,8 +839,12 @@ export function GallerySettingsForm({
                 onClick={() => setShowWatermarkEditorOverlay(true)}
                 className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-photographer-accent dark:hover:border-photographer-accent transition-all duration-300 active:scale-[0.98]"
               >
-                {!hasWatermark && (
-                  <div className="absolute top-2 right-2">
+                {showWatermarkWarning && (
+                  <div
+                    className="absolute top-2 right-2"
+                    title="Znak wodny nie został ustawiony"
+                    aria-label="Znak wodny nie został ustawiony"
+                  >
                     <AlertTriangle size={20} className="text-orange-500 dark:text-orange-400" />
                   </div>
                 )}
@@ -930,20 +882,20 @@ export function GallerySettingsForm({
 
         {(effectiveTab === "general" || effectiveTab === "package") && (
           <div className="flex justify-end gap-3 mt-4">
-          {showCancelButton && (
-            <Button variant="outline" onClick={handleCancel} disabled={saving}>
-              {cancelLabel}
+            {showCancelButton && (
+              <Button variant="outline" onClick={handleCancel} disabled={saving}>
+                {cancelLabel}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              onClick={handleUpdateSettings}
+              disabled={saving || !isFormValid()}
+              startIcon={<Save size={20} />}
+            >
+              {saving ? "Zapisywanie..." : "Zapisz"}
             </Button>
-          )}
-          <Button
-            variant="primary"
-            onClick={handleUpdateSettings}
-            disabled={saving || !isFormValid()}
-            startIcon={<Save size={20} />}
-          >
-            {saving ? "Zapisywanie..." : "Zapisz"}
-          </Button>
-        </div>
+          </div>
         )}
       </div>
 

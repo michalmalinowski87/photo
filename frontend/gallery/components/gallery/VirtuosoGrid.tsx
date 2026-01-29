@@ -326,7 +326,8 @@ export function VirtuosoGridComponent({
 
           const imageUrl = image.bigThumbUrl || image.thumbnailUrl || image.url;
           const previewUrl = image.previewUrl || image.url;
-          const fullImageUrl = image.url;
+          // Best available; original never exposed in gallery app
+          const fullImageUrl = image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
           const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
 
           const marbleMaxColumns =
@@ -415,7 +416,7 @@ export function VirtuosoGridComponent({
                 }}
               >
                 <Image
-                  src={imageUrl}
+                  src={imageUrl ?? ""}
                   alt={image.alt || `Image ${index + 1}`}
                   fill
                   className={imageClasses}
@@ -435,7 +436,7 @@ export function VirtuosoGridComponent({
                   }}
                   priority={index < 3} // Prioritize first 3 images for LCP
                   loading={index < 3 ? undefined : "lazy"}
-                  unoptimized={imageUrl.startsWith("http")}
+                  unoptimized={(imageUrl ?? "").startsWith("http")}
                 />
               </a>
               

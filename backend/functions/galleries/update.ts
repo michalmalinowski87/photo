@@ -208,6 +208,11 @@ export const handler = lambdaLogger(async (event: any) => {
 			expressionAttributeValues[':watermarkUrl'] = body.watermarkUrl.trim();
 		}
 	}
+
+	if (body.watermarkThumbnails !== undefined) {
+		setExpressions.push('watermarkThumbnails = :watermarkThumbnails');
+		expressionAttributeValues[':watermarkThumbnails'] = Boolean(body.watermarkThumbnails);
+	}
 	
 	if (body.watermarkPosition !== undefined) {
 		if (body.watermarkPosition === null) {

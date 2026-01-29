@@ -90,6 +90,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 
+		// NEVER expose original URL to gallery app (clients). Clients may only download finals (delivered order).
+		if (access.isClient && !isFinal) {
+			logger.warn('Client attempted to download original', { galleryId, filename });
+			return {
+				statusCode: 403,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Forbidden',
+					message: 'Download of originals is not available. You can download your delivered photos from the order.'
+				})
+			};
+		}
+
 		// Fetch image to verify it belongs to this gallery
 		const imageGet = await ddb.send(new GetCommand({
 			TableName: imagesTable,

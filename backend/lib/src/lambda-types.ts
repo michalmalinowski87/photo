@@ -68,6 +68,8 @@ export interface GalleryItem extends DynamoDBItem {
 		objectPosition?: string;
 	};
 	watermarkUrl?: string;
+	/** When true, stamp thumb and bigThumb with one full-cover watermark; when false, only preview is watermarked */
+	watermarkThumbnails?: boolean;
 	watermarkPosition?: {
 		// Corner-relative positioning (preferred)
 		corner?: string;

@@ -637,7 +637,8 @@ export function LightGalleryWrapper({
           const newItems = newImages.map((image) => {
             const imageUrl = image.bigThumbUrl || image.thumbnailUrl || image.url;
             const previewUrl = image.previewUrl || image.url;
-            const fullImageUrl = image.url;
+            // Best available: original never exposed in gallery app, so use preview
+            const fullImageUrl = image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
             const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
             
             return {

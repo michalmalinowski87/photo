@@ -13,6 +13,7 @@ interface BusinessInfo {
   tutorialNextStepsDisabled?: boolean;
   tutorialClientSendDisabled?: boolean;
   defaultWatermarkUrl?: string;
+  defaultWatermarkThumbnails?: boolean;
   defaultWatermarkPosition?: {
     position: string;
     scale: number;

@@ -1,6 +1,10 @@
+import { AlertTriangle } from "lucide-react";
 import React, { useState, useEffect } from "react";
 
+import { useBusinessInfo } from "../../../hooks/queries/useAuth";
 import { useGallery } from "../../../hooks/queries/useGalleries";
+import { useOrders } from "../../../hooks/queries/useOrders";
+import { shouldShowWatermarkWarningForGallery } from "../../../lib/watermark-warning";
 import type { Gallery } from "../../../types";
 import { Modal } from "../../ui/modal";
 
@@ -15,13 +19,30 @@ interface WatermarkPersonalizationOverlayProps {
   coverPhotoUrl?: string;
 }
 
-export const WatermarkPersonalizationOverlay: React.FC<
-  WatermarkPersonalizationOverlayProps
-> = ({ isOpen, onClose, galleryId, gallery, coverPhotoUrl }) => {
+export const WatermarkPersonalizationOverlay: React.FC<WatermarkPersonalizationOverlayProps> = ({
+  isOpen,
+  onClose,
+  galleryId,
+  gallery,
+  coverPhotoUrl,
+}) => {
+  const { data: businessInfo } = useBusinessInfo();
   const { data: currentGallery } = useGallery(galleryId);
-  const effectiveGallery = currentGallery || gallery;
+  const { data: orders = [] } = useOrders(galleryId);
+  const effectiveGallery = currentGallery ?? gallery;
+  const hasDeliveredOrPreparingDelivery = orders.some(
+    (o) =>
+      o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
+  );
+  const showWatermarkWarning =
+    effectiveGallery !== undefined &&
+    effectiveGallery !== null &&
+    businessInfo !== undefined &&
+    businessInfo !== null &&
+    !hasDeliveredOrPreparingDelivery &&
+    shouldShowWatermarkWarningForGallery(effectiveGallery, businessInfo);
   const effectiveCoverPhotoUrl =
-    coverPhotoUrl ||
+    coverPhotoUrl ??
     (effectiveGallery?.coverPhotoUrl && typeof effectiveGallery.coverPhotoUrl === "string"
       ? effectiveGallery.coverPhotoUrl
       : "");
@@ -124,6 +145,15 @@ export const WatermarkPersonalizationOverlay: React.FC<
               onClick={() => setActiveOption("watermark")}
               className="relative p-10 md:p-12 rounded-2xl border-2 border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-photographer-accent dark:hover:border-photographer-accent transition-all duration-300 active:scale-[0.98]"
             >
+              {showWatermarkWarning && (
+                <div
+                  className="absolute top-2 right-2"
+                  title="Znak wodny nie został ustawiony"
+                  aria-label="Znak wodny nie został ustawiony"
+                >
+                  <AlertTriangle size={20} className="text-orange-500 dark:text-orange-400" />
+                </div>
+              )}
               <div className="flex flex-col items-center space-y-4">
                 <div className="w-20 h-20 rounded-full flex items-center justify-center bg-photographer-muted dark:bg-gray-700">
                   <svg

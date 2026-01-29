@@ -1788,7 +1788,6 @@ class ApiService {
       });
     },
 
-
     /**
      * Get presigned URL for final image upload
      */
@@ -2050,14 +2049,22 @@ class ApiService {
     /**
      * List all user watermarks
      */
-    list: async (): Promise<{ watermarks: Array<{ url: string; name: string; createdAt: string }> }> => {
+    list: async (): Promise<{
+      watermarks: Array<{ url: string; name: string; createdAt: string }>;
+    }> => {
       return await this._request("/watermarks/list");
     },
 
     /**
      * Add a watermark to user's collection
      */
-    add: async (data: { url: string; name?: string }): Promise<{ message: string; watermark: { url: string; name: string; createdAt: string } }> => {
+    add: async (data: {
+      url: string;
+      name?: string;
+    }): Promise<{
+      message: string;
+      watermark: { url: string; name: string; createdAt: string };
+    }> => {
       if (!data?.url) {
         throw new Error("Watermark URL is required");
       }
@@ -2121,6 +2128,7 @@ class ApiService {
         position: string;
         scale: number;
       };
+      defaultWatermarkThumbnails?: boolean;
     }): Promise<void> => {
       if (!data) {
         throw new Error("Business info data is required");

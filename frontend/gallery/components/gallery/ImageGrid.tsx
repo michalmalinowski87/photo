@@ -100,12 +100,12 @@ export function ImageGrid({
           const imageUrl = getImageUrl(image); // bigThumbUrl for gallery miniatures
           // Preview quality for carousel preview (main image in lightbox) - use previewUrl
           const previewUrl = image.previewUrl || image.url;
-          // Full quality URL (for download/zoom)
-          const fullImageUrl = image.url;
+          // Best available for lightbox/download; original never exposed in gallery app
+          const fullImageUrl = image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
           // Thumbnails for carousel thumbnails strip (bottom of lightGallery)
           const carouselThumbUrl = image.thumbnailUrl || image.thumbUrl || image.bigThumbUrl || image.url;
           // Ensure unique key by combining image.key with index (fallback to URL if key is missing)
-          const uniqueKey = image.key ? `${image.key}-${index}` : image.url || `image-${index}`;
+          const uniqueKey = image.key ? `${image.key}-${index}` : image.previewUrl || image.url || `image-${index}`;
           // Prioritize first 3 images for LCP (increases chance that LCP image has priority)
           const isPriority = index < 3;
 
@@ -125,25 +125,25 @@ export function ImageGrid({
               >
                 {layout === "square" ? (
                   <Image
-                    src={imageUrl}
+                    src={imageUrl ?? ""}
                     alt={image.alt || `Image ${index + 1}`}
                     fill
                     className="object-cover"
                     priority={isPriority} // Prioritize first 3 images for LCP
                     loading={isPriority ? undefined : "lazy"}
                     sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    unoptimized={imageUrl.startsWith("http")} // Don't optimize external URLs
+                    unoptimized={(imageUrl ?? "").startsWith("http")} // Don't optimize external URLs
                   />
                 ) : (
                   <Image
-                    src={imageUrl}
+                    src={imageUrl ?? ""}
                     alt={image.alt || `Image ${index + 1}`}
                     fill
                     className="object-contain"
                     priority={isPriority} // Prioritize first 3 images for LCP
                     loading={isPriority ? undefined : "lazy"}
                     sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    unoptimized={imageUrl.startsWith("http")}
+                    unoptimized={(imageUrl ?? "").startsWith("http")}
                   />
                 )}
               </a>
