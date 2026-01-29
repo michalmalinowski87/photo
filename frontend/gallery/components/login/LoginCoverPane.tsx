@@ -304,7 +304,7 @@ export const LoginCoverPane = memo(function LoginCoverPane({
             )}
           </div>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center">
             <div className="w-full max-w-xl px-10 text-center">
               <PhotoCloudMark variant="full" className="mx-auto" />
 
