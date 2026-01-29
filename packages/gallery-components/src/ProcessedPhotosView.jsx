@@ -87,14 +87,15 @@ function ProcessedImageItem({ img, index, onImageClick }) {
 				bottom: 0,
 				left: 0,
 				right: 0,
-				background: 'rgba(0,0,0,0.7)',
+				background: 'rgba(60, 60, 60, 0.75)',
 				color: 'white',
-				padding: 8,
-				fontSize: '12px',
-				textAlign: 'center'
+				padding: '4px 8px',
+				fontSize: '11px',
+				overflow: 'hidden',
+				textOverflow: 'ellipsis',
+				whiteSpace: 'nowrap'
 			}} title={img.key}>
 				{(() => {
-					// Remove file extension for display
 					const filename = img.key || '';
 					const lastDot = filename.lastIndexOf('.');
 					return lastDot === -1 ? filename : filename.substring(0, lastDot);

@@ -374,7 +374,12 @@ export function GallerySettingsForm({
 
   if (hasDeliveredOrders) {
     const currentPkg = gallery?.pricingPackage as
-      | { packageName?: string; includedCount?: number; extraPriceCents?: number; packagePriceCents?: number }
+      | {
+          packageName?: string;
+          includedCount?: number;
+          extraPriceCents?: number;
+          packagePriceCents?: number;
+        }
       | undefined;
     const pkgChanged =
       settingsForm.packageName !== currentPkg?.packageName ||

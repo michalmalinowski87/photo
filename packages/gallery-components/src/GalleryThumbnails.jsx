@@ -247,21 +247,29 @@ export default function GalleryThumbnails({
 										🗑️
 									</button>
 								)}
-							</div>
-							<div style={{ 
-								padding: 8, 
-								fontSize: '12px', 
-								color: '#666',
-								textOverflow: 'ellipsis',
-								overflow: 'hidden',
-								whiteSpace: 'nowrap'
-							}} title={img.key}>
-								{(() => {
-									// Remove file extension for display
-									const filename = img.key || '';
-									const lastDot = filename.lastIndexOf('.');
-									return lastDot === -1 ? filename : filename.substring(0, lastDot);
-								})()}
+								{/* Photo name overlay at bottom - semi-transparent grey, truncate when long */}
+								<div
+									style={{
+										position: 'absolute',
+										bottom: 0,
+										left: 0,
+										right: 0,
+										background: 'rgba(60, 60, 60, 0.75)',
+										color: 'white',
+										padding: '4px 8px',
+										fontSize: '11px',
+										overflow: 'hidden',
+										textOverflow: 'ellipsis',
+										whiteSpace: 'nowrap'
+									}}
+									title={img.key}
+								>
+									{(() => {
+										const filename = img.key || '';
+										const lastDot = filename.lastIndexOf('.');
+										return lastDot === -1 ? filename : filename.substring(0, lastDot);
+									})()}
+								</div>
 							</div>
 						</div>
 					);

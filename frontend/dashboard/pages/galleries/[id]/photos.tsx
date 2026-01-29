@@ -23,6 +23,7 @@ import Badge from "../../../components/ui/badge/Badge";
 import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading, FullPageLoading } from "../../../components/ui/loading/Loading";
+import { PhotoNameOverlay } from "../../../components/ui/PhotoNameOverlay";
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
@@ -1335,7 +1336,7 @@ export default function GalleryPhotos() {
       return (
         <div
           key={imageKey}
-          className={`relative group rounded-lg overflow-hidden transition-all ${
+          className={`relative group w-full h-full rounded-lg overflow-hidden transition-all ${
             isSelectionMode ? "select-none" : ""
           } ${
             isDeleting
@@ -1369,7 +1370,7 @@ export default function GalleryPhotos() {
           }}
         >
           <div
-            className={`relative ${
+            className={`relative overflow-hidden ${
               currentLayout === "square"
                 ? "aspect-square"
                 : currentLayout === "marble"
@@ -1479,6 +1480,7 @@ export default function GalleryPhotos() {
                       </div>
                     );
                   })()}
+                <PhotoNameOverlay displayName={removeFileExtension(imageKey)} />
                 {isDeleting && (
                   <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
                     <div className="flex flex-col items-center space-y-2">
@@ -1489,12 +1491,6 @@ export default function GalleryPhotos() {
                 )}
                 {!isDeleting && !isSelectionMode && !isDelivered && !isInAnyOrder && (
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity flex flex-col items-center justify-center z-20">
-                    {/* Image name tooltip on hover */}
-                    <div className="absolute top-2 left-0 right-0 flex justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="text-white text-base font-bold truncate max-w-full px-2">
-                        {removeFileExtension(imageKey)}
-                      </div>
-                    </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1509,16 +1505,6 @@ export default function GalleryPhotos() {
                     >
                       Usuń
                     </button>
-                  </div>
-                )}
-                {/* Image name tooltip on hover - show when no delete button overlay */}
-                {!isDeleting && (isSelectionMode || isDelivered || isInAnyOrder) && (
-                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity z-20 pointer-events-none">
-                    <div className="absolute top-2 left-0 right-0 flex justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="text-white text-base font-bold truncate max-w-full px-2">
-                        {removeFileExtension(imageKey)}
-                      </div>
-                    </div>
                   </div>
                 )}
               </>

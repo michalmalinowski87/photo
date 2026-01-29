@@ -3,12 +3,14 @@ import dynamic from "next/dynamic";
 import { useState, useCallback, useEffect } from "react";
 
 import { useImageSelection } from "../../hooks/useImageSelection";
+import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
 import { DashboardVirtuosoGrid } from "../galleries/DashboardVirtuosoGrid";
 import type { GridLayout } from "../galleries/LayoutSelector";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { Loading } from "../ui/loading/Loading";
+import { PhotoNameOverlay } from "../ui/PhotoNameOverlay";
 
 interface GalleryImage {
   id?: string;
@@ -198,7 +200,7 @@ export function FinalsTab({
       return (
         <div
           key={imageKey ?? idx}
-          className={`relative group rounded-lg overflow-hidden transition-all ${
+          className={`relative group w-full h-full rounded-lg overflow-hidden transition-all ${
             isSelectionMode ? "select-none" : ""
           } ${
             isDeleting
@@ -226,7 +228,7 @@ export function FinalsTab({
           }}
         >
           <div
-            className={`relative w-full h-full ${
+            className={`relative overflow-hidden w-full h-full ${
               layout === "square" ? "aspect-square" : layout === "marble" ? "" : "aspect-[4/3]"
             }`}
           >
@@ -261,6 +263,7 @@ export function FinalsTab({
               }`}
               preferredSize={layout === "marble" ? "bigthumb" : "thumb"}
             />
+            <PhotoNameOverlay displayName={removeFileExtension(img.key ?? img.filename ?? "")} />
             {/* Deleting overlay - always visible when deleting */}
             {isDeleting && (
               <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">

@@ -1,12 +1,14 @@
 import { HandHeart } from "lucide-react";
 import { useEffect, useCallback } from "react";
 
+import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
 import { DashboardVirtuosoGrid } from "../galleries/DashboardVirtuosoGrid";
 import type { GridLayout } from "../galleries/LayoutSelector";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { GalleryLoading } from "../ui/loading/Loading";
+import { PhotoNameOverlay } from "../ui/PhotoNameOverlay";
 
 interface GalleryImage {
   id?: string;
@@ -57,7 +59,7 @@ export function OriginalsTab({
       return (
         <div
           key={imgKey ?? idx}
-          className={`relative group rounded-lg overflow-hidden transition-all ${
+          className={`relative group w-full h-full rounded-lg overflow-hidden transition-all ${
             layout === "square"
               ? "bg-gray-100 dark:bg-gray-800"
               : layout === "marble"
@@ -66,13 +68,13 @@ export function OriginalsTab({
           }`}
         >
           <div
-            className={`relative w-full h-full ${
+            className={`relative overflow-hidden w-full h-full ${
               layout === "square" ? "aspect-square" : layout === "marble" ? "" : "aspect-[4/3]"
             }`}
           >
             <LazyRetryableImage
               imageData={img as ImageFallbackUrls}
-              alt={imgKey}
+              alt={String(imgKey)}
               className={`w-full h-full ${
                 layout === "square"
                   ? "object-cover rounded-lg"
@@ -82,6 +84,7 @@ export function OriginalsTab({
               }`}
               preferredSize={layout === "marble" ? "bigthumb" : "thumb"}
             />
+            <PhotoNameOverlay displayName={removeFileExtension(img.key ?? img.filename ?? "")} />
           </div>
         </div>
       );

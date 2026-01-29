@@ -17,12 +17,7 @@ const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@photocloud/gallery-components"],
   // Allow dev requests when accessed via Traefik/local HTTPS (e.g. dashboard.lvh.me)
-  allowedDevOrigins: [
-    "dashboard.lvh.me",
-    "photocloud.lvh.me",
-    "gallery.lvh.me",
-    "*.lvh.me",
-  ],
+  allowedDevOrigins: ["dashboard.lvh.me", "photocloud.lvh.me", "gallery.lvh.me", "*.lvh.me"],
   images: {
     remotePatterns: [
       {
@@ -45,9 +40,13 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Note: We do not add turbopack.resolveAlias for React here. Doing so led to two React
-  // copies (alias vs default resolution) and "Invalid hook call". Turbopack dev uses default
-  // resolution; webpack (build) below enforces a single React from Next's bundle.
+  // Turbopack (used by `next dev --turbopack`): set root to monorepo so workspace packages
+  // (e.g. @photocloud/gallery-components) and hoisted deps resolve. Do not add resolveAlias
+  // for React—doing so led to two React copies and "Invalid hook call". Webpack (build)
+  // below enforces a single React from Next's bundle.
+  turbopack: {
+    root: path.join(__dirname, "..", ".."),
+  },
   webpack: (config, { isServer }) => {
     // Resolve modules from root node_modules in yarn workspace
     // This ensures Next.js can find dependencies even when they're hoisted to the root

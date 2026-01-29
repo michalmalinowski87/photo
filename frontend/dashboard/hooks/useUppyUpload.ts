@@ -536,11 +536,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
 
       let existingKeys: Set<string>;
       const cached = existingKeysCacheRef.current;
-      if (
-        cached &&
-        cached.cacheKey === cacheKey &&
-        Date.now() - cached.timestamp < CACHE_TTL_MS
-      ) {
+      if (cached && cached.cacheKey === cacheKey && Date.now() - cached.timestamp < CACHE_TTL_MS) {
         existingKeys = new Set(cached.keys);
       } else {
         try {

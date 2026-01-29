@@ -47,9 +47,7 @@ export const UploadCollisionModal = ({
       className="max-w-2xl"
     >
       <div className="p-6">
-        <h2 className="text-3xl font-semibold text-gray-900 dark:text-white">
-          Plik już istnieje
-        </h2>
+        <h2 className="text-3xl font-semibold text-gray-900 dark:text-white">Plik już istnieje</h2>
 
         <div className="mt-3 mb-4 border-t border-gray-300 dark:border-gray-600" />
 
@@ -79,11 +77,7 @@ export const UploadCollisionModal = ({
               }`}
             >
               {applyToAllChecked && (
-                <Check
-                  className="h-3.5 w-3.5 shrink-0 text-white"
-                  strokeWidth={3}
-                  aria-hidden
-                />
+                <Check className="h-3.5 w-3.5 shrink-0 text-white" strokeWidth={3} aria-hidden />
               )}
             </span>
             <span className="text-lg leading-relaxed text-gray-700 dark:text-gray-300">
