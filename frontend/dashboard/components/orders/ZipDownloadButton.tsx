@@ -33,7 +33,7 @@ interface ZipStatus {
     message: string;
     attempts: number;
     canRetry: boolean;
-    details?: any[];
+    details?: unknown[];
   };
 }
 

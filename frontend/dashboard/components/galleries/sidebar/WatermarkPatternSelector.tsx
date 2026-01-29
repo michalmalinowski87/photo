@@ -2,8 +2,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Upload, X } from "lucide-react";
 import React, { useState, useCallback, useRef, useEffect } from "react";
 
-import { useToast } from "../../../hooks/useToast";
 import { useWatermarks } from "../../../hooks/queries/useWatermarks";
+import { useToast } from "../../../hooks/useToast";
 import api from "../../../lib/api-service";
 import { queryKeys } from "../../../lib/react-query";
 import { applyWatermark } from "../../../lib/watermark-utils";
@@ -310,6 +310,57 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
     img.src = PREVIEW_IMAGE_PATH;
   }, [selectedPattern, customWatermarkUrl, opacity]);
 
+  // Redraw preview with current opacity (no regeneration, instant update)
+  const redrawPreview = useCallback(() => {
+    if (!previewCanvasRef.current || !baseImageRef.current) return;
+
+    const canvas = previewCanvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Clear and draw base image
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(baseImageRef.current, 0, 0);
+
+    // Draw watermark overlay with current opacity
+    if (selectedPattern === "custom" && watermarkImageRef.current && opacity > 0) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
+      ctx.drawImage(watermarkImageRef.current, 0, 0);
+      ctx.globalAlpha = 1.0;
+    }
+  }, [selectedPattern, opacity]);
+
+  // Redraw thumb preview (base + full-cover watermark with opacity) – same pattern as main preview, no reload
+  const redrawThumbPreview = useCallback(() => {
+    const canvas = thumbPreviewCanvasRef.current;
+    const base = baseImageRef.current;
+    const wm = thumbWatermarkImageRef.current;
+    if (!canvas || !base || selectedPattern !== "custom" || !wm) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = THUMB_PREVIEW_SIZE;
+    canvas.height = THUMB_PREVIEW_SIZE;
+    const s = Math.max(THUMB_PREVIEW_SIZE / base.width, THUMB_PREVIEW_SIZE / base.height);
+    const w = base.width * s;
+    const h = base.height * s;
+    const x = (THUMB_PREVIEW_SIZE - w) / 2;
+    const y = (THUMB_PREVIEW_SIZE - h) / 2;
+    ctx.clearRect(0, 0, THUMB_PREVIEW_SIZE, THUMB_PREVIEW_SIZE);
+    ctx.drawImage(base, x, y, w, h);
+
+    const clampedOpacity = Math.max(0, Math.min(1, opacity));
+    const sw = Math.max(THUMB_PREVIEW_SIZE / wm.width, THUMB_PREVIEW_SIZE / wm.height);
+    const ww = wm.width * sw;
+    const wh = wm.height * sw;
+    const wx = (THUMB_PREVIEW_SIZE - ww) / 2;
+    const wy = (THUMB_PREVIEW_SIZE - wh) / 2;
+    ctx.globalAlpha = clampedOpacity;
+    ctx.drawImage(wm, wx, wy, ww, wh);
+    ctx.globalAlpha = 1;
+  }, [selectedPattern, opacity]);
+
   // Generate watermark image when pattern changes
   const updateWatermark = useCallback(async () => {
     if (!baseImageRef.current || !previewCanvasRef.current) return;
@@ -381,9 +432,9 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
           redrawPreview();
           resolve();
         };
-        watermarkedImg.onerror = (error) => {
+        watermarkedImg.onerror = (err: unknown) => {
           URL.revokeObjectURL(blobUrl);
-          reject(error);
+          reject(err instanceof Error ? err : new Error(String(err)));
         };
         watermarkedImg.src = blobUrl;
       });
@@ -392,7 +443,7 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
     } finally {
       setIsGeneratingWatermark(false);
     }
-  }, [selectedPattern, customWatermarkUrl]);
+  }, [selectedPattern, customWatermarkUrl, redrawPreview]);
 
   // Update watermark when pattern or URL changes, or when overlay opens
   useEffect(() => {
@@ -411,57 +462,6 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
     }
     return undefined;
   }, [selectedPattern, customWatermarkUrl, updateWatermark, isOpen]);
-
-  // Redraw preview with current opacity (no regeneration, instant update)
-  const redrawPreview = useCallback(() => {
-    if (!previewCanvasRef.current || !baseImageRef.current) return;
-
-    const canvas = previewCanvasRef.current;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Clear and draw base image
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(baseImageRef.current, 0, 0);
-
-    // Draw watermark overlay with current opacity
-    if (selectedPattern === "custom" && watermarkImageRef.current && opacity > 0) {
-      ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
-      ctx.drawImage(watermarkImageRef.current, 0, 0);
-      ctx.globalAlpha = 1.0;
-    }
-  }, [selectedPattern, opacity]);
-
-  // Redraw thumb preview (base + full-cover watermark with opacity) – same pattern as main preview, no reload
-  const redrawThumbPreview = useCallback(() => {
-    const canvas = thumbPreviewCanvasRef.current;
-    const base = baseImageRef.current;
-    const wm = thumbWatermarkImageRef.current;
-    if (!canvas || !base || selectedPattern !== "custom" || !wm) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    canvas.width = THUMB_PREVIEW_SIZE;
-    canvas.height = THUMB_PREVIEW_SIZE;
-    const s = Math.max(THUMB_PREVIEW_SIZE / base.width, THUMB_PREVIEW_SIZE / base.height);
-    const w = base.width * s;
-    const h = base.height * s;
-    const x = (THUMB_PREVIEW_SIZE - w) / 2;
-    const y = (THUMB_PREVIEW_SIZE - h) / 2;
-    ctx.clearRect(0, 0, THUMB_PREVIEW_SIZE, THUMB_PREVIEW_SIZE);
-    ctx.drawImage(base, x, y, w, h);
-
-    const clampedOpacity = Math.max(0, Math.min(1, opacity));
-    const sw = Math.max(THUMB_PREVIEW_SIZE / wm.width, THUMB_PREVIEW_SIZE / wm.height);
-    const ww = wm.width * sw;
-    const wh = wm.height * sw;
-    const wx = (THUMB_PREVIEW_SIZE - ww) / 2;
-    const wy = (THUMB_PREVIEW_SIZE - wh) / 2;
-    ctx.globalAlpha = clampedOpacity;
-    ctx.drawImage(wm, wx, wy, ww, wh);
-    ctx.globalAlpha = 1;
-  }, [selectedPattern, opacity]);
 
   redrawThumbPreviewRef.current = redrawThumbPreview;
 
@@ -522,7 +522,7 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
   }, [opacity, selectedPattern, redrawPreview, showThumbPreview, redrawThumbPreview]);
 
   const handleFileSelect = useCallback(
-    async (file: File) => {
+    (file: File) => {
       if (!file.type.startsWith("image/")) {
         return;
       }
@@ -652,7 +652,7 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
         setDeletingWatermarkId(null);
       }
 
-      if (url && url.startsWith("blob:")) {
+      if (url?.startsWith("blob:")) {
         URL.revokeObjectURL(url);
       }
     },
@@ -783,6 +783,7 @@ export const WatermarkPatternSelector: React.FC<WatermarkPatternSelectorProps> =
                   `}
                 >
                   {shouldShowImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- watermark thumbnail from API
                     <img
                       src={thumbnailUrl}
                       alt={watermark.name}

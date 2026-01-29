@@ -9,8 +9,8 @@ import {
   useUpdateGalleryPricingPackage,
 } from "../../hooks/mutations/useGalleryMutations";
 import { useBusinessInfo } from "../../hooks/queries/useAuth";
-import { useOrders } from "../../hooks/queries/useOrders";
 import { useGallery, useGalleryDeliveredOrders } from "../../hooks/queries/useGalleries";
+import { useOrders } from "../../hooks/queries/useOrders";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
 import { formatCurrencyInput, plnToCents, centsToPlnString } from "../../lib/currency";
@@ -53,7 +53,7 @@ export function GallerySettingsForm({
   // Get active tab from URL or defaultTab prop
   const urlTab = router.query.tab as string | undefined;
   const activeTabFromUrl = urlTab as "general" | "package" | "personalize" | undefined;
-  const initialTab = activeTabFromUrl || defaultTab || "general";
+  const initialTab = activeTabFromUrl ?? defaultTab ?? "general";
 
   // Use React Query hooks
   const { data: businessInfo } = useBusinessInfo();
@@ -97,7 +97,7 @@ export function GallerySettingsForm({
   const [activeTab, setActiveTab] = useState<"general" | "package" | "personalize">(initialTab);
   // Use URL as source of truth for which content to show (avoids stale view on sidebar nav)
   const effectiveTab: "general" | "package" | "personalize" =
-    activeTabFromUrl || activeTab || "general";
+    activeTabFromUrl ?? activeTab ?? "general";
 
   // Update activeTab when URL changes
   useEffect(() => {
@@ -580,7 +580,7 @@ export function GallerySettingsForm({
     businessInfo !== null &&
     !hasDeliveredOrPreparingDelivery &&
     shouldShowWatermarkWarningForGallery(gallery, businessInfo);
-  const hasWatermark = Boolean(gallery?.watermarkUrl || businessInfo?.defaultWatermarkUrl);
+  const hasWatermark = Boolean(gallery?.watermarkUrl ?? businessInfo?.defaultWatermarkUrl);
 
   const hasCoverPhoto = Boolean(
     gallery?.coverPhotoUrl && typeof gallery.coverPhotoUrl === "string"

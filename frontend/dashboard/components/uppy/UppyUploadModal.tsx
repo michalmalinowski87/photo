@@ -1,4 +1,3 @@
-import Uppy from "@uppy/core";
 import "@uppy/core/css/style.min.css";
 import ThumbnailGenerator from "@uppy/thumbnail-generator";
 import {
@@ -21,6 +20,7 @@ import Button from "../ui/button/Button";
 import { Modal } from "../ui/modal";
 import { Tooltip } from "../ui/tooltip/Tooltip";
 
+import { UploadCollisionModal } from "./UploadCollisionModal";
 import { UploadCompletionOverlay } from "./UploadCompletionOverlay";
 
 // Lazy load react-virtuoso (~60KB) - only needed when files are present
@@ -41,27 +41,30 @@ interface UppyUploadModalProps {
 // Helper Functions
 // ============================================================================
 
-function isImageFile(file: File | { name: string; type?: string }): boolean {
-  return (
-    (file.type?.startsWith("image/") ?? false) ||
-    /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name)
-  );
-}
-
-function addFileToUppy(uppy: Uppy, file: File): void {
-  if (!isImageFile(file)) {
-    return;
-  }
-  try {
-    uppy.addFile({
-      source: "Local",
-      name: file.name,
-      type: file.type || "image/jpeg",
-      data: file,
+/** Collect files from a directory entry (recursive). Used so we can run collision check on the whole batch. */
+async function collectFilesFromDirectory(entry: FileSystemEntry): Promise<File[]> {
+  const files: File[] = [];
+  if (entry.isDirectory) {
+    const dirReader = (entry as FileSystemDirectoryEntry).createReader();
+    const readEntries = (): Promise<FileSystemEntry[]> =>
+      new Promise((resolve) => {
+        dirReader.readEntries((results) => resolve(Array.from(results)));
+      });
+    // readEntries may return a subset; keep reading until none left
+    let entries = await readEntries();
+    while (entries.length > 0) {
+      for (const subEntry of entries) {
+        files.push(...(await collectFilesFromDirectory(subEntry)));
+      }
+      entries = await readEntries();
+    }
+  } else if (entry.isFile) {
+    const file = await new Promise<File>((resolve, reject) => {
+      (entry as FileSystemFileEntry).file(resolve, reject);
     });
-  } catch (_error) {
-    // Silently fail - file restrictions will be handled by Uppy
+    files.push(file);
   }
+  return files;
 }
 
 function formatFileSize(bytes: number): string {
@@ -111,35 +114,6 @@ function getFileStatus(
   return "pending";
 }
 
-async function readDirectoryEntry(entry: FileSystemEntry, uppy: Uppy): Promise<void> {
-  if (entry.isDirectory) {
-    const dirReader = (entry as FileSystemDirectoryEntry).createReader();
-    const entries: FileSystemEntry[] = [];
-
-    const readEntries = (): Promise<void> => {
-      return new Promise((resolve) => {
-        dirReader.readEntries((results) => {
-          if (results.length > 0) {
-            entries.push(...results);
-            void readEntries().then(resolve);
-          } else {
-            resolve();
-          }
-        });
-      });
-    };
-
-    await readEntries();
-    for (const subEntry of entries) {
-      await readDirectoryEntry(subEntry, uppy);
-    }
-  } else if (entry.isFile) {
-    const fileEntry = entry as FileSystemFileEntry;
-    fileEntry.file((file) => {
-      addFileToUppy(uppy, file);
-    });
-  }
-}
 
 // ============================================================================
 // Memoized Thumbnail Item Component
@@ -296,7 +270,12 @@ ThumbnailItem.displayName = "ThumbnailItem";
 // Component
 // ============================================================================
 
-export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProps) => {
+/**
+ * Inner component that holds all hooks. Wrapped so that when loaded via
+ * Next.js dynamic(), the hook-running component is always the same instance,
+ * avoiding "Should have a queue" / invalid hook call from the dynamic boundary.
+ */
+function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProps) {
   const {
     uppy,
     uploading,
@@ -306,6 +285,9 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     uploadStats,
     isPaused,
     isFinalizing,
+    collisionPrompt,
+    resolveCollisionChoice,
+    addFilesWithCollisionCheck,
     startUpload,
     cancelUpload,
     pauseUpload,
@@ -316,6 +298,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
   const [files, setFiles] = useState<TypedUppyFile[]>([]);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
+  const [showMultipleDirsError, setShowMultipleDirsError] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [viewportHeight, setViewportHeight] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -696,7 +679,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
     if (!e.target.files || !uppy || uploadComplete) {
       return;
     }
-    Array.from(e.target.files).forEach((file) => addFileToUppy(uppy, file));
+    void addFilesWithCollisionCheck(uppy, Array.from(e.target.files));
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -727,6 +710,7 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
 
     const items = e.dataTransfer.items;
     if (items && items.length > 0) {
+      let directoryCount = 0;
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (item.kind === "file") {
@@ -735,23 +719,49 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
           };
           const entry = dataTransferItem.webkitGetAsEntry?.();
           if (entry?.isDirectory) {
-            void readDirectoryEntry(entry, uppy);
-          } else {
-            const file = item.getAsFile();
-            if (file) {
-              addFileToUppy(uppy, file);
-            }
+            directoryCount += 1;
           }
         }
       }
-    } else {
-      const droppedFiles = e.dataTransfer.files;
-      if (droppedFiles) {
-        Array.from(droppedFiles).forEach((file) => {
-          addFileToUppy(uppy, file);
-        });
+      if (directoryCount > 1) {
+        setShowMultipleDirsError(true);
+        return;
       }
     }
+
+    const collectDroppedFiles = async (): Promise<File[]> => {
+      const items = e.dataTransfer.items;
+      const files: File[] = [];
+      if (items && items.length > 0) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.kind === "file") {
+            const dataTransferItem = item as DataTransferItem & {
+              webkitGetAsEntry?: () => FileSystemEntry | null;
+            };
+            const entry = dataTransferItem.webkitGetAsEntry?.();
+            if (entry?.isDirectory) {
+              files.push(...(await collectFilesFromDirectory(entry)));
+            } else {
+              const file = item.getAsFile();
+              if (file) files.push(file);
+            }
+          }
+        }
+      } else {
+        const droppedFiles = e.dataTransfer.files;
+        if (droppedFiles) {
+          files.push(...Array.from(droppedFiles));
+        }
+      }
+      return files;
+    };
+
+    void collectDroppedFiles().then((files) => {
+      if (files.length > 0) {
+        void addFilesWithCollisionCheck(uppy, files);
+      }
+    });
   };
 
   const handleRemoveFile = useCallback(
@@ -888,6 +898,42 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
               </Button>
               <Button variant="primary" onClick={handleConfirmClose}>
                 Anuluj i usuń pliki
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {collisionPrompt && (
+        <UploadCollisionModal
+          isOpen={true}
+          fileName={collisionPrompt.fileName}
+          totalCount={collisionPrompt.totalCount}
+          onChoice={resolveCollisionChoice}
+        />
+      )}
+
+      {showMultipleDirsError && (
+        <Modal
+          isOpen={true}
+          onClose={() => setShowMultipleDirsError(false)}
+          className="max-w-2xl"
+          showCloseButton={true}
+        >
+          <div className="p-6">
+            <h2 className="text-3xl font-semibold text-gray-900 dark:text-white">
+              Zbyt wiele folderów
+            </h2>
+
+            <div className="mt-3 mb-4 border-t border-gray-300 dark:border-gray-600" />
+
+            <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
+              Próbujesz przesłać zbyt wiele folderów na raz. Spróbuj wczytywać foldery pojedynczo.
+            </p>
+
+            <div className="flex justify-end">
+              <Button variant="primary" onClick={() => setShowMultipleDirsError(false)}>
+                OK
               </Button>
             </div>
           </div>
@@ -1137,4 +1183,9 @@ export const UppyUploadModal = ({ isOpen, onClose, config }: UppyUploadModalProp
       </Modal>
     </>
   );
-};
+}
+
+/** Public export: hook-free wrapper so dynamic() import does not trigger invalid hook call. */
+export function UppyUploadModal(props: UppyUploadModalProps) {
+  return <UppyUploadModalContent {...props} />;
+}

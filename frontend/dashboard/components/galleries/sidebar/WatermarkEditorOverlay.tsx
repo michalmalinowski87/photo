@@ -40,21 +40,23 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
   const { showToast } = useToast();
 
   const isGlobalWatermark = !galleryId || galleryId === "";
-  const effectiveGallery = currentGallery || gallery;
+  const effectiveGallery = currentGallery ?? gallery;
+
+  type WatermarkPositionShape = { pattern?: string; opacity?: number } | null | undefined;
 
   // Get current watermark settings.
   // For gallery: when gallery has no override, show global options so user can preview and override.
   const getInitialSettings = useCallback(() => {
     if (isGlobalWatermark) {
-      const pos = businessInfo?.defaultWatermarkPosition as any;
+      const pos = businessInfo?.defaultWatermarkPosition as WatermarkPositionShape;
       return {
-        pattern: (pos?.pattern as WatermarkPatternId) || "none",
-        customWatermarkUrl: businessInfo?.defaultWatermarkUrl || null,
+        pattern: (pos?.pattern as WatermarkPatternId | undefined) ?? "none",
+        customWatermarkUrl: businessInfo?.defaultWatermarkUrl ?? null,
         opacity: pos?.opacity ?? 0.4,
         watermarkThumbnails: businessInfo?.defaultWatermarkThumbnails ?? false,
       };
     } else {
-      const galleryPos = effectiveGallery?.watermarkPosition as any;
+      const galleryPos = effectiveGallery?.watermarkPosition as WatermarkPositionShape;
       const galleryPattern = galleryPos?.pattern as WatermarkPatternId | undefined;
       const hasGalleryExplicitNone = galleryPattern === "none";
       const hasGalleryCustom = Boolean(effectiveGallery?.watermarkUrl);
@@ -69,19 +71,19 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
       }
       if (hasGalleryCustom) {
         return {
-          pattern: (galleryPattern as WatermarkPatternId) || "custom",
-          customWatermarkUrl: effectiveGallery?.watermarkUrl || null,
+          pattern: (galleryPattern ?? "custom") as WatermarkPatternId,
+          customWatermarkUrl: effectiveGallery?.watermarkUrl ?? null,
           opacity: galleryPos?.opacity ?? 0.4,
           watermarkThumbnails: effectiveGallery?.watermarkThumbnails ?? false,
         };
       }
       // Gallery has no override: show global options so user can preview and override
-      const globalPos = businessInfo?.defaultWatermarkPosition as any;
+      const globalPos = businessInfo?.defaultWatermarkPosition as WatermarkPositionShape;
       return {
         pattern:
-          (globalPos?.pattern as WatermarkPatternId) ||
+          (globalPos?.pattern as WatermarkPatternId | undefined) ??
           (businessInfo?.defaultWatermarkUrl ? "custom" : "none"),
-        customWatermarkUrl: businessInfo?.defaultWatermarkUrl || null,
+        customWatermarkUrl: businessInfo?.defaultWatermarkUrl ?? null,
         opacity: globalPos?.opacity ?? 0.4,
         watermarkThumbnails: businessInfo?.defaultWatermarkThumbnails ?? false,
       };
@@ -105,7 +107,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
       const settings = getInitialSettings();
       setSelectedPattern(settings.pattern);
       setCustomWatermarkUrl(settings.customWatermarkUrl);
-      setOpacity(settings.opacity);
+      setOpacity(typeof settings.opacity === "number" ? settings.opacity : 0.4);
       setWatermarkThumbnails(settings.watermarkThumbnails ?? false);
       setIsLoadingWatermarks(true); // Start with loading state when opening
       wasRemovedRef.current = false; // Reset removal flag when opening
@@ -188,7 +190,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
           defaultWatermarkPosition: {
             pattern: selectedPattern,
             opacity,
-          } as any,
+          },
           defaultWatermarkUrl:
             selectedPattern === "custom" && customWatermarkUrl ? customWatermarkUrl : "",
           defaultWatermarkThumbnails: watermarkThumbnails,
@@ -200,7 +202,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
             watermarkPosition: {
               pattern: selectedPattern,
               opacity,
-            } as any,
+            },
             watermarkUrl:
               selectedPattern === "custom" && customWatermarkUrl ? customWatermarkUrl : "",
             watermarkThumbnails,
@@ -234,7 +236,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
           defaultWatermarkPosition: {
             pattern: "none",
             opacity: 0.4,
-          } as any,
+          },
           defaultWatermarkUrl: undefined,
           defaultWatermarkThumbnails: false,
         });
@@ -245,7 +247,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
             watermarkPosition: {
               pattern: "none",
               opacity: 0.4,
-            } as any,
+            },
             watermarkUrl: undefined,
             watermarkThumbnails: false,
           },

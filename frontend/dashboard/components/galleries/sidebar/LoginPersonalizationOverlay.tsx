@@ -74,13 +74,13 @@ export const LoginPersonalizationOverlay: React.FC<LoginPersonalizationOverlayPr
       setCoverPosition({
         x: gallery.coverPhotoPosition.x,
         y: gallery.coverPhotoPosition.y,
-        scale: gallery.coverPhotoPosition.scale || 1,
+        scale: gallery.coverPhotoPosition.scale ?? 1,
       });
     } else if (gallery?.coverPhotoPosition?.objectPosition) {
       // Legacy support
       setCoverPosition({
         objectPosition: gallery.coverPhotoPosition.objectPosition,
-        scale: gallery.coverPhotoPosition.scale || 1,
+        scale: gallery.coverPhotoPosition.scale ?? 1,
       });
     } else {
       // Reset to default if no position data

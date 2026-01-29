@@ -39,7 +39,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [activeHandle, setActiveHandle] = useState<HandleType>(null);
-  const [scale, setScale] = useState(initialPosition?.scale || 1);
+  const [scale, setScale] = useState(initialPosition?.scale ?? 1);
   const [showTransformBox, setShowTransformBox] = useState(true);
 
   // Image position and dimensions
@@ -81,6 +81,12 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
     startImageY: number;
     fixedCorner: { x: number; y: number } | null;
   } | null>(null);
+
+  // Track if we've initialized from initialPosition to avoid resetting during user interaction
+  const hasInitializedRef = useRef(false);
+  const lastInitialPositionRef = useRef<
+    { x?: number; y?: number; scale?: number; objectPosition?: string } | undefined
+  >(undefined);
 
   // Calculate cover area dimensions based on layout
   // Make layout 1 (split) work like layout 2 (angled-split) - full width cover area
@@ -143,10 +149,10 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
       // Check if click is on the form pane
       const isFormPane = target.closest(".form-pane-overlay");
       // Check if click is on the image container or its children (handles, transform box)
-      const isImage = imageContainer?.contains(target) || target.closest("[data-image-container]");
+      const isImage = imageContainer?.contains(target) ?? target.closest("[data-image-container]");
       // Check if click is on resize handles or transform box
       const isHandleOrBox =
-        target.closest("[data-resize-handle]") || target.closest("[data-transform-box]");
+        target.closest("[data-resize-handle]") ?? target.closest("[data-transform-box]");
       // Check if click is inside the container
       const isInsideContainer = container.contains(target);
 
@@ -397,7 +403,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         setImageState({ x: xPercent, y: yPercent });
       }
     },
-    [isDragging, isResizing, activeHandle, coverAreaDims]
+    [isDragging, isResizing, activeHandle, coverAreaDims, containerWidth, containerHeight]
   );
 
   // Handle mouse up
@@ -438,6 +444,20 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
     return undefined;
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+
+  // Reset position when layout changes
+  useEffect(() => {
+    setImageState({ x: 0, y: 0 });
+    setScale(1);
+    setShowTransformBox(true);
+    hasInitializedRef.current = false;
+    lastInitialPositionRef.current = undefined;
+    onPositionChange({
+      x: 0,
+      y: 0,
+      scale: 1,
+    });
+  }, [layout, onPositionChange]);
 
   // Touch event handlers
   const handleTouchStart = useCallback(
@@ -493,7 +513,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
       // Don't clamp - allow free movement outside bounds
       setImageState({ x: xPercent, y: yPercent });
     },
-    [isDragging, coverAreaDims]
+    [isDragging, containerWidth, containerHeight]
   );
 
   const handleTouchEnd = useCallback(() => {
@@ -532,35 +552,6 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
   }, [initialPosition?.scale]);
 
   // Reset image position to default (top-left at 0,0) and scale to 1 when layout changes
-  useEffect(() => {
-    // With top-left positioning, 0% means top-left corner at (0, 0)
-    // For a centered default, we need to calculate based on scale
-    // When scale = 1, to center: top-left should be at (coverWidth - scaledWidth) / 2
-    // As percentage: ((coverWidth - scaledWidth) / 2) / coverWidth * 100
-    // When scale = 1: ((coverWidth - coverWidth) / 2) / coverWidth * 100 = 0%
-    // So for scale = 1, 0% actually centers it (since container = cover area)
-    // But to have it fill the area nicely, we'll use 0% which positions at top-left
-    // For a more centered look, we could use a small offset, but 0% is the simplest default
-    setImageState({ x: 0, y: 0 });
-    setScale(1);
-    setShowTransformBox(true);
-    // Reset initialization flag when layout changes
-    hasInitializedRef.current = false;
-    lastInitialPositionRef.current = undefined;
-    // Notify parent of the reset position (0% = top-left)
-    onPositionChange({
-      x: 0,
-      y: 0,
-      scale: 1,
-    });
-  }, [layout, onPositionChange]);
-
-  // Track if we've initialized from initialPosition to avoid resetting during user interaction
-  const hasInitializedRef = useRef(false);
-  const lastInitialPositionRef = useRef<
-    { x?: number; y?: number; scale?: number; objectPosition?: string } | undefined
-  >(undefined);
-
   // Update position when initialPosition changes (only on mount or when modal reopens)
   // Don't update during user interaction (dragging/resizing)
   useEffect(() => {
@@ -621,14 +612,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
         lastInitialPositionRef.current = currentPos;
       }
     }
-  }, [
-    initialPosition?.x,
-    initialPosition?.y,
-    initialPosition?.scale,
-    initialPosition?.objectPosition,
-    isDragging,
-    isResizing,
-  ]);
+  }, [initialPosition, isDragging, isResizing]);
 
   const imagePos = getImagePosition();
 
@@ -683,7 +667,7 @@ export const CoverPhotoPositioner: React.FC<CoverPhotoPositionerProps> = ({
 
   // Render form pane based on layout
   const renderFormPane = () => {
-    const displayName = galleryName || "Galeria";
+    const displayName = galleryName ?? "Galeria";
 
     switch (layout) {
       case "split":

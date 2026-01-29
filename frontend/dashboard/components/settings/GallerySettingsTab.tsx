@@ -23,12 +23,15 @@ export function GallerySettingsTab() {
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2.5 flex items-center gap-2">
           Znak wodny
           {showWatermarkWarning && (
-            <AlertTriangle
-              size={24}
-              className="text-orange-500 dark:text-orange-400 flex-shrink-0"
+            <span
               title="Znak wodny nie został ustawiony"
               aria-label="Znak wodny nie został ustawiony"
-            />
+            >
+              <AlertTriangle
+                size={24}
+                className="text-orange-500 dark:text-orange-400 flex-shrink-0"
+              />
+            </span>
           )}
         </h2>
         <p className="text-base text-gray-600 dark:text-gray-400 mb-8">

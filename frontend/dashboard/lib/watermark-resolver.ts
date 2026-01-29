@@ -51,7 +51,7 @@ export function getWatermarkConfig(
 
   // Priority 1: Gallery-specific watermark
   if (gallery?.watermarkUrl) {
-    const position = gallery.watermarkPosition as any;
+    const position = gallery.watermarkPosition as { opacity?: number } | undefined;
     return {
       url: gallery.watermarkUrl,
       opacity: position?.opacity ?? 0.7,

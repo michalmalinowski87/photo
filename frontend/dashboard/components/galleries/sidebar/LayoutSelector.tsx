@@ -40,7 +40,7 @@ const LayoutPreview: React.FC<{
   coverPhotoUrl?: string;
   galleryName?: string | null;
 }> = ({ layout, coverPhotoUrl, galleryName }) => {
-  const displayName = galleryName || "Galeria";
+  const displayName = galleryName ?? "Galeria";
   const previewHeight = 120;
   const previewWidth = 200;
 
@@ -52,6 +52,7 @@ const LayoutPreview: React.FC<{
             {/* Cover photo area - 64% */}
             <div className="relative w-[64%] bg-gradient-to-br from-gray-300 to-gray-400 overflow-hidden">
               {coverPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- layout preview thumbnail
                 <img src={coverPhotoUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-400" />
@@ -87,6 +88,7 @@ const LayoutPreview: React.FC<{
             {/* Cover photo area - full width (image extends behind form) */}
             <div className="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-400 overflow-hidden">
               {coverPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- layout preview thumbnail
                 <img src={coverPhotoUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-400" />
@@ -129,6 +131,7 @@ const LayoutPreview: React.FC<{
             {/* Cover photo background */}
             <div className="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-400 overflow-hidden">
               {coverPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- layout preview thumbnail
                 <img src={coverPhotoUrl} alt="" className="w-full h-full object-cover opacity-60" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-400" />
@@ -164,6 +167,7 @@ const LayoutPreview: React.FC<{
             {/* Cover photo background */}
             <div className="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-400 overflow-hidden">
               {coverPhotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- layout preview thumbnail
                 <img src={coverPhotoUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-gray-300 to-gray-400" />

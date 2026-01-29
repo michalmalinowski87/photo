@@ -115,12 +115,7 @@ export const CoverPhotoUpload = () => {
     }
 
     return undefined;
-  }, [
-    uploadCoverPhotoMutation.isSuccess,
-    uploadCoverPhotoMutation.data,
-    showToast,
-    showPersonalizationOverlay,
-  ]);
+  }, [uploadCoverPhotoMutation, showToast, showPersonalizationOverlay]);
 
   // Fallback: Show overlay when gallery data updates after upload (if mutation didn't have URL)
   useEffect(() => {
@@ -425,7 +420,7 @@ export const CoverPhotoUpload = () => {
             justUploadedRef.current = false;
           }}
           galleryId={galleryId}
-          coverPhotoUrl={uploadedCoverPhotoUrl || (gallery?.coverPhotoUrl as string) || ""}
+          coverPhotoUrl={uploadedCoverPhotoUrl ?? (gallery?.coverPhotoUrl as string) ?? ""}
         />
       ) : null}
     </div>

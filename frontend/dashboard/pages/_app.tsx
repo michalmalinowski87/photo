@@ -163,6 +163,7 @@ function AppContent({ Component, pageProps }: AppProps) {
 
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [is404Page]);
 
   // Check if current route is an auth route

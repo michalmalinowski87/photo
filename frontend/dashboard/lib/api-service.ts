@@ -419,7 +419,7 @@ class ApiService {
         (typeof bodyObj?.error === "string" ? bodyObj.error : null) ??
         null;
       // Use first non-empty message so empty string falls through to generic (|| intentional)
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string → generic message
+      /* eslint-disable @typescript-eslint/prefer-nullish-coalescing -- empty string → generic message */
       return (
         safeMsg ||
         apiError.message ||
@@ -429,8 +429,9 @@ class ApiService {
             ? "Nie znaleziono."
             : "Wystąpił błąd. Spróbuj ponownie.")
       );
+      /* eslint-enable @typescript-eslint/prefer-nullish-coalescing */
     }
-    return error.message || "Coś poszło nie tak. Spróbuj ponownie później.";
+    return error.message ?? "Coś poszło nie tak. Spróbuj ponownie później.";
   }
 
   // ==================== GALLERIES ====================
@@ -1268,7 +1269,7 @@ class ApiService {
         message: string;
         attempts: number;
         canRetry: boolean;
-        details?: any[];
+        details?: unknown[];
       };
     }> => {
       if (!galleryId || !orderId) {
@@ -1299,7 +1300,7 @@ class ApiService {
         message: string;
         attempts: number;
         canRetry: boolean;
-        details?: any[];
+        details?: unknown[];
       };
     }> => {
       if (!galleryId || !orderId) {
@@ -2161,8 +2162,10 @@ class ApiService {
       tutorialClientSendDisabled?: boolean;
       defaultWatermarkUrl?: string;
       defaultWatermarkPosition?: {
-        position: string;
-        scale: number;
+        position?: string;
+        scale?: number;
+        pattern?: string;
+        opacity?: number;
       };
       defaultWatermarkThumbnails?: boolean;
     }): Promise<void> => {

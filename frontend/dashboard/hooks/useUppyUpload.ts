@@ -206,6 +206,88 @@ function getTypeLabel(type: UploadType): string {
   return type === "finals" ? "zdjęć finalnych" : "zdjęć";
 }
 
+const PAGINATION_LIMIT = 500;
+
+function isImageFile(file: File): boolean {
+  return (
+    file.type?.startsWith("image/") === true ||
+    /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name)
+  );
+}
+
+/**
+ * Fetch all existing image keys (filenames) for the gallery or order.
+ * Used for collision detection before upload.
+ */
+async function fetchExistingImageKeys(
+  galleryId: string,
+  type: UploadType,
+  orderId?: string
+): Promise<Set<string>> {
+  const keys = new Set<string>();
+
+  if (type === "finals" && orderId) {
+    let cursor: string | null = null;
+    do {
+      const response = await api.orders.getFinalImages(galleryId, orderId, {
+        limit: PAGINATION_LIMIT,
+        cursor,
+      });
+      for (const img of response.images ?? []) {
+        const key = img.key ?? (img as { filename?: string }).filename;
+        if (key) keys.add(key);
+      }
+      cursor = response.hasMore ? (response.nextCursor ?? null) : null;
+    } while (cursor !== null);
+  } else {
+    let cursor: string | null = null;
+    do {
+      const response = await api.galleries.getImages(galleryId, undefined, {
+        limit: PAGINATION_LIMIT,
+        cursor,
+      });
+      for (const img of response.images ?? []) {
+        const key = img.key ?? (img as { filename?: string }).filename;
+        if (key) keys.add(key);
+      }
+      cursor = response.hasMore ? (response.nextCursor ?? null) : null;
+    } while (cursor !== null);
+  }
+
+  return keys;
+}
+
+/**
+ * Return the next available filename for duplicate (base_1.ext, base_2.ext, ...).
+ */
+function getNextAvailableName(baseName: string, ext: string, takenSet: Set<string>): string {
+  let n = 1;
+  let candidate: string;
+  do {
+    candidate = `${baseName}_${n}${ext}`;
+    n += 1;
+  } while (takenSet.has(candidate));
+  return candidate;
+}
+
+/**
+ * Assign unique names within a batch (first keeps name, subsequent duplicates get base_1, base_2, ...).
+ */
+function assignUniqueNamesInBatch(files: File[]): Array<{ file: File; name: string }> {
+  const taken = new Set<string>();
+  return files.map((file) => {
+    let name = file.name;
+    if (taken.has(name)) {
+      const lastDot = name.lastIndexOf(".");
+      const baseName = lastDot === -1 ? name : name.slice(0, lastDot);
+      const ext = lastDot === -1 ? "" : name.slice(lastDot);
+      name = getNextAvailableName(baseName, ext, taken);
+    }
+    taken.add(name);
+    return { file, name };
+  });
+}
+
 function showUploadResultToast(
   showToast: ReturnType<typeof useToast>["showToast"],
   type: UploadType,
@@ -376,6 +458,14 @@ const INITIAL_PROGRESS: UploadProgressState = {
   timeRemaining: 0,
 };
 
+export type CollisionAction = "stop" | "skip" | "replace" | "duplicate";
+
+export interface CollisionPrompt {
+  fileName: string;
+  fileId: string;
+  totalCount: number;
+}
+
 // ============================================================================
 // Main Hook
 // ============================================================================
@@ -394,11 +484,159 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
   const [isPaused, setIsPaused] = useState(false);
   const [uploadStats, setUploadStats] = useState<UploadStats | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [collisionPrompt, setCollisionPrompt] = useState<CollisionPrompt | null>(null);
+  const collisionResolveRef = useRef<
+    ((result: { action: CollisionAction; applyToAll: boolean }) => void) | null
+  >(null);
   const speedCalculationRef = useRef<SpeedCalculationState | null>(null);
   const uploadStartTimeRef = useRef<number | null>(null);
   const isCancellingRef = useRef(false);
   const configRef = useRef(config);
   configRef.current = config;
+
+  const existingKeysCacheRef = useRef<{
+    keys: Set<string>;
+    timestamp: number;
+    cacheKey: string;
+  } | null>(null);
+
+  // Prefetch existing image keys when hook is ready so drop/add is instant
+  useEffect(() => {
+    if (!config.galleryId || (config.type === "finals" && !config.orderId)) {
+      return;
+    }
+    const cacheKey = `${config.galleryId}-${config.type}-${config.orderId ?? ""}`;
+    void fetchExistingImageKeys(config.galleryId, config.type, config.orderId).then((keys) => {
+      existingKeysCacheRef.current = { keys, timestamp: Date.now(), cacheKey };
+    });
+  }, [config.galleryId, config.type, config.orderId]);
+
+  const resolveCollisionChoice = useCallback((action: CollisionAction, applyToAll: boolean) => {
+    collisionResolveRef.current?.({ action, applyToAll });
+    collisionResolveRef.current = null;
+    setCollisionPrompt(null);
+  }, []);
+
+  /**
+   * Add files to Uppy after resolving name collisions with existing gallery images
+   * and current Uppy queue. Collision modal is shown before any file is added;
+   * miniatures never show duplicate names.
+   */
+  const addFilesWithCollisionCheck = useCallback(
+    async (uppy: Uppy, incomingFiles: File[]): Promise<void> => {
+      const imageFiles = incomingFiles.filter(isImageFile);
+      if (imageFiles.length === 0) {
+        return;
+      }
+
+      const batchWithNames = assignUniqueNamesInBatch(imageFiles);
+      const cfg = configRef.current;
+      const cacheKey = `${cfg.galleryId}-${cfg.type}-${cfg.orderId ?? ""}`;
+      const CACHE_TTL_MS = 60_000;
+
+      let existingKeys: Set<string>;
+      const cached = existingKeysCacheRef.current;
+      if (
+        cached &&
+        cached.cacheKey === cacheKey &&
+        Date.now() - cached.timestamp < CACHE_TTL_MS
+      ) {
+        existingKeys = new Set(cached.keys);
+      } else {
+        try {
+          existingKeys = await fetchExistingImageKeys(cfg.galleryId, cfg.type, cfg.orderId);
+          existingKeysCacheRef.current = { keys: existingKeys, timestamp: Date.now(), cacheKey };
+        } catch {
+          // On error, add all with batch-assigned names
+          for (const { file, name } of batchWithNames) {
+            try {
+              uppy.addFile({
+                source: "Local",
+                name,
+                type: file.type || "image/jpeg",
+                data: file,
+              });
+            } catch {
+              // Silently fail
+            }
+          }
+          return;
+        }
+      }
+
+      const uppyNames = new Set(Object.values(uppy.getFiles()).map((f) => f.name));
+      const taken = new Set<string>([...existingKeys, ...uppyNames]);
+
+      let applyToAllChoice: { action: CollisionAction } | null = null;
+      const remainingCollisions = batchWithNames.filter(({ name }) => taken.has(name));
+
+      for (const { file, name } of batchWithNames) {
+        let effectiveName = name;
+        let shouldAdd = true;
+
+        if (taken.has(name)) {
+          let action: CollisionAction;
+
+          if (applyToAllChoice) {
+            action = applyToAllChoice.action;
+          } else {
+            setCollisionPrompt({
+              fileName: name,
+              fileId: "",
+              totalCount: remainingCollisions.length,
+            });
+            const choice = await new Promise<{
+              action: CollisionAction;
+              applyToAll: boolean;
+            }>((resolve) => {
+              collisionResolveRef.current = resolve;
+            });
+            collisionResolveRef.current = null;
+            setCollisionPrompt(null);
+            action = choice.action;
+            if (choice.applyToAll) {
+              applyToAllChoice = { action };
+            }
+          }
+
+          if (action === "stop") {
+            return;
+          }
+          if (action === "skip") {
+            shouldAdd = false;
+          } else if (action === "replace") {
+            const existingInUppy = Object.values(uppy.getFiles()).find((f) => f.name === name);
+            if (existingInUppy) {
+              uppy.removeFile(existingInUppy.id);
+              uppyNames.delete(name);
+            }
+            effectiveName = name;
+          } else if (action === "duplicate") {
+            const lastDot = name.lastIndexOf(".");
+            const baseName = lastDot === -1 ? name : name.slice(0, lastDot);
+            const ext = lastDot === -1 ? "" : name.slice(lastDot);
+            effectiveName = getNextAvailableName(baseName, ext, taken);
+          }
+        }
+
+        if (shouldAdd) {
+          try {
+            uppy.addFile({
+              source: "Local",
+              name: effectiveName,
+              type: file.type || "image/jpeg",
+              data: file,
+            });
+            taken.add(effectiveName);
+            uppyNames.add(effectiveName);
+          } catch {
+            // Silently fail
+          }
+        }
+      }
+    },
+    []
+  );
 
   // Initialize Uppy instance
   useEffect(() => {
@@ -486,8 +724,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
       orderId: config.orderId,
       type: config.type,
       onBeforeUpload: async (files: TypedUppyFile[]) => {
-        // Validate storage limits for both originals and finals
         try {
+          // Collision detection runs at file-add time (addFilesWithCollisionCheck);
+          // here we only validate storage limits.
           const isValid = await validateStorageLimits(
             configRef.current.galleryId,
             files,
@@ -965,6 +1204,9 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     uploadStats,
     isPaused,
     isFinalizing,
+    collisionPrompt,
+    resolveCollisionChoice,
+    addFilesWithCollisionCheck,
     startUpload,
     cancelUpload,
     pauseUpload,

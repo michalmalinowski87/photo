@@ -262,11 +262,12 @@ const AppSidebar = () => {
                     />
                   )}
                   {nav.name === "Ustawienia" && showWatermarkWarning && (
-                    <AlertTriangle
-                      size={20}
-                      className="text-orange-500 dark:text-orange-400 flex-shrink-0"
-                      title="Znak wodny nie został ustawiony"
-                    />
+                    <span title="Znak wodny nie został ustawiony">
+                      <AlertTriangle
+                        size={20}
+                        className="text-orange-500 dark:text-orange-400 flex-shrink-0"
+                      />
+                    </span>
                   )}
                   <ChevronDown
                     className={`w-6 h-6 transition-transform duration-200 ${
@@ -347,11 +348,12 @@ const AppSidebar = () => {
                         />
                       )}
                       {subItem.name === "Galeria" && showWatermarkWarning && (
-                        <AlertTriangle
-                          size={18}
-                          className="ml-auto text-orange-500 dark:text-orange-400 flex-shrink-0"
-                          title="Znak wodny nie został ustawiony"
-                        />
+                        <span title="Znak wodny nie został ustawiony">
+                          <AlertTriangle
+                            size={18}
+                            className="ml-auto text-orange-500 dark:text-orange-400 flex-shrink-0"
+                          />
+                        </span>
                       )}
                     </Link>
                   </li>

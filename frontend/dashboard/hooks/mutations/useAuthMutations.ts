@@ -58,6 +58,9 @@ export function useUpdateBusinessInfo() {
       defaultWatermarkUrl?: string;
       defaultWatermarkThumbnails?: boolean;
       defaultWatermarkPosition?: {
+        // Pattern-based system
+        pattern?: string;
+        opacity?: number;
         // Corner-relative positioning (preferred)
         corner?: string;
         offsetX?: number;
@@ -67,7 +70,6 @@ export function useUpdateBusinessInfo() {
         y?: number;
         scale?: number;
         rotation?: number;
-        opacity?: number;
         // Legacy support
         position?: string;
       };

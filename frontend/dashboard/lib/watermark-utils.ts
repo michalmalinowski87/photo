@@ -38,9 +38,9 @@ function svgToImage(svgString: string): Promise<HTMLImageElement> {
       URL.revokeObjectURL(url);
       resolve(img);
     };
-    img.onerror = (error) => {
+    img.onerror = (err: unknown) => {
       URL.revokeObjectURL(url);
-      reject(error);
+      reject(err instanceof Error ? err : new Error(String(err)));
     };
     img.src = url;
   });
@@ -134,9 +134,9 @@ export async function applyDefaultWatermark(imageBlob: Blob): Promise<Blob> {
       }
     };
 
-    img.onerror = (error) => {
+    img.onerror = (err: unknown) => {
       URL.revokeObjectURL(url);
-      reject(error);
+      reject(err instanceof Error ? err : new Error(String(err)));
     };
     img.src = url;
   });
@@ -238,9 +238,9 @@ export async function applyFullCoverWatermark(
       }
     };
 
-    img.onerror = (error) => {
+    img.onerror = (err: unknown) => {
       URL.revokeObjectURL(url);
-      reject(error);
+      reject(err instanceof Error ? err : new Error(String(err)));
     };
     img.src = url;
   });
@@ -303,9 +303,9 @@ export async function applyDefaultWatermarkFullCover(imageBlob: Blob): Promise<B
       }
     };
 
-    img.onerror = (error) => {
+    img.onerror = (err: unknown) => {
       URL.revokeObjectURL(url);
-      reject(error);
+      reject(err instanceof Error ? err : new Error(String(err)));
     };
     img.src = url;
   });
@@ -389,13 +389,11 @@ export async function applyWatermark(
 
       // Tile the watermark across the entire canvas (like CSS background-repeat: repeat)
       // Draw watermarks until we've covered the entire area, including edges
-      let drawnCount = 0;
       for (let row = 0; row < finalRows; row++) {
         for (let col = 0; col < finalCols; col++) {
           const x = col * watermarkWidth;
           const y = row * watermarkHeight;
           ctx.drawImage(watermarkImage, x, y, watermarkWidth, watermarkHeight);
-          drawnCount++;
         }
       }
 
@@ -426,9 +424,9 @@ export async function applyWatermark(
       }
     };
 
-    img.onerror = (error) => {
+    img.onerror = (err: unknown) => {
       URL.revokeObjectURL(url);
-      reject(error);
+      reject(err instanceof Error ? err : new Error(String(err)));
     };
     img.src = url;
   });
