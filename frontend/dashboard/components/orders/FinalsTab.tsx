@@ -19,7 +19,7 @@ import { DashboardVirtuosoGrid } from "../galleries/DashboardVirtuosoGrid";
 import type { GridLayout } from "../galleries/LayoutSelector";
 import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
-import { Loading } from "../ui/loading/Loading";
+import { ContentAreaLoadingOverlay, Loading } from "../ui/loading/Loading";
 import { PhotoNameOverlay } from "../ui/PhotoNameOverlay";
 import { Tooltip } from "../ui/tooltip/Tooltip";
 
@@ -481,7 +481,11 @@ export function FinalsTab({
         )}
       </div>
 
-      {images.length === 0 ? (
+      {_isLoading && images.length === 0 ? (
+        <div className="relative" style={{ minHeight: "400px" }}>
+          <ContentAreaLoadingOverlay text="Ładowanie zdjęć finalnych..." />
+        </div>
+      ) : images.length === 0 ? (
         <EmptyState
           icon={<Sparkles size={64} />}
           title="Brak zdjęć finalnych"
@@ -546,7 +550,7 @@ export function FinalsTab({
           <div
             className={`w-full overflow-auto table-scrollbar ${isSelectionMode ? "select-none" : ""}`}
             style={{
-              height: "calc(100vh - 470px)",
+              height: isNonSelectionGallery ? "calc(130vh - 470px)" : "calc(100vh - 470px)",
               minHeight: "600px",
               overscrollBehavior: "none",
             }}

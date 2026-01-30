@@ -226,7 +226,12 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       // Upload all three versions to S3 in parallel with retry logic
       await Promise.all([
         this.uploadToS3WithRetry(presignedData.previewUrl, finalPreview, "image/webp", "preview"),
-        this.uploadToS3WithRetry(presignedData.bigThumbUrl, finalBigThumb, "image/webp", "bigthumb"),
+        this.uploadToS3WithRetry(
+          presignedData.bigThumbUrl,
+          finalBigThumb,
+          "image/webp",
+          "bigthumb"
+        ),
         this.uploadToS3WithRetry(presignedData.thumbnailUrl, finalThumbnail, "image/webp", "thumb"),
       ]);
     } catch (_error) {
@@ -295,7 +300,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
     maxRetries: number = 3
   ): Promise<void> {
     let lastError: Error | null = null;
-    
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         await this.uploadToS3(presignedUrl, blob, contentType);
@@ -303,35 +308,42 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
         return;
       } catch (error: any) {
         lastError = error;
-        
+
         // Don't retry on 403/404 errors (permission/not found)
         if (error?.status === 403 || error?.status === 404) {
-          console.warn(`[ThumbnailUpload] ${sizeType} upload failed with ${error.status}, not retrying`);
+          console.warn(
+            `[ThumbnailUpload] ${sizeType} upload failed with ${error.status}, not retrying`
+          );
           throw error;
         }
-        
+
         // Retry on network errors, timeouts, or 5xx errors
-        const isRetryable = 
+        const isRetryable =
           error?.code === "ECONNRESET" ||
           error?.code === "ETIMEDOUT" ||
           error?.code === "ENOTFOUND" ||
           error?.message?.includes("timeout") ||
           error?.message?.includes("network") ||
           (error?.status >= 500 && error?.status < 600);
-        
+
         if (!isRetryable || attempt === maxRetries - 1) {
           // Last attempt or non-retryable error
-          console.error(`[ThumbnailUpload] ${sizeType} upload failed after ${attempt + 1} attempts:`, error);
+          console.error(
+            `[ThumbnailUpload] ${sizeType} upload failed after ${attempt + 1} attempts:`,
+            error
+          );
           throw error;
         }
-        
+
         // Exponential backoff: 1s, 2s, 4s
         const delay = Math.pow(2, attempt) * 1000;
-        console.warn(`[ThumbnailUpload] ${sizeType} upload failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        console.warn(
+          `[ThumbnailUpload] ${sizeType} upload failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
-    
+
     // Should never reach here, but TypeScript needs it
     if (lastError) {
       throw lastError;
@@ -352,7 +364,9 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       });
 
       if (!response.ok) {
-        const error = new Error(`Failed to upload to S3: ${response.status} ${response.statusText}`);
+        const error = new Error(
+          `Failed to upload to S3: ${response.status} ${response.statusText}`
+        );
         (error as any).status = response.status;
         throw error;
       }
