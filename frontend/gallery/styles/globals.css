@@ -213,7 +213,34 @@
   background-color: transparent !important;
 }
 
-/* Center the custom selection toggle in the toolbar (above the photo) */
+/* Selection group: centered in toolbar (same spot as original "Wybierz zdjęcie"), Wybierz zdjęcie + Dodaj do albumu + Dodaj do druku in one row */
+.lg-toolbar .lg-toolbar-selection-group {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 12px !important;
+  flex-shrink: 0 !important;
+  direction: ltr !important;
+  margin: 0 !important;
+  z-index: 2 !important;
+}
+
+.lg-toolbar .lg-toolbar-selection-group .lg-selection-toggle,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-book,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-print {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  margin: 0 !important;
+}
+
+/* Center the custom selection toggle when NOT in group (legacy/fallback) */
 .lg-toolbar .lg-selection-toggle {
   position: absolute !important;
   left: 50% !important;
@@ -237,15 +264,46 @@
   transition: background-color 200ms ease, box-shadow 200ms ease, transform 120ms ease !important;
 }
 
+.lg-toolbar .lg-toolbar-selection-group .lg-selection-toggle,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-book,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-print {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid #000000 !important;
+  border-radius: 0 !important;
+  padding: 0.75rem 1.5rem !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12) !important;
+}
+
 .lg-toolbar .lg-selection-toggle:hover {
   background-color: #171717 !important;
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.16) !important;
   transform: translate(-50%, -50%) !important;
 }
 
+.lg-toolbar .lg-toolbar-selection-group .lg-selection-toggle:hover,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-book:hover,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-print:hover {
+  background-color: #171717 !important;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.16) !important;
+  transform: none !important;
+}
+
 .lg-toolbar .lg-selection-toggle:active {
   background-color: #262626 !important;
   transform: translate(-50%, -50%) scale(0.98) !important;
+}
+
+.lg-toolbar .lg-toolbar-selection-group .lg-selection-toggle:active,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-book:active,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-print:active {
+  background-color: #262626 !important;
+  transform: scale(0.98) !important;
 }
 
 .lg-toolbar .lg-selection-toggle:focus {
@@ -261,9 +319,36 @@
     0 3px 14px rgba(0, 0, 0, 0.16) !important;
 }
 
+.lg-toolbar .lg-toolbar-selection-group .lg-selection-toggle:focus-visible,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-book:focus-visible,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-print:focus-visible {
+  outline: none !important;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.95),
+    0 0 0 4px rgba(0, 0, 0, 0.95),
+    0 3px 14px rgba(0, 0, 0, 0.16) !important;
+}
+
 .lg-toolbar .lg-icon:hover {
   color: #000000 !important;
   background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Force same dark style on all group buttons (override any lg-icon or other lightGallery classes) */
+.lg-toolbar .lg-toolbar-selection-group .lg-selection-toggle,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-book,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-print,
+.lg-toolbar .lg-toolbar-selection-group button.lg-icon {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid #000000 !important;
+}
+.lg-toolbar .lg-toolbar-selection-group .lg-selection-toggle:hover,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-book:hover,
+.lg-toolbar .lg-toolbar-selection-group .lg-photo-print:hover,
+.lg-toolbar .lg-toolbar-selection-group button.lg-icon:hover {
+  background-color: #171717 !important;
+  color: #ffffff !important;
 }
 
 /* Thumbnails - light background */

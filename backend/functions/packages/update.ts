@@ -40,7 +40,9 @@ export const handler = lambdaLogger(async (event: any) => {
 		name,
 		includedPhotos,
 		pricePerExtraPhoto,
-		price
+		price,
+		photoBookCount,
+		photoPrintCount
 	} = body;
 
 	// Get existing package
@@ -60,8 +62,26 @@ export const handler = lambdaLogger(async (event: any) => {
 	const existingPackage = getResult.Item as any;
 	requireOwnerOr403(existingPackage.ownerId, ownerId);
 
+	const effectiveIncludedPhotos = typeof includedPhotos === 'number' ? includedPhotos : (existingPackage.includedPhotos ?? 0);
+
+	if (typeof photoBookCount === 'number' && (photoBookCount < 0 || photoBookCount > effectiveIncludedPhotos)) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'photoBookCount must be 0 <= photoBookCount <= includedPhotos' })
+		};
+	}
+	if (typeof photoPrintCount === 'number' && (photoPrintCount < 0 || photoPrintCount > effectiveIncludedPhotos)) {
+		return {
+			statusCode: 400,
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ error: 'photoPrintCount must be 0 <= photoPrintCount <= includedPhotos' })
+		};
+	}
+
 	// Build update expression
 	const updateExpressions: string[] = [];
+	const removeExpressions: string[] = [];
 	const expressionValues: Record<string, any> = {};
 	const expressionNames: Record<string, string> = {};
 
@@ -107,7 +127,16 @@ export const handler = lambdaLogger(async (event: any) => {
 		expressionValues[':price'] = price;
 	}
 
-	if (updateExpressions.length === 0) {
+	if (photoBookCount !== undefined) {
+		updateExpressions.push('photoBookCount = :photoBookCount');
+		expressionValues[':photoBookCount'] = typeof photoBookCount === 'number' ? Math.max(0, Math.min(photoBookCount, effectiveIncludedPhotos)) : 0;
+	}
+	if (photoPrintCount !== undefined) {
+		updateExpressions.push('photoPrintCount = :photoPrintCount');
+		expressionValues[':photoPrintCount'] = typeof photoPrintCount === 'number' ? Math.max(0, Math.min(photoPrintCount, effectiveIncludedPhotos)) : 0;
+	}
+
+	if (updateExpressions.length === 0 && removeExpressions.length === 0) {
 		return {
 			statusCode: 400,
 			headers: { 'content-type': 'application/json' },
@@ -118,15 +147,19 @@ export const handler = lambdaLogger(async (event: any) => {
 	updateExpressions.push('updatedAt = :updatedAt');
 	expressionValues[':updatedAt'] = new Date().toISOString();
 
+	let updateExpr = 'SET ' + updateExpressions.join(', ');
+	if (removeExpressions.length > 0) {
+		updateExpr += ' REMOVE ' + removeExpressions.join(', ');
+	}
+
 	try {
 		const updateCommand: any = {
 			TableName: packagesTable,
 			Key: { packageId },
-			UpdateExpression: `SET ${updateExpressions.join(', ')}`,
+			UpdateExpression: updateExpr,
 			ExpressionAttributeValues: expressionValues
 		};
 
-		// Only add ExpressionAttributeNames if we have any (i.e., if name is being updated)
 		if (Object.keys(expressionNames).length > 0) {
 			updateCommand.ExpressionAttributeNames = expressionNames;
 		}

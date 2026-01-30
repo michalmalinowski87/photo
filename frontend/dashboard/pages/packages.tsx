@@ -37,6 +37,8 @@ interface PackageFormData {
   includedPhotos: number;
   pricePerExtraPhoto?: number; // Optional
   price: number;
+  photoBookCount?: number;
+  photoPrintCount?: number;
 }
 
 // Lazy load ConfirmDialog - only shown when delete confirmation is open
@@ -157,8 +159,10 @@ export default function Packages() {
   const [formData, setFormData] = useState<PackageFormData>({
     name: "",
     includedPhotos: 0,
-    pricePerExtraPhoto: undefined, // Optional, start as undefined
+    pricePerExtraPhoto: undefined,
     price: 0,
+    photoBookCount: 0,
+    photoPrintCount: 0,
   });
   const [pricePerExtraPhotoInput, setPricePerExtraPhotoInput] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState<string | null>(null);
@@ -168,8 +172,10 @@ export default function Packages() {
     setFormData({
       name: "",
       includedPhotos: 0,
-      pricePerExtraPhoto: undefined, // Optional, start as undefined
+      pricePerExtraPhoto: undefined,
       price: 0,
+      photoBookCount: 0,
+      photoPrintCount: 0,
     });
     setPricePerExtraPhotoInput(null);
     setPriceInput(null);
@@ -178,11 +184,14 @@ export default function Packages() {
 
   const handleEdit = (pkg: PricingPackage): void => {
     setEditingPackage(pkg);
+    const cap = pkg.includedPhotos ?? 0;
     setFormData({
       name: pkg.name ?? "",
-      includedPhotos: pkg.includedPhotos ?? 0,
-      pricePerExtraPhoto: pkg.pricePerExtraPhoto ?? undefined, // Optional
+      includedPhotos: cap,
+      pricePerExtraPhoto: pkg.pricePerExtraPhoto ?? undefined,
       price: pkg.price ?? 0,
+      photoBookCount: Math.max(0, Math.min((pkg as { photoBookCount?: number }).photoBookCount ?? 0, cap)),
+      photoPrintCount: Math.max(0, Math.min((pkg as { photoPrintCount?: number }).photoPrintCount ?? 0, cap)),
     });
     setPricePerExtraPhotoInput(null);
     setPriceInput(null);
@@ -190,16 +199,42 @@ export default function Packages() {
   };
 
   const handleSave = async (): Promise<void> => {
+    const cap = formData.includedPhotos;
+    const nBook = formData.photoBookCount ?? 0;
+    if (nBook < 0 || nBook > cap) {
+      showToast(
+        "error",
+        "Błąd",
+        "Liczba zdjęć do albumu musi być od 0 do liczby zdjęć w pakiecie."
+      );
+      return;
+    }
+    const nPrint = formData.photoPrintCount ?? 0;
+    if (nPrint < 0 || nPrint > cap) {
+      showToast(
+        "error",
+        "Błąd",
+        "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie."
+      );
+      return;
+    }
     try {
+      const payload: PackageFormData = {
+        name: formData.name,
+        includedPhotos: formData.includedPhotos,
+        pricePerExtraPhoto: formData.pricePerExtraPhoto,
+        price: formData.price,
+        photoBookCount: Math.max(0, Math.min(formData.photoBookCount ?? 0, cap)),
+        photoPrintCount: Math.max(0, Math.min(formData.photoPrintCount ?? 0, cap)),
+      };
       if (editingPackage) {
         await updatePackageMutation.mutateAsync({
           packageId: editingPackage.packageId,
-          data: formData,
+          data: payload,
         });
       } else {
-        await createPackageMutation.mutateAsync(formData);
+        await createPackageMutation.mutateAsync(payload);
       }
-
       setShowForm(false);
       showToast(
         "success",
@@ -275,9 +310,13 @@ export default function Packages() {
                 onChange={(e) => {
                   const value = e.target.value;
                   if (value === "" || /^\d+$/.test(value)) {
+                    const next = value === "" ? 0 : parseInt(value, 10);
+                    const cap = Math.max(0, next);
                     setFormData({
                       ...formData,
-                      includedPhotos: value === "" ? 0 : parseInt(value, 10),
+                      includedPhotos: cap,
+                      photoBookCount: Math.min(formData.photoBookCount ?? 0, cap),
+                      photoPrintCount: Math.min(formData.photoPrintCount ?? 0, cap),
                     });
                   }
                 }}
@@ -339,6 +378,51 @@ export default function Packages() {
                   }
                 }}
               />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Liczba zdjęć do Albumu
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min="0"
+                  value={formData.photoBookCount === 0 ? "" : String(formData.photoBookCount)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    const n = v === "" ? 0 : parseInt(v, 10);
+                    if (v === "" || (!Number.isNaN(n) && n >= 0)) {
+                      setFormData({
+                        ...formData,
+                        photoBookCount: v === "" ? 0 : Math.min(n, formData.includedPhotos),
+                      });
+                    }
+                  }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Liczba zdjęć do Druku
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  min="0"
+                  value={formData.photoPrintCount === 0 ? "" : String(formData.photoPrintCount)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    const n = v === "" ? 0 : parseInt(v, 10);
+                    if (v === "" || (!Number.isNaN(n) && n >= 0)) {
+                      setFormData({
+                        ...formData,
+                        photoPrintCount: v === "" ? 0 : Math.min(n, formData.includedPhotos),
+                      });
+                    }
+                  }}
+                />
+              </div>
             </div>
           </div>
 

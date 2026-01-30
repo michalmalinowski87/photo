@@ -8,6 +8,8 @@ interface PackageFormData {
   includedPhotos: number;
   pricePerExtraPhoto?: number; // Optional
   price: number;
+  photoBookCount?: number;
+  photoPrintCount?: number;
 }
 
 export function useCreatePackage() {

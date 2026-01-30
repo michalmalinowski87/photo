@@ -3,7 +3,7 @@
 import { useMemo, useCallback, useState, useRef, useEffect } from "react";
 import justifiedLayout from "justified-layout";
 import Image from "next/image";
-import { Sparkles } from "lucide-react";
+import { Sparkles, BookOpen, BookOpenCheck, Image as ImageIcon, ImagePlus } from "lucide-react";
 import type { ImageData } from "@/types/gallery";
 import { EmptyState } from "./EmptyState";
 
@@ -23,7 +23,15 @@ interface VirtuosoGridProps {
   showUnselectedIndicators?: boolean;
   enableDownload?: boolean;
   onDownload?: (imageKey: string) => void;
-  hideBorders?: boolean; // Hide borders for "Dokupione" view
+  hideBorders?: boolean;
+  showPhotoBookUi?: boolean;
+  showPhotoPrintUi?: boolean;
+  photoBookKeys?: string[];
+  photoPrintKeys?: string[];
+  photoBookCount?: number;
+  photoPrintCount?: number;
+  onTogglePhotoBook?: (key: string) => void;
+  onTogglePhotoPrint?: (key: string) => void;
 }
 
 interface LayoutBox {
@@ -48,6 +56,14 @@ export function VirtuosoGridComponent({
   enableDownload = false,
   onDownload,
   hideBorders = false,
+  showPhotoBookUi = false,
+  showPhotoPrintUi = false,
+  photoBookKeys = [],
+  photoPrintKeys = [],
+  photoBookCount = 0,
+  photoPrintCount = 0,
+  onTogglePhotoBook,
+  onTogglePhotoPrint,
 }: VirtuosoGridProps) {
   const [containerWidth, setContainerWidth] = useState(1200);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -352,14 +368,17 @@ export function VirtuosoGridComponent({
               : "object-cover rounded-[2px]";
 
           const isSelected = selectedKeys.has(image.key);
-          // Show indicator when:
-          // - showSelectionIndicators is true AND
-          // - (image is selected OR showUnselectedIndicators is true)
           const showIndicator = showSelectionIndicators && (isSelected || showUnselectedIndicators);
+          const inBook = !!(showPhotoBookUi && photoBookKeys.includes(image.key));
+          const inPrint = !!(showPhotoPrintUi && photoPrintKeys.includes(image.key));
+          const canAddToBook = showPhotoBookUi && (inBook || photoBookKeys.length < photoBookCount);
+          const canAddToPrint = showPhotoPrintUi && (inPrint || photoPrintKeys.length < photoPrintCount);
+          const showBookPrint =
+            isSelected && (canAddToBook || canAddToPrint) && (onTogglePhotoBook || onTogglePhotoPrint);
 
           return (
             <div
-              key={`${image.key || image.url || 'image'}-${index}`}
+              key={`${image.key || image.url || "image"}-${index}`}
               style={{
                 position: "absolute",
                 top: box.top + 8, // Container padding-top provides the spacing
@@ -368,13 +387,11 @@ export function VirtuosoGridComponent({
                 height: box.height,
                 boxSizing: "border-box", // Ensure ring border is included in dimensions
               }}
-              className={`overflow-hidden cursor-pointer transition-all duration-200 ease-out ${
+              className={`overflow-visible cursor-pointer transition-all duration-200 ease-out ${
                 hideBorders
                   ? "bg-transparent hover:scale-[1.0085] hover:-translate-y-[0.85px] active:scale-100 active:translate-y-0"
                   : "bg-white rounded-[2px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:scale-[1.0085] hover:-translate-y-[0.85px] hover:shadow-[0_6px_26px_rgba(0,0,0,0.13)] active:scale-100 active:translate-y-0 active:shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
-              } ${
-                isSelected && !hideBorders ? "ring-2 ring-black ring-opacity-70" : ""
-              }`}
+              } ${isSelected && !hideBorders ? "ring-2 ring-black ring-opacity-70" : ""}`}
             >
               <a
                 href={fullImageUrl}
@@ -382,24 +399,26 @@ export function VirtuosoGridComponent({
                 data-download-url={enableDownload ? fullImageUrl : undefined}
                 data-thumb={carouselThumbUrl}
                 data-sub-html={image.key}
-                className="block w-full h-full relative"
+                className="block w-full h-full relative overflow-hidden rounded-[2px]"
                 onClick={(e) => {
                   // Prevent default anchor behavior until lightGallery is ready (prevents race condition)
                   // Check if lightGallery container exists and is ready by looking for the data attribute
                   // Try multiple ways to find the container in case DOM structure varies
-                  let container: HTMLElement | null = (e.target as HTMLElement).closest('[data-lg-container]') as HTMLElement;
+                  let container: HTMLElement | null = (e.target as HTMLElement).closest(
+                    "[data-lg-container]"
+                  ) as HTMLElement;
                   if (!container) {
                     // Fallback: find any parent with the attribute
                     let element: HTMLElement | null = e.target as HTMLElement;
                     while (element && element !== document.body) {
-                      if (element.hasAttribute('data-lg-container')) {
+                      if (element.hasAttribute("data-lg-container")) {
                         container = element;
                         break;
                       }
                       element = element.parentElement;
                     }
                   }
-                  const isGalleryReady = container?.getAttribute('data-lg-ready') === 'true';
+                  const isGalleryReady = container?.getAttribute("data-lg-ready") === "true";
                   // Only prevent if we found the container and it's explicitly not ready
                   // If container not found, assume gallery is ready (fallback for edge cases)
                   if (container && !isGalleryReady) {
@@ -407,9 +426,13 @@ export function VirtuosoGridComponent({
                     e.stopPropagation();
                     return;
                   }
-                  
+
                   // If selection is enabled and user clicks the selection indicator area, prevent lightGallery
-                  if (canSelect && onImageSelect && (e.target as HTMLElement).closest('.selection-indicator')) {
+                  if (
+                    canSelect &&
+                    onImageSelect &&
+                    (e.target as HTMLElement).closest(".selection-indicator")
+                  ) {
                     e.preventDefault();
                     e.stopPropagation();
                   }
@@ -439,58 +462,114 @@ export function VirtuosoGridComponent({
                   unoptimized={(imageUrl ?? "").startsWith("http")}
                 />
               </a>
-              
-              {/* Selection indicator */}
+
+              {/* Selection indicator and optional photo book/print */}
               {showIndicator && (
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (onImageSelect) {
-                onImageSelect(image.key);
-              }
-            }}
-                  className={`selection-indicator absolute top-2 right-2 w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation z-10 ${
-                    isSelected
-                      ? "bg-black text-white"
-                      : "bg-white/80 text-gray-700 hover:bg-white/95 border-0"
-                  }`}
-                  aria-label={isSelected ? "Odznacz zdjęcie" : "Zaznacz zdjęcie"}
-                  style={{
-                    minWidth: "44px",
-                    minHeight: "44px",
-                  }}
-                >
-                  {isSelected ? (
-                    <svg
-                      className="w-6 h-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      strokeWidth={3}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  ) : (
-                    <svg
-                      className="w-6 h-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      strokeWidth={3}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 4v16m8-8H4"
-                      />
-                    </svg>
+                <div className="selection-indicator absolute top-2 right-2 flex flex-row gap-1 items-center z-10">
+                  {showBookPrint && (
+                    <>
+                      {canAddToBook && onTogglePhotoBook && (
+                        <span className="relative group">
+                          <span
+                            className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-1 text-xs whitespace-nowrap bg-gray-900 dark:bg-gray-700 text-white rounded opacity-0 group-hover:opacity-100 transition-none pointer-events-none z-20"
+                            style={{ transitionDelay: "0ms" }}
+                          >
+                            {inBook ? "Usuń z albumu" : "Dodaj do albumu"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onTogglePhotoBook(image.key);
+                            }}
+                            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation shadow border-0 ${
+                              inBook
+                                ? "bg-black text-white"
+                                : "bg-white/80 text-gray-700 hover:bg-white/95 dark:bg-gray-800/90 dark:text-gray-300"
+                            }`}
+                            aria-label={inBook ? "Usuń z albumu" : "Dodaj do albumu"}
+                            style={{ minWidth: "44px", minHeight: "44px" }}
+                          >
+                            {inBook ? (
+                              <BookOpen className="w-6 h-6" strokeWidth={2} />
+                            ) : (
+                              <BookOpenCheck className="w-6 h-6" strokeWidth={2} />
+                            )}
+                          </button>
+                        </span>
+                      )}
+                      {canAddToPrint && onTogglePhotoPrint && (
+                        <span className="relative group">
+                          <span
+                            className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-1 text-xs whitespace-nowrap bg-gray-900 dark:bg-gray-700 text-white rounded opacity-0 group-hover:opacity-100 transition-none pointer-events-none z-20"
+                            style={{ transitionDelay: "0ms" }}
+                          >
+                            {inPrint ? "Usuń z druku" : "Dodaj do druku"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onTogglePhotoPrint(image.key);
+                            }}
+                            className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation shadow border-0 ${
+                              inPrint
+                                ? "bg-black text-white"
+                                : "bg-white/80 text-gray-700 hover:bg-white/95 dark:bg-gray-800/90 dark:text-gray-300"
+                            }`}
+                            aria-label={inPrint ? "Usuń z druku" : "Dodaj do druku"}
+                            style={{ minWidth: "44px", minHeight: "44px" }}
+                          >
+                            {inPrint ? (
+                              <ImageIcon className="w-6 h-6" strokeWidth={2} />
+                            ) : (
+                              <ImagePlus className="w-6 h-6" strokeWidth={2} />
+                            )}
+                          </button>
+                        </span>
+                      )}
+                    </>
                   )}
-                </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (onImageSelect) onImageSelect(image.key);
+                    }}
+                    className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation ${
+                      isSelected
+                        ? "bg-black text-white"
+                        : "bg-white/80 text-gray-700 hover:bg-white/95 dark:bg-gray-800/90 dark:text-gray-300 border-0"
+                    }`}
+                    aria-label={isSelected ? "Odznacz zdjęcie" : "Zaznacz zdjęcie"}
+                    style={{ minWidth: "44px", minHeight: "44px" }}
+                  >
+                    {isSelected ? (
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        strokeWidth={3}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        strokeWidth={3}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               )}
 
               {/* Download button - only show in delivered view */}

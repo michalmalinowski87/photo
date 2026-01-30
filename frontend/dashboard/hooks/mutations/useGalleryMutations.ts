@@ -626,6 +626,8 @@ export function useUpdateGalleryPricingPackage() {
         includedCount: number;
         extraPriceCents: number;
         packagePriceCents: number;
+        photoBookCount?: number;
+        photoPrintCount?: number;
       };
     }) => api.galleries.updatePricingPackage(galleryId, pricingPackage),
     onSuccess: (_, variables) => {

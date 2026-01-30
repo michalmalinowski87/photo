@@ -72,6 +72,8 @@ export const handler = lambdaLogger(async (event: any) => {
 				includedCount?: number;
 				extraPriceCents?: number;
 				packagePriceCents?: number;
+				photoBookCount?: number;
+				photoPrintCount?: number;
 		  }
 		| undefined;
 
@@ -87,17 +89,21 @@ export const handler = lambdaLogger(async (event: any) => {
 		const currentIncludedCount = currentPricingPackage?.includedCount ?? 0;
 		const currentPackagePrice = currentPricingPackage?.packagePriceCents ?? 0;
 		const currentPackageName = currentPricingPackage?.packageName;
-		
+		const currentPhotoBookCount = currentPricingPackage?.photoBookCount ?? 0;
+		const currentPhotoPrintCount = currentPricingPackage?.photoPrintCount ?? 0;
+
 		const includedCountChanged = pkg.includedCount !== currentIncludedCount;
 		const packagePriceChanged = pkg.packagePriceCents !== currentPackagePrice;
 		const packageNameChanged = packageName !== undefined && packageName !== currentPackageName;
+		const photoBookCountChanged = (pkg.photoBookCount ?? 0) !== currentPhotoBookCount;
+		const photoPrintCountChanged = (pkg.photoPrintCount ?? 0) !== currentPhotoPrintCount;
 
-		if (includedCountChanged || packagePriceChanged || packageNameChanged) {
+		if (includedCountChanged || packagePriceChanged || packageNameChanged || photoBookCountChanged || photoPrintCountChanged) {
 			return {
 				statusCode: 403,
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ 
-					error: 'Cannot update pricing package: Gallery has delivered orders. Only the price for additional photos (extraPriceCents) can be updated.' 
+				body: JSON.stringify({
+					error: 'Cannot update pricing package: Gallery has delivered orders. Only the price for additional photos (extraPriceCents) can be updated.'
 				})
 			};
 		}
@@ -112,12 +118,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		}
 
 		// Build pricingPackage update preserving all fields except extraPriceCents
-		const pricingPackageUpdate: {
-			packageName?: string;
-			includedCount: number;
-			extraPriceCents: number;
-			packagePriceCents: number;
-		} = {
+		const pricingPackageUpdate: Record<string, unknown> = {
 			includedCount: currentIncludedCount,
 			extraPriceCents: newExtraPrice,
 			packagePriceCents: currentPackagePrice,
@@ -125,6 +126,8 @@ export const handler = lambdaLogger(async (event: any) => {
 		if (currentPackageName !== undefined) {
 			pricingPackageUpdate.packageName = currentPackageName;
 		}
+		pricingPackageUpdate.photoBookCount = currentPricingPackage?.photoBookCount ?? 0;
+		pricingPackageUpdate.photoPrintCount = currentPricingPackage?.photoPrintCount ?? 0;
 
 		await ddb.send(new UpdateCommand({
 			TableName: table,
@@ -143,17 +146,19 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
+	// Normalize photo book / photo print counts
+	const cap = pkg.includedCount;
+	const bookCount = typeof pkg.photoBookCount === 'number' ? Math.max(0, Math.min(pkg.photoBookCount, cap)) : 0;
+	const printCount = typeof pkg.photoPrintCount === 'number' ? Math.max(0, Math.min(pkg.photoPrintCount, cap)) : 0;
+
 	// Build pricingPackage object - only include packageName if it exists
 	// Full update allowed when no delivered/approved orders exist
-	const pricingPackageUpdate: {
-		packageName?: string;
-		includedCount: number;
-		extraPriceCents: number;
-		packagePriceCents: number;
-	} = {
+	const pricingPackageUpdate: Record<string, unknown> = {
 		includedCount: pkg.includedCount,
 		extraPriceCents: pkg.extraPriceCents,
 		packagePriceCents: pkg.packagePriceCents,
+		photoBookCount: bookCount,
+		photoPrintCount: printCount,
 	};
 	if (packageName !== undefined) {
 		pricingPackageUpdate.packageName = packageName;
@@ -172,7 +177,7 @@ export const handler = lambdaLogger(async (event: any) => {
 	return {
 		statusCode: 200,
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ galleryId: id, pricingPackage: pkg })
+		body: JSON.stringify({ galleryId: id, pricingPackage: pricingPackageUpdate })
 	};
 });
 

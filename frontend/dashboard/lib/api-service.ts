@@ -706,6 +706,8 @@ class ApiService {
         includedCount: number;
         extraPriceCents: number;
         packagePriceCents: number;
+        photoBookCount?: number;
+        photoPrintCount?: number;
       }
     ): Promise<{ success: boolean }> => {
       if (!galleryId) {

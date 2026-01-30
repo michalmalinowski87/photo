@@ -913,7 +913,24 @@ export default function OrderDetail() {
   // Normalize selectedKeys - handle both array and string formats
   // For non-selection galleries, empty/undefined selectedKeys means "all photos"
   const selectedKeys = normalizeSelectedKeys(order.selectedKeys);
+  const photoBookKeys = normalizeSelectedKeys((order as { photoBookKeys?: unknown }).photoBookKeys);
+  const photoPrintKeys = normalizeSelectedKeys(
+    (order as { photoPrintKeys?: unknown }).photoPrintKeys
+  );
   const selectionEnabled = gallery?.selectionEnabled !== false; // Default to true if not specified
+
+  const pkg = gallery?.pricingPackage as
+    | {
+        includedCount?: number;
+        photoBookCount?: number;
+        photoPrintCount?: number;
+      }
+    | undefined;
+  const includedCount = pkg?.includedCount ?? 0;
+  const photoBookCount = Math.max(0, pkg?.photoBookCount ?? 0);
+  const photoPrintCount = Math.max(0, pkg?.photoPrintCount ?? 0);
+  const showPhotoBookUi = photoBookCount > 0 && photoBookCount < includedCount;
+  const showPhotoPrintUi = photoPrintCount > 0 && photoPrintCount < includedCount;
 
   // Check if gallery is paid (not DRAFT state)
   const isGalleryPaid = gallery?.state !== "DRAFT" && gallery?.isPaid !== false;
@@ -984,6 +1001,10 @@ export default function OrderDetail() {
           hasNextPage={hasNextOriginalPage}
           isFetchingNextPage={isFetchingNextOriginalPage}
           layout={layout}
+          photoBookKeys={photoBookKeys}
+          photoPrintKeys={photoPrintKeys}
+          showPhotoBookUi={showPhotoBookUi}
+          showPhotoPrintUi={showPhotoPrintUi}
         />
       )}
 
@@ -1006,6 +1027,10 @@ export default function OrderDetail() {
           fetchNextPage={fetchNextFinalPage}
           hasNextPage={hasNextFinalPage}
           isFetchingNextPage={isFetchingNextFinalPage}
+          photoBookKeys={photoBookKeys}
+          photoPrintKeys={photoPrintKeys}
+          showPhotoBookUi={showPhotoBookUi}
+          showPhotoPrintUi={showPhotoPrintUi}
         />
       )}
 

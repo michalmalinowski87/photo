@@ -10,6 +10,8 @@ import {
   X,
   Check,
   Link,
+  BookOpen,
+  Image as ImageIcon,
 } from "lucide-react";
 import type { GetServerSideProps } from "next";
 import dynamic from "next/dynamic";
@@ -24,6 +26,7 @@ import { EmptyState } from "../../../components/ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../../../components/ui/LazyRetryableImage";
 import { Loading, GalleryLoading, FullPageLoading } from "../../../components/ui/loading/Loading";
 import { PhotoNameOverlay } from "../../../components/ui/PhotoNameOverlay";
+import { Tooltip } from "../../../components/ui/tooltip/Tooltip";
 import { useBulkImageDelete } from "../../../hooks/useBulkImageDelete";
 import { useGallery } from "../../../hooks/useGallery";
 import { useGalleryImageOrders } from "../../../hooks/useGalleryImageOrders";
@@ -230,6 +233,20 @@ export default function GalleryPhotos() {
         o.deliveryStatus === "CLIENT_APPROVED"
     );
   }, [orders]);
+
+  // Album/print UI flags from gallery pricing package (for order section thumbnails)
+  const { showPhotoBookUi, showPhotoPrintUi } = useMemo(() => {
+    const pkg = gallery?.pricingPackage as
+      | { includedCount?: number; photoBookCount?: number; photoPrintCount?: number }
+      | undefined;
+    const includedCount = pkg?.includedCount ?? 0;
+    const photoBookCount = Math.max(0, pkg?.photoBookCount ?? 0);
+    const photoPrintCount = Math.max(0, pkg?.photoPrintCount ?? 0);
+    return {
+      showPhotoBookUi: photoBookCount > 0 && photoBookCount < includedCount,
+      showPhotoPrintUi: photoPrintCount > 0 && photoPrintCount < includedCount,
+    };
+  }, [gallery?.pricingPackage]);
 
   // Helper to get query key for a section
   const getSectionQueryKey = useCallback(
@@ -1313,9 +1330,33 @@ export default function GalleryPhotos() {
     });
   }, []);
 
+  // Helper to normalize keys array from order (photoBookKeys, photoPrintKeys)
+  const normalizeOrderKeys = useCallback(
+    (keys: string[] | string | undefined): string[] => {
+      if (!keys) return [];
+      if (Array.isArray(keys)) return keys.map((k) => String(k).trim());
+      if (typeof keys === "string") {
+        try {
+          const parsed: unknown = JSON.parse(keys);
+          return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    },
+    []
+  );
+
   // Render single image item (extracted for reuse)
   const renderImageItem = useCallback(
-    (img: GalleryImage, index: number, allImages: GalleryImage[], itemLayout?: GridLayout) => {
+    (
+      img: GalleryImage,
+      index: number,
+      allImages: GalleryImage[],
+      itemLayout?: GridLayout,
+      currentOrder?: { photoBookKeys?: string[] | string; photoPrintKeys?: string[] | string }
+    ) => {
       const currentLayout = itemLayout ?? layout;
       // Combine deleting states from both single and bulk delete
       const allDeletingImages = new Set([...deletingImages, ...deletingImagesBulk]);
@@ -1328,6 +1369,19 @@ export default function GalleryPhotos() {
       // Use stable key/filename as identifier - always prefer key, fallback to filename
       // This ensures React can properly reconcile components when images are reordered
       const imageKey = img.key ?? img.filename ?? "";
+      // Album/print membership when rendering an order section
+      const photoBookSet =
+        currentOrder && showPhotoBookUi
+          ? new Set(normalizeOrderKeys(currentOrder.photoBookKeys))
+          : new Set<string>();
+      const photoPrintSet =
+        currentOrder && showPhotoPrintUi
+          ? new Set(normalizeOrderKeys(currentOrder.photoPrintKeys))
+          : new Set<string>();
+      const inBook = photoBookSet.has(imageKey);
+      const inPrint = photoPrintSet.has(imageKey);
+      const showAlbumPrintIcons =
+        (showPhotoBookUi || showPhotoPrintUi) && (inBook || inPrint);
       // Check if image has any available URLs
       const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
       const isSelected = selectedKeys.has(imageKey);
@@ -1445,41 +1499,65 @@ export default function GalleryPhotos() {
                   } ${isNonDeletable && isSelectionMode ? "opacity-60" : ""}`}
                   preferredSize={currentLayout === "marble" ? "bigthumb" : "thumb"}
                 />
-                {orderStatus &&
-                  (() => {
-                    // Map order status to badge color and label (matching StatusBadges component)
-                    const statusMap: Record<
-                      string,
-                      {
-                        color:
-                          | "success"
-                          | "info"
-                          | "warning"
-                          | "error"
-                          | "light"
-                          | "dark"
-                          | "primary";
-                        label: string;
-                      }
-                    > = {
-                      CLIENT_APPROVED: { color: "info", label: "Zatwierdzone" },
-                      PREPARING_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
-                      DELIVERED: { color: "success", label: "Dostarczone" },
-                    };
+                <div className="absolute top-2 right-2 z-20 flex flex-row gap-1 items-center">
+                  {showAlbumPrintIcons && (
+                    <>
+                      {showPhotoBookUi && inBook && (
+                        <Tooltip content="Album" side="bottom">
+                          <span
+                            className="w-7 h-7 rounded inline-flex items-center justify-center bg-gray-900/70 text-white shrink-0"
+                            aria-hidden
+                          >
+                            <BookOpen className="w-4 h-4" strokeWidth={2} />
+                          </span>
+                        </Tooltip>
+                      )}
+                      {showPhotoPrintUi && inPrint && (
+                        <Tooltip content="Druk" side="bottom">
+                          <span
+                            className="w-7 h-7 rounded inline-flex items-center justify-center bg-gray-900/70 text-white shrink-0"
+                            aria-hidden
+                          >
+                            <ImageIcon className="w-4 h-4" strokeWidth={2} />
+                          </span>
+                        </Tooltip>
+                      )}
+                    </>
+                  )}
+                  {orderStatus &&
+                    (() => {
+                      // Map order status to badge color and label (matching StatusBadges component)
+                      const statusMap: Record<
+                        string,
+                        {
+                          color:
+                            | "success"
+                            | "info"
+                            | "warning"
+                            | "error"
+                            | "light"
+                            | "dark"
+                            | "primary";
+                          label: string;
+                        }
+                      > = {
+                        CLIENT_APPROVED: { color: "info", label: "Zatwierdzone" },
+                        PREPARING_DELIVERY: { color: "info", label: "Gotowe do wysyłki" },
+                        DELIVERED: { color: "success", label: "Dostarczone" },
+                      };
 
-                    const statusInfo = statusMap[orderStatus] ?? {
-                      color: "light" as const,
-                      label: orderStatus,
-                    };
+                      const statusInfo = statusMap[orderStatus] ?? {
+                        color: "light" as const,
+                        label: orderStatus,
+                      };
 
-                    return (
-                      <div className="absolute top-2 right-2 z-20">
+                      return (
                         <Badge color={statusInfo.color} variant="light" size="sm">
                           {statusInfo.label}
                         </Badge>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
+                </div>
                 <PhotoNameOverlay displayName={removeFileExtension(imageKey)} />
                 {isDeleting && (
                   <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
@@ -1524,6 +1602,9 @@ export default function GalleryPhotos() {
       handleSelectionClick,
       handleDeletePhotoClick,
       layout,
+      showPhotoBookUi,
+      showPhotoPrintUi,
+      normalizeOrderKeys,
     ]
   );
 
@@ -2042,7 +2123,7 @@ export default function GalleryPhotos() {
                             images={orderImages}
                             layout={layout}
                             renderImageItem={(img, idx, all) =>
-                              renderImageItem(img, idx, all, layout)
+                              renderImageItem(img, idx, all, layout, order)
                             }
                             hasNextPage={hasNextPage}
                             onLoadMore={fetchNextPage}
@@ -2131,7 +2212,9 @@ export default function GalleryPhotos() {
                       <DashboardVirtuosoGrid
                         images={unselectedImages}
                         layout={layout}
-                        renderImageItem={(img, idx, all) => renderImageItem(img, idx, all, layout)}
+                        renderImageItem={(img, idx, all) =>
+                          renderImageItem(img, idx, all, layout, undefined)
+                        }
                         hasNextPage={hasNextPage}
                         onLoadMore={fetchNextPage}
                         isFetchingNextPage={isFetchingNextPage}
@@ -2168,7 +2251,9 @@ export default function GalleryPhotos() {
               <DashboardVirtuosoGrid
                 images={images}
                 layout={layout}
-                renderImageItem={(img, idx, all) => renderImageItem(img, idx, all, layout)}
+                renderImageItem={(img, idx, all) =>
+                  renderImageItem(img, idx, all, layout, undefined)
+                }
                 hasNextPage={hasNextPage}
                 onLoadMore={fetchNextPage}
                 isFetchingNextPage={isFetchingNextPage}

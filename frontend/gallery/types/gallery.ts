@@ -24,10 +24,14 @@ export interface PricingPackage {
   extraPriceCents: number;
   packagePriceCents: number;
   packageName?: string;
+  photoBookCount?: number;
+  photoPrintCount?: number;
 }
 
 export interface SelectionState {
   selectedKeys: string[];
+  photoBookKeys?: string[];
+  photoPrintKeys?: string[];
   approved: boolean;
   selectedCount: number;
   overageCount: number;

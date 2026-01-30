@@ -31,7 +31,9 @@ export const handler = lambdaLogger(async (event: any) => {
 		name,
 		includedPhotos,
 		pricePerExtraPhoto,
-		price
+		price,
+		photoBookCount,
+		photoPrintCount
 	} = body;
 
 	// Package name is optional - use provided name or undefined
@@ -61,16 +63,22 @@ export const handler = lambdaLogger(async (event: any) => {
 		};
 	}
 
+	const cap = includedPhotos;
+	const bookCount = typeof photoBookCount === 'number' ? Math.max(0, Math.min(photoBookCount, cap)) : 0;
+	const printCount = typeof photoPrintCount === 'number' ? Math.max(0, Math.min(photoPrintCount, cap)) : 0;
+
 	const now = new Date().toISOString();
 	const packageId = `pkg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-	const pkg = {
+	const pkg: Record<string, unknown> = {
 		packageId,
 		ownerId,
 		name: packageName,
 		includedPhotos,
 		pricePerExtraPhoto,
 		price,
+		photoBookCount: bookCount,
+		photoPrintCount: printCount,
 		createdAt: now,
 		updatedAt: now
 	};
@@ -78,7 +86,7 @@ export const handler = lambdaLogger(async (event: any) => {
 	try {
 		await ddb.send(new PutCommand({
 			TableName: packagesTable,
-			Item: pkg
+			Item: pkg as Record<string, any>
 		}));
 
 		return {

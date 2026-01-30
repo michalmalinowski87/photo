@@ -80,6 +80,10 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		};
 	}
 
+	const cap = pricingPackage.includedCount;
+	const bookCount = typeof pricingPackage.photoBookCount === 'number' ? Math.max(0, Math.min(pricingPackage.photoBookCount, cap)) : 0;
+	const printCount = typeof pricingPackage.photoPrintCount === 'number' ? Math.max(0, Math.min(pricingPackage.photoPrintCount, cap)) : 0;
+
 	const now = new Date().toISOString();
 	// Generate clean, professional gallery ID using NanoID (URL-safe, collision-resistant)
 	// Default length is 21 characters, which provides excellent uniqueness
@@ -125,15 +129,12 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		item.galleryName = body.galleryName.trim();
 	}
 	
-	const pricingPackageItem: {
-		packageName?: string;
-		includedCount: number;
-		extraPriceCents: number;
-		packagePriceCents: number;
-	} = {
+	const pricingPackageItem: Record<string, unknown> = {
 		includedCount: pricingPackage.includedCount,
 		extraPriceCents: pricingPackage.extraPriceCents,
-		packagePriceCents: pricingPackage.packagePriceCents
+		packagePriceCents: pricingPackage.packagePriceCents,
+		photoBookCount: bookCount,
+		photoPrintCount: printCount
 	};
 	if (finalPackageName !== undefined) {
 		pricingPackageItem.packageName = finalPackageName;

@@ -44,6 +44,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Get selections from request body (stored in memory on frontend)
 	const body = event?.body ? JSON.parse(event.body) : {};
 	const selectedKeys: string[] = Array.isArray(body?.selectedKeys) ? body.selectedKeys : [];
+	let photoBookKeys: string[] = Array.isArray(body?.photoBookKeys) ? body.photoBookKeys : [];
+	let photoPrintKeys: string[] = Array.isArray(body?.photoPrintKeys) ? body.photoPrintKeys : [];
 
 	// Query all orders once - reuse for all checks
 	const ordersQuery = await ddb.send(new QueryCommand({
@@ -56,9 +58,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	// Check for existing CHANGES_REQUESTED order first (cancel change request scenario)
 	const changesRequestedOrder = orders.find((o: any) => o.deliveryStatus === 'CHANGES_REQUESTED');
 	
-	// If canceling change request, use the existing order's selectedKeys if none provided
+	// If canceling change request, use the existing order's selectedKeys and photo book/print keys if none provided
 	if (changesRequestedOrder && selectedKeys.length === 0) {
 		selectedKeys.push(...(changesRequestedOrder.selectedKeys || []));
+		if (photoBookKeys.length === 0 && Array.isArray(changesRequestedOrder.photoBookKeys)) {
+			photoBookKeys = [...changesRequestedOrder.photoBookKeys];
+		}
+		if (photoPrintKeys.length === 0 && Array.isArray(changesRequestedOrder.photoPrintKeys)) {
+			photoPrintKeys = [...changesRequestedOrder.photoPrintKeys];
+		}
 	}
 
 	// Validate selectedKeys only if we don't have a CHANGES_REQUESTED order to restore
@@ -78,8 +86,37 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Compute overage from selected keys
 	const selectedCount = selectedKeys.length;
-	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number; packagePriceCents?: number } | undefined;
-	
+	const pkg = gallery.pricingPackage as {
+		includedCount?: number;
+		extraPriceCents?: number;
+		packagePriceCents?: number;
+		photoBookCount?: number;
+		photoPrintCount?: number;
+	} | undefined;
+
+	// Validate and normalize photoBookKeys / photoPrintKeys (offer = count > 0)
+	const selectedSet = new Set(selectedKeys);
+	const photoBookCount = Math.max(0, pkg?.photoBookCount ?? 0);
+	const photoPrintCount = Math.max(0, pkg?.photoPrintCount ?? 0);
+	const offerPhotoBook = photoBookCount > 0;
+	const offerPhotoPrint = photoPrintCount > 0;
+	if (!offerPhotoBook) {
+		photoBookKeys = [];
+	} else {
+		photoBookKeys = photoBookKeys.filter((k) => selectedSet.has(k));
+		if (photoBookKeys.length > photoBookCount) {
+			return { statusCode: 400, body: 'photoBookKeys length must be <= photoBookCount' };
+		}
+	}
+	if (!offerPhotoPrint) {
+		photoPrintKeys = [];
+	} else {
+		photoPrintKeys = photoPrintKeys.filter((k) => selectedSet.has(k));
+		if (photoPrintKeys.length > photoPrintCount) {
+			return { statusCode: 400, body: 'photoPrintKeys length must be <= photoPrintCount' };
+		}
+	}
+
 	// Check if this is "purchase more" scenario (there's a DELIVERED order but no active order)
 	const hasDeliveredOrder = orders.some((o: any) => o.deliveryStatus === 'DELIVERED');
 	const hasBlockingOrder = orders.some((o: any) => 
@@ -212,8 +249,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// This is because the selection changed (via change request), so ZIP needs to be regenerated
 		// Status is PREPARING_DELIVERY if finals exist, but ZIP generation still happens
 		const updateExpr = selectedKeysHash
-			? 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts, zipSelectedKeysHash = :h REMOVE canceledAt, zipKey, zipProgress'
-			: 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts REMOVE canceledAt, zipKey, zipSelectedKeysHash, zipProgress';
+			? 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts, zipSelectedKeysHash = :h, photoBookKeys = :pbk, photoPrintKeys = :ppk REMOVE canceledAt, zipKey, zipProgress'
+			: 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts, photoBookKeys = :pbk, photoPrintKeys = :ppk REMOVE canceledAt, zipKey, zipSelectedKeysHash, zipProgress';
 		
 		const updateValues: any = {
 			':ds': deliveryStatus,
@@ -224,7 +261,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			':tc': totalCents,
 			':u': now,
 			':g': true,
-			':ts': Date.now()
+			':ts': Date.now(),
+			':pbk': photoBookKeys,
+			':ppk': photoPrintKeys
 		};
 		if (selectedKeysHash) {
 			updateValues[':h'] = selectedKeysHash;
@@ -252,6 +291,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			overageCount,
 			overageCents,
 			totalCents,
+			photoBookKeys,
+			photoPrintKeys,
 			createdAt: now,
 			zipGenerating: true,
 			zipGeneratingSince: Date.now()

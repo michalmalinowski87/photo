@@ -31,6 +31,8 @@ interface FieldErrors {
   extraPriceCents?: string;
   packagePriceCents?: string;
   initialPaymentAmountCents?: string;
+  photoBookCount?: string;
+  photoPrintCount?: string;
   selectedClientId?: string;
   clientEmail?: string;
   clientPassword?: string;
@@ -75,6 +77,8 @@ interface WizardData {
   includedCount: number;
   extraPriceCents: number;
   packagePriceCents: number;
+  photoBookCount?: number;
+  photoPrintCount?: number;
 
   // Step 4: Dane klienta
   selectedClientId?: string;
@@ -154,6 +158,8 @@ const CreateGalleryWizard = ({
     includedCount: 0,
     extraPriceCents: 0,
     packagePriceCents: 0,
+    photoBookCount: 0,
+    photoPrintCount: 0,
     clientEmail: "",
     clientPassword: "",
     isCompany: false,
@@ -181,6 +187,8 @@ const CreateGalleryWizard = ({
         includedCount: 0,
         extraPriceCents: 0,
         packagePriceCents: 0,
+        photoBookCount: 0,
+        photoPrintCount: 0,
         clientEmail: "",
         clientPassword: "",
         isCompany: false,
@@ -202,12 +210,15 @@ const CreateGalleryWizard = ({
   const handlePackageSelect = (packageId: string) => {
     const pkg = existingPackages.find((p) => p.packageId === packageId);
     if (pkg) {
+      const cap = Number(pkg.includedPhotos) || 0;
       const updates = {
         selectedPackageId: packageId,
         packageName: pkg.name?.trim() ?? "",
-        includedCount: Number(pkg.includedPhotos) || 0,
+        includedCount: cap,
         extraPriceCents: Number(pkg.pricePerExtraPhoto) || 0,
         packagePriceCents: Number(pkg.price) || 0,
+        photoBookCount: Math.max(0, Math.min((pkg as { photoBookCount?: number }).photoBookCount ?? 0, cap)),
+        photoPrintCount: Math.max(0, Math.min((pkg as { photoPrintCount?: number }).photoPrintCount ?? 0, cap)),
       };
       setData({ ...data, ...updates });
       // Clear related errors when package is selected
@@ -314,6 +325,19 @@ const CreateGalleryWizard = ({
           errors.packagePriceCents = "Cena pakietu jest wymagana";
           isValid = false;
         }
+        const cap = data.includedCount ?? 0;
+        const nBook = data.photoBookCount ?? 0;
+        if (nBook < 0 || nBook > cap) {
+          errors.photoBookCount =
+            "Liczba zdjęć do albumu musi być od 0 do liczby zdjęć w pakiecie";
+          isValid = false;
+        }
+        const nPrint = data.photoPrintCount ?? 0;
+        if (nPrint < 0 || nPrint > cap) {
+          errors.photoPrintCount =
+            "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie";
+          isValid = false;
+        }
         if (data.initialPaymentAmountCents < 0) {
           errors.initialPaymentAmountCents = "Kwota wpłacona nie może być ujemna";
           isValid = false;
@@ -402,6 +426,8 @@ const CreateGalleryWizard = ({
           includedCount: number;
           extraPriceCents: number;
           packagePriceCents: number;
+          photoBookCount?: number;
+          photoPrintCount?: number;
         };
         galleryName?: string;
         initialPaymentAmountCents?: number;
@@ -420,16 +446,20 @@ const CreateGalleryWizard = ({
       const packageName = data.packageName?.trim();
       const finalPackageName = packageName && packageName.length > 0 ? packageName : undefined;
 
-      // Build pricingPackage object - only include packageName if it exists
+      // Build pricingPackage object - only counts (offer = count > 0)
       const pricingPackage: {
         packageName?: string;
         includedCount: number;
         extraPriceCents: number;
         packagePriceCents: number;
+        photoBookCount?: number;
+        photoPrintCount?: number;
       } = {
         includedCount,
         extraPriceCents,
         packagePriceCents,
+        photoBookCount: Math.max(0, Math.min(data.photoBookCount ?? 0, includedCount)),
+        photoPrintCount: Math.max(0, Math.min(data.photoPrintCount ?? 0, includedCount)),
       };
       if (finalPackageName) {
         pricingPackage.packageName = finalPackageName;
@@ -587,6 +617,8 @@ const CreateGalleryWizard = ({
             extraPriceCents={data.extraPriceCents}
             packagePriceCents={data.packagePriceCents}
             initialPaymentAmountCents={data.initialPaymentAmountCents}
+            photoBookCount={data.photoBookCount}
+            photoPrintCount={data.photoPrintCount}
             onPackageSelect={handlePackageSelect}
             onDataChange={(updates) => {
               setData({ ...data, ...updates });
@@ -613,6 +645,8 @@ const CreateGalleryWizard = ({
               extraPriceCents: fieldErrors.extraPriceCents,
               packagePriceCents: fieldErrors.packagePriceCents,
               initialPaymentAmountCents: fieldErrors.initialPaymentAmountCents,
+              photoBookCount: fieldErrors.photoBookCount,
+              photoPrintCount: fieldErrors.photoPrintCount,
             }}
             onPackageSave={async (packageData) => {
               try {

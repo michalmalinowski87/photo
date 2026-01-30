@@ -429,14 +429,19 @@ export default function GalleryPage() {
 
     setIsActionLoading(true);
     try {
-      await selectionActions.approveSelection.mutateAsync(keysArray);
+      const payload: { selectedKeys: string[]; photoBookKeys?: string[]; photoPrintKeys?: string[] } = {
+        selectedKeys: keysArray,
+      };
+      if (Array.isArray(selectionState.photoBookKeys)) payload.photoBookKeys = selectionState.photoBookKeys;
+      if (Array.isArray(selectionState.photoPrintKeys)) payload.photoPrintKeys = selectionState.photoPrintKeys;
+      await selectionActions.approveSelection.mutateAsync(payload);
       // Selection state will update via query invalidation
     } catch (error) {
       console.error("Failed to approve selection:", error);
     } finally {
       setIsActionLoading(false);
     }
-  }, [selectionState?.selectedKeys, selectionActions]);
+  }, [selectionState?.selectedKeys, selectionState?.photoBookKeys, selectionState?.photoPrintKeys, selectionActions]);
 
   // Request changes
   const handleRequestChanges = useCallback(async () => {
@@ -464,15 +469,16 @@ export default function GalleryPage() {
       return;
     }
     
-    // Get selectedKeys from selectionState (should exist from the order)
-    // If not available, pass empty array - backend will handle it
     const keysArray = selectionState?.selectedKeys || [];
+    const payload: { selectedKeys: string[]; photoBookKeys?: string[]; photoPrintKeys?: string[] } = {
+      selectedKeys: keysArray,
+    };
+    if (Array.isArray(selectionState?.photoBookKeys)) payload.photoBookKeys = selectionState.photoBookKeys;
+    if (Array.isArray(selectionState?.photoPrintKeys)) payload.photoPrintKeys = selectionState.photoPrintKeys;
 
     setIsActionLoading(true);
     try {
-      console.log("Canceling change request by approving selection:", keysArray);
-      await selectionActions.approveSelection.mutateAsync(keysArray);
-      console.log("Change request canceled successfully");
+      await selectionActions.approveSelection.mutateAsync(payload);
       
       // Smooth UX: keep the first modal visible under the loading overlay,
       // then swap to the success confirmation without flashing the page.
@@ -486,7 +492,7 @@ export default function GalleryPage() {
       setShowCancelChangeErrorModal(true);
       setIsActionLoading(false);
     }
-  }, [selectionActions, selectionState?.selectedKeys, galleryId]);
+  }, [selectionActions, selectionState?.selectedKeys, selectionState?.photoBookKeys, selectionState?.photoPrintKeys]);
 
   // ZIP status for current order (when viewing a single order or when single order exists)
   const currentOrderId = selectedOrderId || singleOrder?.orderId || null;
@@ -821,6 +827,77 @@ export default function GalleryPage() {
   }, [isOwnerPreview, isSelectingState, extraPriceCents, currentSelectedCount, baseLimit]);
   const canSelectValue = !isOwnerPreview && isSelectingState && !shouldShowBought && !shouldShowWybrane;
 
+  const photoBookCount = Math.max(0, selectionState?.pricingPackage?.photoBookCount ?? 0);
+  const photoPrintCount = Math.max(0, selectionState?.pricingPackage?.photoPrintCount ?? 0);
+  const showPhotoBookUi =
+    !isOwnerPreview &&
+    !shouldShowBought &&
+    !shouldShowUnselected &&
+    isSelectingState &&
+    photoBookCount > 0 &&
+    photoBookCount < baseLimit;
+  const showPhotoPrintUi =
+    !isOwnerPreview &&
+    !shouldShowBought &&
+    !shouldShowUnselected &&
+    isSelectingState &&
+    photoPrintCount > 0 &&
+    photoPrintCount < baseLimit;
+  const photoBookKeys = selectionState?.photoBookKeys ?? [];
+  const photoPrintKeys = selectionState?.photoPrintKeys ?? [];
+  // #region agent log
+  if (typeof fetch !== "undefined") {
+    const pricingPackage = selectionState?.pricingPackage;
+    fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: "page.tsx:photoBookPrintVisibility",
+        message: "photo book/print icon visibility inputs",
+        data: {
+          photoBookCount,
+          photoPrintCount,
+          baseLimit,
+          includedCountFromPkg: pricingPackage?.includedCount ?? null,
+          isSelectingState,
+          shouldShowBought,
+          shouldShowUnselected,
+          isOwnerPreview,
+          showPhotoBookUi,
+          showPhotoPrintUi,
+          photoBookCountGt0: photoBookCount > 0,
+          photoBookCountLtBase: photoBookCount < baseLimit,
+          photoPrintCountGt0: photoPrintCount > 0,
+          photoPrintCountLtBase: photoPrintCount < baseLimit,
+        },
+        timestamp: Date.now(),
+        sessionId: "debug-session",
+        runId: "post-fix",
+        hypothesisId: "A",
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
+  const handleTogglePhotoBook = useCallback(
+    (key: string) => {
+      if (!showPhotoBookUi || !selectionActions.togglePhotoBook.mutate) return;
+      const inSet = photoBookKeys.includes(key);
+      if (!inSet && photoBookKeys.length >= photoBookCount) return;
+      selectionActions.togglePhotoBook.mutate({ key, inSet: !inSet });
+    },
+    [showPhotoBookUi, photoBookKeys, photoBookCount, selectionActions.togglePhotoBook.mutate]
+  );
+  const handleTogglePhotoPrint = useCallback(
+    (key: string) => {
+      if (!showPhotoPrintUi || !selectionActions.togglePhotoPrint.mutate) return;
+      const inSet = photoPrintKeys.includes(key);
+      if (!inSet && photoPrintKeys.length >= photoPrintCount) return;
+      selectionActions.togglePhotoPrint.mutate({ key, inSet: !inSet });
+    },
+    [showPhotoPrintUi, photoPrintKeys, photoPrintCount, selectionActions.togglePhotoPrint.mutate]
+  );
+
   // Combine all loading states to prevent blink between loading screens
   // For delivered view: wait for both selection state AND final images
   // For bought view: wait for selection state, client-approved orders, AND regular images
@@ -1109,6 +1186,12 @@ export default function GalleryPage() {
             baseLimit={baseLimit}
             extraPriceCents={extraPriceCents}
             currentSelectedCount={currentSelectedCount}
+            showPhotoBookUi={showPhotoBookUi}
+            showPhotoPrintUi={showPhotoPrintUi}
+            photoBookKeys={photoBookKeys}
+            photoPrintKeys={photoPrintKeys}
+            onTogglePhotoBook={handleTogglePhotoBook}
+            onTogglePhotoPrint={handleTogglePhotoPrint}
           >
             <VirtuosoGridComponent
               key={`grid-${shouldShowDelivered ? 'delivered' : shouldShowBought ? 'bought' : shouldShowUnselected ? 'unselected' : 'selecting'}-${displayImages.length}`}
@@ -1146,6 +1229,14 @@ export default function GalleryPage() {
               enableDownload={shouldShowDelivered}
               onDownload={handleDownload}
               hideBorders={shouldShowBought}
+              showPhotoBookUi={showPhotoBookUi}
+              showPhotoPrintUi={showPhotoPrintUi}
+              photoBookKeys={photoBookKeys}
+              photoPrintKeys={photoPrintKeys}
+              photoBookCount={photoBookCount}
+              photoPrintCount={photoPrintCount}
+              onTogglePhotoBook={handleTogglePhotoBook}
+              onTogglePhotoPrint={handleTogglePhotoPrint}
             />
           </LightGalleryWrapper>
           </Suspense>

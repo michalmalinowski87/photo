@@ -13,6 +13,8 @@ interface Package {
   includedPhotos?: number;
   pricePerExtraPhoto?: number;
   price?: number;
+  photoBookCount?: number;
+  photoPrintCount?: number;
   [key: string]: unknown;
 }
 
@@ -24,6 +26,8 @@ interface PackageStepProps {
   extraPriceCents: number;
   packagePriceCents: number;
   initialPaymentAmountCents: number;
+  photoBookCount?: number;
+  photoPrintCount?: number;
   onPackageSelect: (packageId: string) => void;
   onDataChange: (updates: {
     selectedPackageId?: string;
@@ -32,6 +36,8 @@ interface PackageStepProps {
     extraPriceCents?: number;
     packagePriceCents?: number;
     initialPaymentAmountCents?: number;
+    photoBookCount?: number;
+    photoPrintCount?: number;
   }) => void;
   extraPriceInput: string | null;
   packagePriceInput: string | null;
@@ -46,12 +52,16 @@ interface PackageStepProps {
     extraPriceCents?: string;
     packagePriceCents?: string;
     initialPaymentAmountCents?: string;
+    photoBookCount?: string;
+    photoPrintCount?: string;
   };
   onPackageSave?: (packageData: {
     name: string;
     includedPhotos: number;
     pricePerExtraPhoto: number;
     price: number;
+    photoBookCount?: number;
+    photoPrintCount?: number;
   }) => Promise<void>;
 }
 
@@ -63,6 +73,8 @@ export const PackageStep = ({
   extraPriceCents,
   packagePriceCents,
   initialPaymentAmountCents,
+  photoBookCount,
+  photoPrintCount,
   onPackageSelect,
   onDataChange,
   extraPriceInput,
@@ -158,7 +170,7 @@ export const PackageStep = ({
   // Selector mode - step2-style layout
   if (!isFormMode) {
     return (
-      <div className="w-full mt-[150px]">
+      <div className="w-full mt-12">
         <div className="mb-8 md:mb-12">
           <div className="text-2xl md:text-3xl font-medium text-photographer-heading dark:text-white mb-2">
             Ustaw pakiet cenowy *
@@ -278,6 +290,8 @@ export const PackageStep = ({
                 extraPriceCents: 0,
                 packagePriceCents: 0,
                 initialPaymentAmountCents: 0,
+                photoBookCount: 0,
+                photoPrintCount: 0,
               });
             }}
             className="relative p-10 md:p-12 rounded-2xl border-2 border-photographer-border dark:border-gray-700 bg-photographer-elevated dark:bg-gray-800/30 hover:border-photographer-darkBeige dark:hover:border-gray-600 hover:bg-photographer-muted dark:hover:bg-gray-800/50 transition-all duration-300 active:scale-[0.98] flex flex-col items-center space-y-4 opacity-90 hover:opacity-100"
@@ -301,7 +315,7 @@ export const PackageStep = ({
 
   // Form mode - package form with reordered fields
   return (
-    <div className="w-full space-y-8 mt-[150px]">
+    <div className="w-full space-y-8 mt-12">
       <div className="mb-8 md:mb-12">
         <div className="text-2xl md:text-3xl font-medium text-gray-900 dark:text-white mb-2">
           Ustaw pakiet cenowy *
@@ -324,6 +338,8 @@ export const PackageStep = ({
                 extraPriceCents: 0,
                 packagePriceCents: 0,
                 initialPaymentAmountCents: 0,
+                photoBookCount: 0,
+                photoPrintCount: 0,
               });
               // Clear input states
               onExtraPriceInputChange(null);
@@ -434,9 +450,22 @@ export const PackageStep = ({
               value={includedCount || ""}
               onChange={(e) => {
                 const value = e.target.value;
-                // Only allow digits
                 if (value === "" || /^\d+$/.test(value)) {
-                  onDataChange({ includedCount: value === "" ? 0 : parseInt(value, 10) || 0 });
+                  const cap = value === "" ? 0 : Math.max(0, parseInt(value, 10) || 0);
+                  const updates: {
+                    includedCount: number;
+                    photoBookCount?: number;
+                    photoPrintCount?: number;
+                  } = {
+                    includedCount: cap,
+                  };
+                  if ((photoBookCount ?? 0) > cap) {
+                    updates.photoBookCount = cap;
+                  }
+                  if ((photoPrintCount ?? 0) > cap) {
+                    updates.photoPrintCount = cap;
+                  }
+                  onDataChange(updates);
                 }
               }}
               error={!!fieldErrors.includedCount}
@@ -461,6 +490,44 @@ export const PackageStep = ({
               }}
               error={!!fieldErrors.extraPriceCents}
               errorMessage={fieldErrors.extraPriceCents}
+            />
+          </div>
+        </div>
+
+        {/* Liczba zdjęć do Albumu / Druku - same row as "Liczba zdjęć w pakiecie" style */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <TypeformInput
+              type="text"
+              label="Liczba zdjęć do Albumu"
+              placeholder="0"
+              value={photoBookCount === 0 ? "" : photoBookCount}
+              onChange={(e) => {
+                const v = e.target.value;
+                const n = v === "" ? 0 : parseInt(v, 10);
+                if (v === "" || (!Number.isNaN(n) && n >= 0)) {
+                  onDataChange({ photoBookCount: v === "" ? 0 : Math.min(n, includedCount) });
+                }
+              }}
+              error={!!fieldErrors.photoBookCount}
+              errorMessage={fieldErrors.photoBookCount}
+            />
+          </div>
+          <div>
+            <TypeformInput
+              type="text"
+              label="Liczba zdjęć do Druku"
+              placeholder="0"
+              value={photoPrintCount === 0 ? "" : photoPrintCount}
+              onChange={(e) => {
+                const v = e.target.value;
+                const n = v === "" ? 0 : parseInt(v, 10);
+                if (v === "" || (!Number.isNaN(n) && n >= 0)) {
+                  onDataChange({ photoPrintCount: v === "" ? 0 : Math.min(n, includedCount) });
+                }
+              }}
+              error={!!fieldErrors.photoPrintCount}
+              errorMessage={fieldErrors.photoPrintCount}
             />
           </div>
         </div>
@@ -492,13 +559,15 @@ export const PackageStep = ({
                     }
                     setSaving(true);
                     try {
-                      // Use package name if provided, otherwise use empty string (will be auto-generated on backend or use default)
-                      await onPackageSave({
+                      const payload = {
                         name: packageName?.trim() ?? "",
                         includedPhotos: includedCount,
                         pricePerExtraPhoto: extraPriceCents,
                         price: packagePriceCents,
-                      });
+                        photoBookCount: Math.max(0, Math.min(photoBookCount ?? 0, includedCount)),
+                        photoPrintCount: Math.max(0, Math.min(photoPrintCount ?? 0, includedCount)),
+                      };
+                      await onPackageSave(payload);
                       // Reset payment amount when new package is saved
                       onDataChange({ initialPaymentAmountCents: 0 });
                       onPaymentAmountInputChange(null);

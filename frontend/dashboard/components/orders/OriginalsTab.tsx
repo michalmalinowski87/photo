@@ -1,5 +1,5 @@
-import { HandHeart } from "lucide-react";
-import { useEffect, useCallback } from "react";
+import { HandHeart, BookOpen, Image as ImageIcon } from "lucide-react";
+import { useEffect, useCallback, useState, useMemo } from "react";
 
 import { removeFileExtension } from "../../lib/filename-utils";
 import { ImageFallbackUrls } from "../../lib/image-fallback";
@@ -9,6 +9,7 @@ import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { GalleryLoading } from "../ui/loading/Loading";
 import { PhotoNameOverlay } from "../ui/PhotoNameOverlay";
+import { Tooltip } from "../ui/tooltip/Tooltip";
 
 interface GalleryImage {
   id?: string;
@@ -24,6 +25,8 @@ interface GalleryImage {
   [key: string]: unknown;
 }
 
+type PhotoFilter = "all" | "photoBook" | "photoPrint";
+
 interface OriginalsTabProps {
   images: GalleryImage[];
   selectedKeys: string[];
@@ -35,6 +38,10 @@ interface OriginalsTabProps {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   layout?: GridLayout;
+  photoBookKeys?: string[];
+  photoPrintKeys?: string[];
+  showPhotoBookUi?: boolean;
+  showPhotoPrintUi?: boolean;
 }
 
 export function OriginalsTab({
@@ -48,13 +55,30 @@ export function OriginalsTab({
   hasNextPage = false,
   isFetchingNextPage = false,
   layout = "standard",
+  photoBookKeys = [],
+  photoPrintKeys = [],
+  showPhotoBookUi = false,
+  showPhotoPrintUi = false,
 }: OriginalsTabProps) {
   const shouldShowAllImages = !selectionEnabled;
+  const showFilters = (showPhotoBookUi || showPhotoPrintUi) && selectedKeys.length > 0;
+  const [filter, setFilter] = useState<PhotoFilter>("all");
+
+  const photoBookSet = useMemo(
+    () => new Set(photoBookKeys.map((k) => k.toString().trim())),
+    [photoBookKeys]
+  );
+  const photoPrintSet = useMemo(
+    () => new Set(photoPrintKeys.map((k) => k.toString().trim())),
+    [photoPrintKeys]
+  );
 
   // Render image item for DashboardVirtuosoGrid
   const renderImageItem = useCallback(
     (img: GalleryImage, idx: number) => {
-      const imgKey = img.key ?? img.filename ?? img.id ?? `img-${idx}`;
+      const imgKey = (img.key ?? img.filename ?? img.id ?? `img-${idx}`).toString().trim();
+      const inBook = photoBookSet.has(imgKey);
+      const inPrint = photoPrintSet.has(imgKey);
 
       return (
         <div
@@ -85,11 +109,35 @@ export function OriginalsTab({
               preferredSize={layout === "marble" ? "bigthumb" : "thumb"}
             />
             <PhotoNameOverlay displayName={removeFileExtension(img.key ?? img.filename ?? "")} />
+            {showFilters && (inBook || inPrint) && (
+              <div className="absolute top-2 right-2 flex flex-row gap-1 items-center z-10">
+                {showPhotoBookUi && inBook && (
+                  <Tooltip content="Album" side="bottom">
+                    <span
+                      className="w-7 h-7 rounded inline-flex items-center justify-center bg-gray-900/70 text-white shrink-0"
+                      aria-hidden
+                    >
+                      <BookOpen className="w-4 h-4" strokeWidth={2} />
+                    </span>
+                  </Tooltip>
+                )}
+                {showPhotoPrintUi && inPrint && (
+                  <Tooltip content="Druk" side="bottom">
+                    <span
+                      className="w-7 h-7 rounded inline-flex items-center justify-center bg-gray-900/70 text-white shrink-0"
+                      aria-hidden
+                    >
+                      <ImageIcon className="w-4 h-4" strokeWidth={2} />
+                    </span>
+                  </Tooltip>
+                )}
+              </div>
+            )}
           </div>
         </div>
       );
     },
-    [layout]
+    [layout, showFilters, showPhotoBookUi, showPhotoPrintUi, photoBookSet, photoPrintSet]
   );
 
   // Auto-fetch if we have selectedKeys and need to fetch more to match them
@@ -153,30 +201,82 @@ export function OriginalsTab({
 
   // Selection gallery with selectedKeys: show filtered images
   const normalizedSelectedKeys = selectedKeys.map((k) => k.toString().trim());
-  const filteredImages = images.filter((img) => {
+  let baseFiltered = images.filter((img) => {
     const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
     return normalizedSelectedKeys.includes(imgKey);
   });
+
+  // Apply photo book / photo print filter when active
+  if (showFilters && filter !== "all") {
+    const keySet = filter === "photoBook" ? photoBookSet : photoPrintSet;
+    baseFiltered = baseFiltered.filter((img) => {
+      const imgKey = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
+      return keySet.has(imgKey);
+    });
+  }
 
   if (isLoading && images.length === 0) {
     return <GalleryLoading />;
   }
 
   return (
-    <div
-      className="w-full overflow-auto table-scrollbar"
-      style={{ height: "calc(100vh - 400px)", minHeight: "600px", overscrollBehavior: "none" }}
-    >
-      <DashboardVirtuosoGrid
-        images={filteredImages}
-        layout={layout}
-        renderImageItem={renderImageItem}
-        hasNextPage={hasNextPage}
-        onLoadMore={fetchNextPage}
-        isFetchingNextPage={isFetchingNextPage}
-        isLoading={isLoading}
-        error={error}
-      />
+    <div className="space-y-3">
+      {showFilters && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              filter === "all"
+                ? "bg-photographer-accent text-white dark:bg-photographer-accentDark"
+                : "bg-photographer-elevated dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-photographer-muted dark:hover:bg-gray-700"
+            }`}
+          >
+            Wszystkie ({selectedKeys.length})
+          </button>
+          {showPhotoBookUi && (
+            <button
+              type="button"
+              onClick={() => setFilter("photoBook")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                filter === "photoBook"
+                  ? "bg-photographer-accent text-white dark:bg-photographer-accentDark"
+                  : "bg-photographer-elevated dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-photographer-muted dark:hover:bg-gray-700"
+              }`}
+            >
+              Album ({photoBookKeys.length})
+            </button>
+          )}
+          {showPhotoPrintUi && (
+            <button
+              type="button"
+              onClick={() => setFilter("photoPrint")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                filter === "photoPrint"
+                  ? "bg-photographer-accent text-white dark:bg-photographer-accentDark"
+                  : "bg-photographer-elevated dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-photographer-muted dark:hover:bg-gray-700"
+              }`}
+            >
+              Druk ({photoPrintKeys.length})
+            </button>
+          )}
+        </div>
+      )}
+      <div
+        className="w-full overflow-auto table-scrollbar"
+        style={{ height: "calc(100vh - 400px)", minHeight: "600px", overscrollBehavior: "none" }}
+      >
+        <DashboardVirtuosoGrid
+          images={baseFiltered}
+          layout={layout}
+          renderImageItem={renderImageItem}
+          hasNextPage={hasNextPage}
+          onLoadMore={fetchNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          isLoading={isLoading}
+          error={error}
+        />
+      </div>
     </div>
   );
 }

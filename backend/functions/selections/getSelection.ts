@@ -24,7 +24,16 @@ export const handler = lambdaLogger(async (event: any) => {
 	}
 	
 	// Get pricing package from gallery (set by photographer per gallery)
-	const pkg = gallery.pricingPackage as { includedCount?: number; extraPriceCents?: number; packageName?: string; packagePriceCents?: number } | undefined;
+	const pkg = gallery.pricingPackage as {
+		includedCount?: number;
+		extraPriceCents?: number;
+		packageName?: string;
+		packagePriceCents?: number;
+		offerPhotoBook?: boolean;
+		offerPhotoPrint?: boolean;
+		photoBookCount?: number;
+		photoPrintCount?: number;
+	} | undefined;
 	const ordersQuery = await ddb.send(new QueryCommand({
 		TableName: ordersTable,
 		KeyConditionExpression: 'galleryId = :g',
@@ -52,23 +61,54 @@ export const handler = lambdaLogger(async (event: any) => {
 	
 	// Pull selection from order if it exists, otherwise use defaults
 	const selectedKeys = activeOrder?.selectedKeys || [];
+	const photoBookKeys = activeOrder?.photoBookKeys || [];
+	const photoPrintKeys = activeOrder?.photoPrintKeys || [];
 	// Calculate selectedCount from selectedKeys.length to ensure consistency (selectedKeys is source of truth)
 	const selectedKeysArray = Array.isArray(selectedKeys) ? selectedKeys : [];
+	const photoBookKeysArray = Array.isArray(photoBookKeys) ? photoBookKeys : [];
+	const photoPrintKeysArray = Array.isArray(photoPrintKeys) ? photoPrintKeys : [];
 	const calculatedSelectedCount = selectedKeysArray.length;
 	const selection = activeOrder ? {
 		selectedKeys: selectedKeysArray,
+		photoBookKeys: photoBookKeysArray,
+		photoPrintKeys: photoPrintKeysArray,
 		approved: isApproved,
 		selectedCount: calculatedSelectedCount, // Use calculated count from selectedKeys, not stale DB value
 		overageCount: activeOrder.overageCount || 0,
 		overageCents: activeOrder.overageCents || 0
-	} : { selectedKeys: [], approved: false, selectedCount: 0, overageCount: 0, overageCents: 0 };
+	} : { selectedKeys: [], photoBookKeys: [], photoPrintKeys: [], approved: false, selectedCount: 0, overageCount: 0, overageCents: 0 };
 	
 	// Can request changes if order is CLIENT_APPROVED or PREPARING_DELIVERY (photographer has done work)
 	const canRequestChanges = !!(clientApprovedOrder || preparingDeliveryOrder);
 	
 	// Check if change requests are blocked for the active order
 	const changeRequestsBlocked = canRequestChanges && (clientApprovedOrder?.changeRequestsBlocked === true || preparingDeliveryOrder?.changeRequestsBlocked === true);
-	
+
+	// Normalize pricingPackage so photoBookCount/photoPrintCount are always present for the gallery app.
+	// Backward compat: if only legacy offerPhotoBook/offerPhotoPrint are set, derive counts from includedCount.
+	const includedCount = pkg?.includedCount ?? 0;
+	const basePkg = pkg || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 };
+	const photoBookCount =
+		typeof (basePkg as any).photoBookCount === 'number'
+			? (basePkg as any).photoBookCount
+			: (basePkg as any).offerPhotoBook === true
+				? includedCount
+				: 0;
+	const photoPrintCount =
+		typeof (basePkg as any).photoPrintCount === 'number'
+			? (basePkg as any).photoPrintCount
+			: (basePkg as any).offerPhotoPrint === true
+				? includedCount
+				: 0;
+	const pricingPackage = {
+		...basePkg,
+		includedCount,
+		extraPriceCents: basePkg.extraPriceCents ?? 0,
+		packagePriceCents: basePkg.packagePriceCents ?? 0,
+		photoBookCount: Math.max(0, Math.min(photoBookCount, includedCount)),
+		photoPrintCount: Math.max(0, Math.min(photoPrintCount, includedCount)),
+	};
+
 	// Include gallery-level status and pricing info
 	const responseBody = {
 		...selection,
@@ -78,7 +118,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		changeRequestsBlocked: changeRequestsBlocked || false, // True if change requests are blocked for this order
 		hasDeliveredOrder, // For showing processed photos view
 		selectionEnabled: gallery.selectionEnabled !== false, // Gallery-level setting
-		pricingPackage: pkg || { includedCount: 0, extraPriceCents: 0, packagePriceCents: 0 }
+		pricingPackage,
 	};
 	return { 
 		statusCode: 200, 

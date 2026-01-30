@@ -1,6 +1,16 @@
-import { Plus, Trash2, Sparkles, CheckSquare, Square, Check, X } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Sparkles,
+  CheckSquare,
+  Square,
+  Check,
+  X,
+  BookOpen,
+  Image as ImageIcon,
+} from "lucide-react";
 import dynamic from "next/dynamic";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 
 import { useImageSelection } from "../../hooks/useImageSelection";
 import { removeFileExtension } from "../../lib/filename-utils";
@@ -11,6 +21,7 @@ import { EmptyState } from "../ui/empty-state/EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { Loading } from "../ui/loading/Loading";
 import { PhotoNameOverlay } from "../ui/PhotoNameOverlay";
+import { Tooltip } from "../ui/tooltip/Tooltip";
 
 interface GalleryImage {
   id?: string;
@@ -23,6 +34,8 @@ interface GalleryImage {
   size?: number;
   [key: string]: unknown;
 }
+
+type PhotoFilter = "all" | "photoBook" | "photoPrint";
 
 interface FinalsTabProps {
   images: GalleryImage[];
@@ -42,6 +55,10 @@ interface FinalsTabProps {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   layout?: GridLayout;
+  photoBookKeys?: string[];
+  photoPrintKeys?: string[];
+  showPhotoBookUi?: boolean;
+  showPhotoPrintUi?: boolean;
 }
 
 // Lazy load BulkDeleteConfirmDialog - only shown when bulk delete confirmation is open
@@ -73,7 +90,32 @@ export function FinalsTab({
   hasNextPage = false,
   isFetchingNextPage = false,
   layout = "standard",
+  photoBookKeys = [],
+  photoPrintKeys = [],
+  showPhotoBookUi = false,
+  showPhotoPrintUi = false,
 }: FinalsTabProps) {
+  const showFilters = (showPhotoBookUi || showPhotoPrintUi) && images.length > 0;
+  const [filter, setFilter] = useState<PhotoFilter>("all");
+
+  const photoBookSet = useMemo(
+    () => new Set(photoBookKeys.map((k) => k.toString().trim())),
+    [photoBookKeys]
+  );
+  const photoPrintSet = useMemo(
+    () => new Set(photoPrintKeys.map((k) => k.toString().trim())),
+    [photoPrintKeys]
+  );
+
+  const displayedImages = useMemo(() => {
+    if (!showFilters || filter === "all") return images;
+    const keySet = filter === "photoBook" ? photoBookSet : photoPrintSet;
+    return images.filter((img) => {
+      const k = (img.key ?? img.filename ?? img.id ?? "").toString().trim();
+      return keySet.has(k);
+    });
+  }, [images, showFilters, filter, photoBookSet, photoPrintSet]);
+
   // Selection mode for bulk delete
   const {
     selectedKeys,
@@ -193,9 +235,11 @@ export function FinalsTab({
   // Render image item for DashboardVirtuosoGrid
   const renderImageItem = useCallback(
     (img: GalleryImage, idx: number) => {
-      const imageKey = img.key ?? img.filename ?? "";
+      const imageKey = (img.key ?? img.filename ?? "").toString().trim();
       const isSelected = selectedKeys.has(imageKey);
       const isDeleting = deletingImages.has(imageKey);
+      const inBook = photoBookSet.has(imageKey);
+      const inPrint = photoPrintSet.has(imageKey);
 
       return (
         <div
@@ -216,14 +260,13 @@ export function FinalsTab({
                 : "bg-white dark:bg-gray-800"
           }`}
           onMouseDown={(e) => {
-            // Prevent browser text/element selection when in selection mode
             if (isSelectionMode) {
               e.preventDefault();
             }
           }}
           onClick={(e) => {
             if (isSelectionMode) {
-              handleSelectionClick(imageKey, idx, e.nativeEvent, images);
+              handleSelectionClick(imageKey, idx, e.nativeEvent, displayedImages);
             }
           }}
         >
@@ -232,7 +275,6 @@ export function FinalsTab({
               layout === "square" ? "aspect-square" : layout === "marble" ? "" : "aspect-[4/3]"
             }`}
           >
-            {/* Selection checkbox overlay */}
             {isSelectionMode && (
               <div className="absolute top-2 left-2 z-30">
                 <div
@@ -243,7 +285,7 @@ export function FinalsTab({
                   }`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleSelectionClick(imageKey, idx, e.nativeEvent, images);
+                    handleSelectionClick(imageKey, idx, e.nativeEvent, displayedImages);
                   }}
                 >
                   {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
@@ -264,7 +306,30 @@ export function FinalsTab({
               preferredSize={layout === "marble" ? "bigthumb" : "thumb"}
             />
             <PhotoNameOverlay displayName={removeFileExtension(img.key ?? img.filename ?? "")} />
-            {/* Deleting overlay - always visible when deleting */}
+            {showFilters && (inBook || inPrint) && (
+              <div className="absolute top-2 right-2 flex flex-row gap-1 items-center z-10">
+                {showPhotoBookUi && inBook && (
+                  <Tooltip content="Album" side="bottom">
+                    <span
+                      className="w-7 h-7 rounded inline-flex items-center justify-center bg-gray-900/70 text-white shrink-0"
+                      aria-hidden
+                    >
+                      <BookOpen className="w-4 h-4" strokeWidth={2} />
+                    </span>
+                  </Tooltip>
+                )}
+                {showPhotoPrintUi && inPrint && (
+                  <Tooltip content="Druk" side="bottom">
+                    <span
+                      className="w-7 h-7 rounded inline-flex items-center justify-center bg-gray-900/70 text-white shrink-0"
+                      aria-hidden
+                    >
+                      <ImageIcon className="w-4 h-4" strokeWidth={2} />
+                    </span>
+                  </Tooltip>
+                )}
+              </div>
+            )}
             {isDeleting && (
               <div className="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center rounded-lg z-30">
                 <div className="flex flex-col items-center space-y-2">
@@ -273,7 +338,6 @@ export function FinalsTab({
                 </div>
               </div>
             )}
-            {/* Delete button - show when onDeleteImage is provided, hide when order is DELIVERED, disable when any deletion is in progress */}
             {onDeleteImage &&
               !isDeleting &&
               !isSelectionMode &&
@@ -306,9 +370,14 @@ export function FinalsTab({
       deletingImages,
       layout,
       handleSelectionClick,
-      images,
+      displayedImages,
       onDeleteImage,
       orderDeliveryStatus,
+      showFilters,
+      showPhotoBookUi,
+      showPhotoPrintUi,
+      photoBookSet,
+      photoPrintSet,
     ]
   );
 
@@ -369,7 +438,8 @@ export function FinalsTab({
                       : `${selectedKeys.size} zdjęć wybranych`}
               </span>
               {(() => {
-                const allSelected = images.length > 0 && selectedKeys.size === images.length;
+                const list = displayedImages;
+                const allSelected = list.length > 0 && selectedKeys.size === list.length;
                 return (
                   <>
                     <button
@@ -377,7 +447,7 @@ export function FinalsTab({
                         if (allSelected) {
                           deselectAll();
                         } else {
-                          selectAll(images);
+                          selectAll(list);
                         }
                       }}
                       className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
@@ -430,20 +500,67 @@ export function FinalsTab({
           }
         />
       ) : (
-        <div
-          className={`w-full overflow-auto table-scrollbar ${isSelectionMode ? "select-none" : ""}`}
-          style={{ height: "calc(100vh - 470px)", minHeight: "600px", overscrollBehavior: "none" }}
-        >
-          <DashboardVirtuosoGrid
-            images={images}
-            layout={layout}
-            renderImageItem={renderImageItem}
-            hasNextPage={hasNextPage}
-            onLoadMore={fetchNextPage}
-            isFetchingNextPage={isFetchingNextPage}
-            isLoading={_isLoading}
-            error={error}
-          />
+        <div className="space-y-3">
+          {showFilters && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  filter === "all"
+                    ? "bg-photographer-accent text-white dark:bg-photographer-accentDark"
+                    : "bg-photographer-elevated dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-photographer-muted dark:hover:bg-gray-700"
+                }`}
+              >
+                Wszystkie ({images.length})
+              </button>
+              {showPhotoBookUi && (
+                <button
+                  type="button"
+                  onClick={() => setFilter("photoBook")}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    filter === "photoBook"
+                      ? "bg-photographer-accent text-white dark:bg-photographer-accentDark"
+                      : "bg-photographer-elevated dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-photographer-muted dark:hover:bg-gray-700"
+                  }`}
+                >
+                  Album ({photoBookKeys.length})
+                </button>
+              )}
+              {showPhotoPrintUi && (
+                <button
+                  type="button"
+                  onClick={() => setFilter("photoPrint")}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    filter === "photoPrint"
+                      ? "bg-photographer-accent text-white dark:bg-photographer-accentDark"
+                      : "bg-photographer-elevated dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-photographer-muted dark:hover:bg-gray-700"
+                  }`}
+                >
+                  Druk ({photoPrintKeys.length})
+                </button>
+              )}
+            </div>
+          )}
+          <div
+            className={`w-full overflow-auto table-scrollbar ${isSelectionMode ? "select-none" : ""}`}
+            style={{
+              height: "calc(100vh - 470px)",
+              minHeight: "600px",
+              overscrollBehavior: "none",
+            }}
+          >
+            <DashboardVirtuosoGrid
+              images={displayedImages}
+              layout={layout}
+              renderImageItem={renderImageItem}
+              hasNextPage={hasNextPage}
+              onLoadMore={fetchNextPage}
+              isFetchingNextPage={isFetchingNextPage}
+              isLoading={_isLoading}
+              error={error}
+            />
+          </div>
         </div>
       )}
 

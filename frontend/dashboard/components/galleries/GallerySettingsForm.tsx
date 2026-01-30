@@ -30,6 +30,8 @@ interface SettingsForm {
   includedCount: number;
   extraPriceCents: number;
   packagePriceCents: number;
+  photoBookCount?: number;
+  photoPrintCount?: number;
 }
 
 interface GallerySettingsFormProps {
@@ -91,6 +93,8 @@ export function GallerySettingsForm({
     includedCount: 0,
     extraPriceCents: 0,
     packagePriceCents: 0,
+    photoBookCount: 0,
+    photoPrintCount: 0,
   });
   const [extraPriceInput, setExtraPriceInput] = useState<string | null>(null);
   const [packagePriceInput, setPackagePriceInput] = useState<string | null>(null);
@@ -115,6 +119,8 @@ export function GallerySettingsForm({
     includedCount?: string;
     extraPriceCents?: string;
     packagePriceCents?: string;
+    photoBookCount?: string;
+    photoPrintCount?: string;
   }>({});
 
   // Gallery data comes from GalleryContext - initialize form when gallery loads
@@ -126,16 +132,21 @@ export function GallerySettingsForm({
             includedCount?: number;
             extraPriceCents?: number;
             packagePriceCents?: number;
+            photoBookCount?: number;
+            photoPrintCount?: number;
           }
         | undefined;
+      const cap = pricingPackage?.includedCount ?? 0;
       setSettingsForm({
         galleryName: (gallery.galleryName as string | undefined) ?? "",
         clientEmail: (gallery.clientEmail as string | undefined) ?? "",
         clientPassword: "",
         packageName: pricingPackage?.packageName ?? "",
-        includedCount: pricingPackage?.includedCount ?? 0,
+        includedCount: cap,
         extraPriceCents: pricingPackage?.extraPriceCents ?? 0,
         packagePriceCents: pricingPackage?.packagePriceCents ?? 0,
+        photoBookCount: Math.max(0, Math.min(pricingPackage?.photoBookCount ?? 0, cap)),
+        photoPrintCount: Math.max(0, Math.min(pricingPackage?.photoPrintCount ?? 0, cap)),
       });
       setExtraPriceInput(null);
       setPackagePriceInput(null);
@@ -183,6 +194,18 @@ export function GallerySettingsForm({
       newErrors.packagePriceCents = "Cena pakietu nie może być ujemna";
     }
 
+    const cap = settingsForm.includedCount;
+    const nBook = settingsForm.photoBookCount ?? 0;
+    if (nBook < 0 || nBook > cap) {
+      newErrors.photoBookCount =
+        "Liczba zdjęć do albumu musi być od 0 do liczby zdjęć w pakiecie";
+    }
+    const nPrint = settingsForm.photoPrintCount ?? 0;
+    if (nPrint < 0 || nPrint > cap) {
+      newErrors.photoPrintCount =
+        "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -220,6 +243,12 @@ export function GallerySettingsForm({
       return false;
     }
 
+    const cap = settingsForm.includedCount;
+    const nBook = settingsForm.photoBookCount ?? 0;
+    if (nBook < 0 || nBook > cap) return false;
+    const nPrint = settingsForm.photoPrintCount ?? 0;
+    if (nPrint < 0 || nPrint > cap) return false;
+
     return true;
   };
 
@@ -252,13 +281,17 @@ export function GallerySettingsForm({
             includedCount?: number;
             extraPriceCents?: number;
             packagePriceCents?: number;
+            photoBookCount?: number;
+            photoPrintCount?: number;
           }
         | undefined;
       const pkgChanged =
         settingsForm.packageName !== currentPkg?.packageName ||
         settingsForm.includedCount !== currentPkg?.includedCount ||
         settingsForm.extraPriceCents !== currentPkg?.extraPriceCents ||
-        settingsForm.packagePriceCents !== currentPkg?.packagePriceCents;
+        settingsForm.packagePriceCents !== currentPkg?.packagePriceCents ||
+        (settingsForm.photoBookCount ?? 0) !== (currentPkg?.photoBookCount ?? 0) ||
+        (settingsForm.photoPrintCount ?? 0) !== (currentPkg?.photoPrintCount ?? 0);
 
       // If only gallery name changed, use the optimistic-only mutation (no refetch)
       // If other fields changed too, use the full mutation (with refetch for consistency)
@@ -307,22 +340,23 @@ export function GallerySettingsForm({
 
       // Update pricing package if changed
       if (pkgChanged) {
-        // Ensure all required fields are present and valid
         const trimmedPackageName = settingsForm.packageName?.trim();
         const packageName =
           trimmedPackageName && trimmedPackageName.length > 0 ? trimmedPackageName : undefined;
         const includedCount = Number(settingsForm.includedCount) || 0;
         const extraPriceCents = Number(settingsForm.extraPriceCents) || 0;
         const packagePriceCents = Number(settingsForm.packagePriceCents) || 0;
-
+        const pricingPackage = {
+          packageName,
+          includedCount,
+          extraPriceCents,
+          packagePriceCents,
+          photoBookCount: Math.max(0, Math.min(settingsForm.photoBookCount ?? 0, includedCount)),
+          photoPrintCount: Math.max(0, Math.min(settingsForm.photoPrintCount ?? 0, includedCount)),
+        };
         await updatePricingPackageMutation.mutateAsync({
           galleryId,
-          pricingPackage: {
-            packageName,
-            includedCount,
-            extraPriceCents,
-            packagePriceCents,
-          },
+          pricingPackage,
         });
       }
 
@@ -784,12 +818,15 @@ export function GallerySettingsForm({
                     placeholder="0"
                     value={settingsForm.includedCount}
                     onChange={(e) => {
-                      const value = Number.parseInt(e.target.value, 10) || 0;
-                      setSettingsForm({
-                        ...settingsForm,
-                        includedCount: value,
-                      });
-                      // Clear error when user starts typing
+                      const value = Math.max(0, Number.parseInt(e.target.value, 10) || 0);
+                      const updates: Partial<SettingsForm> = { includedCount: value };
+                      if ((settingsForm.photoBookCount ?? 0) > value) {
+                        updates.photoBookCount = value;
+                      }
+                      if ((settingsForm.photoPrintCount ?? 0) > value) {
+                        updates.photoPrintCount = value;
+                      }
+                      setSettingsForm({ ...settingsForm, ...updates });
                       if (errors.includedCount) {
                         setErrors({ ...errors, includedCount: undefined });
                       }
@@ -860,6 +897,69 @@ export function GallerySettingsForm({
                     error={!!errors.extraPriceCents}
                     errorMessage={errors.extraPriceCents}
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Liczba zdjęć do Albumu
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      value={
+                        settingsForm.photoBookCount === 0
+                          ? ""
+                          : String(settingsForm.photoBookCount)
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const n = v === "" ? 0 : parseInt(v, 10);
+                        if (v === "" || (!Number.isNaN(n) && n >= 0)) {
+                          setSettingsForm({
+                            ...settingsForm,
+                            photoBookCount:
+                              v === "" ? 0 : Math.min(n, settingsForm.includedCount),
+                          });
+                          if (errors.photoBookCount)
+                            setErrors({ ...errors, photoBookCount: undefined });
+                        }
+                      }}
+                      error={!!errors.photoBookCount}
+                      errorMessage={errors.photoBookCount}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                      Liczba zdjęć do Druku
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      min="0"
+                      value={
+                        settingsForm.photoPrintCount === 0
+                          ? ""
+                          : String(settingsForm.photoPrintCount)
+                      }
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const n = v === "" ? 0 : parseInt(v, 10);
+                        if (v === "" || (!Number.isNaN(n) && n >= 0)) {
+                          setSettingsForm({
+                            ...settingsForm,
+                            photoPrintCount:
+                              v === "" ? 0 : Math.min(n, settingsForm.includedCount),
+                          });
+                          if (errors.photoPrintCount)
+                            setErrors({ ...errors, photoPrintCount: undefined });
+                        }
+                      }}
+                      error={!!errors.photoPrintCount}
+                      errorMessage={errors.photoPrintCount}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
