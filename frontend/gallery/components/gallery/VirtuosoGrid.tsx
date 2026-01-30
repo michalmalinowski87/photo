@@ -492,9 +492,9 @@ export function VirtuosoGridComponent({
                             style={{ minWidth: "44px", minHeight: "44px" }}
                           >
                             {inBook ? (
-                              <BookOpen className="w-6 h-6" strokeWidth={2} />
-                            ) : (
                               <BookOpenCheck className="w-6 h-6" strokeWidth={2} />
+                            ) : (
+                              <BookOpen className="w-6 h-6" strokeWidth={2} />
                             )}
                           </button>
                         </span>

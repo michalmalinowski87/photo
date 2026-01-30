@@ -1190,6 +1190,8 @@ export default function GalleryPage() {
             showPhotoPrintUi={showPhotoPrintUi}
             photoBookKeys={photoBookKeys}
             photoPrintKeys={photoPrintKeys}
+            photoBookCount={photoBookCount}
+            photoPrintCount={photoPrintCount}
             onTogglePhotoBook={handleTogglePhotoBook}
             onTogglePhotoPrint={handleTogglePhotoPrint}
           >

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ImageData } from "@/types/gallery";
+import { LightGalleryToolbarButtons } from "./LightGalleryToolbarButtons";
 
 // Suppress lightGallery license warnings in development - set up at module level
 if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
@@ -72,6 +74,8 @@ interface LightGalleryWrapperProps {
   showPhotoPrintUi?: boolean;
   photoBookKeys?: string[];
   photoPrintKeys?: string[];
+  photoBookCount?: number;
+  photoPrintCount?: number;
   onTogglePhotoBook?: (key: string) => void;
   onTogglePhotoPrint?: (key: string) => void;
 }
@@ -97,6 +101,8 @@ export function LightGalleryWrapper({
   showPhotoPrintUi = false,
   photoBookKeys = [],
   photoPrintKeys = [],
+  photoBookCount = 0,
+  photoPrintCount = 0,
   onTogglePhotoBook,
   onTogglePhotoPrint,
 }: LightGalleryWrapperProps) {
@@ -124,9 +130,16 @@ export function LightGalleryWrapper({
   const showPhotoPrintUiRef = useRef(showPhotoPrintUi);
   const photoBookKeysRef = useRef(photoBookKeys);
   const photoPrintKeysRef = useRef(photoPrintKeys);
+  const photoBookCountRef = useRef(photoBookCount);
+  const photoPrintCountRef = useRef(photoPrintCount);
   const onTogglePhotoBookRef = useRef(onTogglePhotoBook);
   const onTogglePhotoPrintRef = useRef(onTogglePhotoPrint);
-  const refreshSelectionButtonsRef = useRef<(() => void) | null>(null);
+  const [toolbarEl, setToolbarEl] = useState<HTMLElement | null>(null);
+  const [currentGalleryIndex, setCurrentGalleryIndex] = useState(0);
+  const setToolbarElRef = useRef(setToolbarEl);
+  const setCurrentGalleryIndexRef = useRef(setCurrentGalleryIndex);
+  setToolbarElRef.current = setToolbarEl;
+  setCurrentGalleryIndexRef.current = setCurrentGalleryIndex;
 
   useEffect(() => {
     onDownloadRef.current = onDownload;
@@ -144,12 +157,14 @@ export function LightGalleryWrapper({
     showPhotoPrintUiRef.current = showPhotoPrintUi;
     photoBookKeysRef.current = photoBookKeys;
     photoPrintKeysRef.current = photoPrintKeys;
+    photoBookCountRef.current = photoBookCount;
+    photoPrintCountRef.current = photoPrintCount;
     onTogglePhotoBookRef.current = onTogglePhotoBook;
     onTogglePhotoPrintRef.current = onTogglePhotoPrint;
     if (images.length > imagesLengthRef.current) {
       prefetchTriggeredRef.current = false;
     }
-  }, [onDownload, images, onPrefetchNextPage, hasNextPage, onGalleryClose, selectedKeys, onImageSelect, canSelect, baseLimit, extraPriceCents, currentSelectedCount, showPhotoBookUi, showPhotoPrintUi, photoBookKeys, photoPrintKeys, onTogglePhotoBook, onTogglePhotoPrint]);
+  }, [onDownload, images, onPrefetchNextPage, hasNextPage, onGalleryClose, selectedKeys, onImageSelect, canSelect, baseLimit, extraPriceCents, currentSelectedCount, showPhotoBookUi, showPhotoPrintUi, photoBookKeys, photoPrintKeys, photoBookCount, photoPrintCount, onTogglePhotoBook, onTogglePhotoPrint]);
 
   // Keyboard support while LightGallery is open:
   // Space / Enter toggles selection for the current photo.
@@ -305,7 +320,14 @@ export function LightGalleryWrapper({
         // Track gallery open/close state
         const handleGalleryOpen = () => {
           isGalleryOpenRef.current = true;
-          
+          setTimeout(() => {
+            const toolbar = document.querySelector('.lg-toolbar');
+            if (canSelectRef.current && toolbar) {
+              setToolbarElRef.current?.(toolbar as HTMLElement);
+              const idx = galleryInstanceRef.current?.index ?? 0;
+              setCurrentGalleryIndexRef.current?.(idx);
+            }
+          }, 100);
           // Ensure close button exists - fix for lightGallery bug where close button disappears when download is enabled
           setTimeout(() => {
             const toolbar = document.querySelector('.lg-toolbar');
@@ -329,16 +351,7 @@ export function LightGalleryWrapper({
         
         const handleGalleryClose = () => {
           isGalleryOpenRef.current = false;
-          // Clean up any polling intervals for selection buttons
-          if (containerRef.current) {
-            const selectionBtn = containerRef.current.querySelector('.lg-selection-toggle');
-            if (selectionBtn) {
-              const interval = (selectionBtn as any).__selectionCheckInterval;
-              if (interval) {
-                clearInterval(interval);
-              }
-            }
-          }
+          setToolbarElRef.current?.(null);
           if (onGalleryCloseRef.current) {
             onGalleryCloseRef.current();
           }
@@ -348,210 +361,6 @@ export function LightGalleryWrapper({
         if (containerRef.current) {
           containerRef.current.addEventListener('lgAfterOpen', handleGalleryOpen);
           containerRef.current.addEventListener('lgBeforeClose', handleGalleryClose);
-        }
-
-        // Add custom selection toggle button to toolbar if selection is enabled
-        const addSelectionButton = () => {
-          if (!canSelectRef.current || !onImageSelectRef.current) return;
-          
-          const toolbar = document.querySelector('.lg-toolbar');
-          if (!toolbar) return;
-
-          // Remove existing selection group (contains selection + album + print buttons)
-          const existingGroup = toolbar.querySelector('.lg-toolbar-selection-group');
-          if (existingGroup) {
-            const existingBtn = existingGroup.querySelector('.lg-selection-toggle');
-            if (existingBtn && (existingBtn as any).__selectionCheckInterval) {
-              clearInterval((existingBtn as any).__selectionCheckInterval);
-            }
-            existingGroup.remove();
-          }
-
-          // Create selection toggle and album/print buttons
-          const toolbarButtonStyle = 'min-width: 44px; min-height: 44px; padding: 0 12px; display: flex; gap: 8px; align-items: center; justify-content: center; cursor: pointer; background-color: #000000; color: #ffffff; border: 1px solid #000000; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;';
-          const applyGroupButtonStyle = (btn: HTMLButtonElement) => {
-            btn.style.setProperty('background-color', '#000000', 'important');
-            btn.style.setProperty('color', '#ffffff', 'important');
-            btn.style.setProperty('border', '1px solid #000000', 'important');
-          };
-          const selectionBtn = document.createElement('button');
-          selectionBtn.className = 'lg-selection-toggle';
-          selectionBtn.setAttribute('aria-label', 'Toggle selection');
-          selectionBtn.style.cssText = toolbarButtonStyle;
-          applyGroupButtonStyle(selectionBtn);
-          selectionBtn.addEventListener('pointerdown', (e) => e.preventDefault());
-
-          let bookBtn: HTMLButtonElement | null = null;
-          let printBtn: HTMLButtonElement | null = null;
-          if (showPhotoBookUiRef.current && onTogglePhotoBookRef.current) {
-            bookBtn = document.createElement('button');
-            bookBtn.className = 'lg-photo-book';
-            bookBtn.style.cssText = toolbarButtonStyle;
-            applyGroupButtonStyle(bookBtn);
-            bookBtn.addEventListener('pointerdown', (e: Event) => e.preventDefault());
-          }
-          if (showPhotoPrintUiRef.current && onTogglePhotoPrintRef.current) {
-            printBtn = document.createElement('button');
-            printBtn.className = 'lg-photo-print';
-            printBtn.style.cssText = toolbarButtonStyle;
-            applyGroupButtonStyle(printBtn);
-            printBtn.addEventListener('pointerdown', (e: Event) => e.preventDefault());
-          }
-
-          // Update button label and state based on current selection state (use ref so refresh works after gallery recreate)
-          const updateButtonLabel = () => {
-            const instance = galleryInstanceRef.current;
-            if (!instance) return;
-            const currentIndex = instance.index ?? 0;
-            const currentImage = imagesRef.current[currentIndex];
-            if (!currentImage) return;
-            
-            const isSelected = selectedKeysRef.current.has(currentImage.key);
-            const isAtMaxLimit = extraPriceCentsRef.current === 0 && currentSelectedCountRef.current >= baseLimitRef.current;
-            const shouldDisable = !isSelected && isAtMaxLimit;
-            
-            if (isSelected) {
-              // Use Lucide "Check" icon (inline SVG) to match the icon library used across the app.
-              selectionBtn.innerHTML = `
-                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M20 6 9 17 4 12" />
-                </svg>
-                <span>Wybrane Zdjęcie</span>
-              `;
-              selectionBtn.setAttribute('aria-label', 'Wybrane zdjęcie');
-              selectionBtn.disabled = false;
-              selectionBtn.style.opacity = '1';
-              selectionBtn.style.cursor = 'pointer';
-              selectionBtn.removeAttribute('title');
-            } else {
-              selectionBtn.innerHTML = `<span>Wybierz Zdjęcie</span>`;
-              selectionBtn.setAttribute('aria-label', shouldDisable ? 'Osiągnięto limit wyboru zdjęć' : 'Wybierz zdjęcie');
-              
-              if (shouldDisable) {
-                selectionBtn.disabled = true;
-                selectionBtn.style.opacity = '0.5';
-                selectionBtn.style.cursor = 'not-allowed';
-                selectionBtn.setAttribute('title', `Osiągnięto limit wyboru zdjęć (${baseLimitRef.current}). Odznacz przynajmniej jedno zdjęcie, aby wybrać inne.`);
-              } else {
-                selectionBtn.disabled = false;
-                selectionBtn.style.opacity = '1';
-                selectionBtn.style.cursor = 'pointer';
-                selectionBtn.removeAttribute('title');
-              }
-            }
-            const bookKeys = photoBookKeysRef.current || [];
-            const printKeys = photoPrintKeysRef.current || [];
-            const inBook = bookKeys.includes(currentImage.key);
-            const inPrint = printKeys.includes(currentImage.key);
-            if (bookBtn && showPhotoBookUiRef.current) {
-              bookBtn.style.display = isSelected ? 'flex' : 'none';
-              bookBtn.textContent = inBook ? 'Usuń z albumu' : 'Dodaj do albumu';
-              bookBtn.setAttribute('aria-label', inBook ? 'Usuń z albumu' : 'Dodaj do albumu');
-              bookBtn.disabled = false;
-            }
-            if (printBtn && showPhotoPrintUiRef.current) {
-              printBtn.style.display = isSelected ? 'flex' : 'none';
-              printBtn.textContent = inPrint ? 'Usuń z druku' : 'Dodaj do druku';
-              printBtn.setAttribute('aria-label', inPrint ? 'Usuń z druku' : 'Dodaj do druku');
-              printBtn.disabled = false;
-            }
-            applyGroupButtonStyle(selectionBtn);
-            if (bookBtn) applyGroupButtonStyle(bookBtn);
-            if (printBtn) applyGroupButtonStyle(printBtn);
-          };
-
-          updateButtonLabel();
-
-          selectionBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const instance = galleryInstanceRef.current;
-            if (!instance) return;
-            const currentIndex = instance.index ?? 0;
-            const currentImage = imagesRef.current[currentIndex];
-            if (!currentImage || !onImageSelectRef.current) return;
-            
-            // Prevent action if button is disabled
-            const isSelected = selectedKeysRef.current.has(currentImage.key);
-            const isAtMaxLimit = extraPriceCentsRef.current === 0 && currentSelectedCountRef.current >= baseLimitRef.current;
-            if (!isSelected && isAtMaxLimit) {
-              return; // Button is disabled, don't process click
-            }
-            
-            onImageSelectRef.current(currentImage.key);
-            // Update label after a short delay to reflect new state
-            setTimeout(updateButtonLabel, 100);
-            // Ensure the button doesn't keep focus after pointer click.
-            selectionBtn.blur();
-          });
-
-          if (bookBtn && onTogglePhotoBookRef.current) {
-            bookBtn.addEventListener('click', (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const instance = galleryInstanceRef.current;
-              if (!instance) return;
-              const currentImage = imagesRef.current[instance.index ?? 0];
-              if (!currentImage) return;
-              onTogglePhotoBookRef.current?.(currentImage.key);
-              setTimeout(updateButtonLabel, 100);
-              bookBtn?.blur();
-            });
-          }
-          if (printBtn && onTogglePhotoPrintRef.current) {
-            printBtn.addEventListener('click', (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const instance = galleryInstanceRef.current;
-              if (!instance) return;
-              const currentImage = imagesRef.current[instance.index ?? 0];
-              if (!currentImage) return;
-              onTogglePhotoPrintRef.current?.(currentImage.key);
-              setTimeout(updateButtonLabel, 100);
-              printBtn?.blur();
-            });
-          }
-
-          // Wrap selection + album + print in one row, centered in toolbar (same position as original "Wybierz zdjęcie")
-          const group = document.createElement('div');
-          group.className = 'lg-toolbar-selection-group';
-          group.style.cssText = 'position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12px; flex-shrink: 0; direction: ltr; white-space: nowrap; z-index: 2;';
-          group.appendChild(selectionBtn);
-          if (bookBtn) group.appendChild(bookBtn);
-          if (printBtn) group.appendChild(printBtn);
-          toolbar.appendChild(group);
-
-          // Update icon on slide change and when selection changes
-          const updateOnSlideChange = () => {
-            updateButtonLabel();
-          };
-          if (containerRef.current) {
-            containerRef.current.addEventListener('lgAfterSlide', updateOnSlideChange);
-          }
-          
-          // Also update button when selection might have changed externally
-          // Use a polling approach to check for selection changes (since we can't easily observe Set changes)
-          const selectionCheckInterval = setInterval(() => {
-            if (isGalleryOpenRef.current && galleryInstanceRef.current) {
-              updateButtonLabel();
-            }
-          }, 500); // Check every 500ms
-          
-          // Store interval ID for cleanup
-          (selectionBtn as any).__selectionCheckInterval = selectionCheckInterval;
-          refreshSelectionButtonsRef.current = addSelectionButton;
-        };
-
-        // Add button after gallery opens
-        if (canSelectRef.current && onImageSelectRef.current) {
-          const addButtonAfterOpen = () => {
-            setTimeout(addSelectionButton, 100);
-          };
-          if (containerRef.current) {
-            containerRef.current.addEventListener('lgAfterOpen', addButtonAfterOpen);
-          }
-          // Also try to add immediately if gallery is already open
-          setTimeout(addSelectionButton, 200);
         }
 
         // Intercept download button clicks - use document-level listener since lightGallery creates buttons dynamically
@@ -601,6 +410,7 @@ export function LightGalleryWrapper({
           const handleSlideChange = (event: any) => {
             const currentIndex = event.detail?.index ?? galleryInstance?.index ?? 0;
             currentGalleryIndexRef.current = currentIndex;
+            setCurrentGalleryIndexRef.current?.(currentIndex);
             const totalImages = imagesRef.current.length;
             const imagesUntilEnd = totalImages - currentIndex - 1;
             
@@ -678,7 +488,6 @@ export function LightGalleryWrapper({
 
     return () => {
       clearTimeout(timeoutId);
-      refreshSelectionButtonsRef.current = null;
       // Clean up download click handler
       if (downloadHandlerRef.current) {
         document.removeEventListener('click', downloadHandlerRef.current, true);
@@ -699,13 +508,6 @@ export function LightGalleryWrapper({
       }
     };
   }, [galleryId, enableDownload]); // Include enableDownload in dependencies
-
-  // When showPhotoBookUi/showPhotoPrintUi change while carousel is open, re-build toolbar so album/print buttons appear (e.g. after selection state loads)
-  useEffect(() => {
-    if (!isGalleryOpenRef.current) return;
-    const refresh = refreshSelectionButtonsRef.current;
-    if (refresh) refresh();
-  }, [showPhotoBookUi, showPhotoPrintUi]);
 
   // Refresh gallery when images change (for infinite scroll)
   useEffect(() => {
@@ -802,7 +604,14 @@ export function LightGalleryWrapper({
           // Track gallery open/close state for recreated instance
           const handleGalleryOpen = () => {
             isGalleryOpenRef.current = true;
-            
+            setTimeout(() => {
+              const toolbar = document.querySelector('.lg-toolbar');
+              if (canSelectRef.current && toolbar) {
+                setToolbarElRef.current?.(toolbar as HTMLElement);
+                const idx = galleryInstanceRef.current?.index ?? 0;
+                setCurrentGalleryIndexRef.current?.(idx);
+              }
+            }, 100);
             // Ensure close button exists - fix for lightGallery bug where close button disappears when download is enabled
             setTimeout(() => {
               const toolbar = document.querySelector('.lg-toolbar');
@@ -826,6 +635,7 @@ export function LightGalleryWrapper({
           
           const handleGalleryClose = () => {
             isGalleryOpenRef.current = false;
+            setToolbarElRef.current?.(null);
             if (onGalleryCloseRef.current) {
               onGalleryCloseRef.current();
             }
@@ -866,171 +676,6 @@ export function LightGalleryWrapper({
             document.addEventListener('click', handleDownloadClick, true);
           }
           
-          // Re-attach selection button if selection is enabled
-          if (canSelectRef.current && onImageSelectRef.current) {
-            const addButtonAfterOpen = () => {
-              setTimeout(() => {
-                const toolbar = document.querySelector('.lg-toolbar');
-                if (!toolbar) return;
-
-                const existingGroup = toolbar.querySelector('.lg-toolbar-selection-group');
-                if (existingGroup) {
-                  const existingBtn = existingGroup.querySelector('.lg-selection-toggle');
-                  if (existingBtn && (existingBtn as any).__selectionCheckInterval) {
-                    clearInterval((existingBtn as any).__selectionCheckInterval);
-                  }
-                  existingGroup.remove();
-                }
-
-                const toolbarButtonStyle = 'min-width: 44px; min-height: 44px; padding: 0 12px; display: flex; gap: 8px; align-items: center; justify-content: center; cursor: pointer; background-color: #000000; color: #ffffff; border: 1px solid #000000; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;';
-                const applyGroupButtonStyle = (btn: HTMLButtonElement) => {
-                  btn.style.setProperty('background-color', '#000000', 'important');
-                  btn.style.setProperty('color', '#ffffff', 'important');
-                  btn.style.setProperty('border', '1px solid #000000', 'important');
-                };
-                const selectionBtn = document.createElement('button');
-                selectionBtn.className = 'lg-selection-toggle';
-                selectionBtn.setAttribute('aria-label', 'Toggle selection');
-                selectionBtn.style.cssText = toolbarButtonStyle;
-                applyGroupButtonStyle(selectionBtn);
-                selectionBtn.addEventListener('pointerdown', (e: Event) => e.preventDefault());
-
-                let bookBtn: HTMLButtonElement | null = null;
-                let printBtn: HTMLButtonElement | null = null;
-                if (showPhotoBookUiRef.current && onTogglePhotoBookRef.current) {
-                  bookBtn = document.createElement('button');
-                  bookBtn.className = 'lg-photo-book';
-                  bookBtn.style.cssText = toolbarButtonStyle;
-                  applyGroupButtonStyle(bookBtn);
-                  bookBtn.addEventListener('pointerdown', (e: Event) => e.preventDefault());
-                }
-                if (showPhotoPrintUiRef.current && onTogglePhotoPrintRef.current) {
-                  printBtn = document.createElement('button');
-                  printBtn.className = 'lg-photo-print';
-                  printBtn.style.cssText = toolbarButtonStyle;
-                  applyGroupButtonStyle(printBtn);
-                  printBtn.addEventListener('pointerdown', (e: Event) => e.preventDefault());
-                }
-
-                const updateButtonLabel = () => {
-                  if (!galleryInstance) return;
-                  const currentIndex = galleryInstance.index ?? 0;
-                  const currentImage = imagesRef.current[currentIndex];
-                  if (!currentImage) return;
-
-                  const isSelected = selectedKeysRef.current.has(currentImage.key);
-                  const isAtMaxLimit = extraPriceCentsRef.current === 0 && currentSelectedCountRef.current >= baseLimitRef.current;
-                  const shouldDisable = !isSelected && isAtMaxLimit;
-
-                  if (isSelected) {
-                    selectionBtn.innerHTML = `<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17 4 12" /></svg><span>Wybrane Zdjęcie</span>`;
-                    selectionBtn.setAttribute('aria-label', 'Wybrane zdjęcie');
-                    selectionBtn.disabled = false;
-                    selectionBtn.style.opacity = '1';
-                    selectionBtn.style.cursor = 'pointer';
-                    selectionBtn.removeAttribute('title');
-                  } else {
-                    selectionBtn.innerHTML = `<span>Wybierz Zdjęcie</span>`;
-                    selectionBtn.setAttribute('aria-label', shouldDisable ? 'Osiągnięto limit wyboru zdjęć' : 'Wybierz zdjęcie');
-                    selectionBtn.disabled = !!shouldDisable;
-                    selectionBtn.style.opacity = shouldDisable ? '0.5' : '1';
-                    selectionBtn.style.cursor = shouldDisable ? 'not-allowed' : 'pointer';
-                    if (shouldDisable) selectionBtn.setAttribute('title', `Osiągnięto limit wyboru zdjęć (${baseLimitRef.current}). Odznacz przynajmniej jedno zdjęcie, aby wybrać inne.`);
-                    else selectionBtn.removeAttribute('title');
-                  }
-
-                  const bookKeys = photoBookKeysRef.current || [];
-                  const printKeys = photoPrintKeysRef.current || [];
-                  const inBook = bookKeys.includes(currentImage.key);
-                  const inPrint = printKeys.includes(currentImage.key);
-
-                  if (bookBtn && showPhotoBookUiRef.current) {
-                    bookBtn.style.display = isSelected ? 'flex' : 'none';
-                    bookBtn.textContent = inBook ? 'Usuń z albumu' : 'Dodaj do albumu';
-                    bookBtn.setAttribute('aria-label', inBook ? 'Usuń z albumu' : 'Dodaj do albumu');
-                    bookBtn.disabled = false;
-                  }
-                  if (printBtn && showPhotoPrintUiRef.current) {
-                    printBtn.style.display = isSelected ? 'flex' : 'none';
-                    printBtn.textContent = inPrint ? 'Usuń z druku' : 'Dodaj do druku';
-                    printBtn.setAttribute('aria-label', inPrint ? 'Usuń z druku' : 'Dodaj do druku');
-                    printBtn.disabled = false;
-                  }
-                  applyGroupButtonStyle(selectionBtn);
-                  if (bookBtn) applyGroupButtonStyle(bookBtn);
-                  if (printBtn) applyGroupButtonStyle(printBtn);
-                };
-
-                updateButtonLabel();
-
-                selectionBtn.addEventListener('click', (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!galleryInstance) return;
-                  const currentIndex = galleryInstance.index ?? 0;
-                  const currentImage = imagesRef.current[currentIndex];
-                  if (!currentImage || !onImageSelectRef.current) return;
-                  const isSelected = selectedKeysRef.current.has(currentImage.key);
-                  const isAtMaxLimit = extraPriceCentsRef.current === 0 && currentSelectedCountRef.current >= baseLimitRef.current;
-                  if (!isSelected && isAtMaxLimit) return;
-                  onImageSelectRef.current(currentImage.key);
-                  setTimeout(updateButtonLabel, 100);
-                  selectionBtn.blur();
-                });
-
-                if (bookBtn && onTogglePhotoBookRef.current) {
-                  bookBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!galleryInstance) return;
-                    const currentImage = imagesRef.current[galleryInstance.index ?? 0];
-                    if (!currentImage) return;
-                    onTogglePhotoBookRef.current?.(currentImage.key);
-                    setTimeout(updateButtonLabel, 100);
-                    bookBtn?.blur();
-                  });
-                }
-                if (printBtn && onTogglePhotoPrintRef.current) {
-                  printBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!galleryInstance) return;
-                    const currentImage = imagesRef.current[galleryInstance.index ?? 0];
-                    if (!currentImage) return;
-                    onTogglePhotoPrintRef.current?.(currentImage.key);
-                    setTimeout(updateButtonLabel, 100);
-                    printBtn?.blur();
-                  });
-                }
-
-                const group = document.createElement('div');
-                group.className = 'lg-toolbar-selection-group';
-                group.style.cssText = 'position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 12px; flex-shrink: 0; direction: ltr; white-space: nowrap; z-index: 2;';
-                group.appendChild(selectionBtn);
-                if (bookBtn) group.appendChild(bookBtn);
-                if (printBtn) group.appendChild(printBtn);
-                toolbar.appendChild(group);
-
-                if (containerRef.current) {
-                  containerRef.current.addEventListener('lgAfterSlide', updateButtonLabel);
-                }
-                const selectionCheckInterval = setInterval(() => {
-                  if (isGalleryOpenRef.current && galleryInstance) updateButtonLabel();
-                }, 500);
-                (selectionBtn as any).__selectionCheckInterval = selectionCheckInterval;
-              }, 100);
-            };
-            if (containerRef.current) {
-              containerRef.current.addEventListener('lgAfterOpen', addButtonAfterOpen);
-            }
-            setTimeout(() => {
-              const toolbar = document.querySelector('.lg-toolbar');
-              if (toolbar) {
-                addButtonAfterOpen();
-              }
-            }, 300);
-          }
-
           // Re-attach slide change listener for prefetching and thumbnail updates
           if (containerRef.current) {
             // Remove existing handler if any
@@ -1041,6 +686,7 @@ export function LightGalleryWrapper({
             const handleSlideChange = (event: any) => {
               const currentIndex = event.detail?.index ?? galleryInstance?.index ?? 0;
               currentGalleryIndexRef.current = currentIndex;
+              setCurrentGalleryIndexRef.current?.(currentIndex);
               const totalImages = imagesRef.current.length;
               const imagesUntilEnd = totalImages - currentIndex - 1;
               
@@ -1113,5 +759,32 @@ export function LightGalleryWrapper({
   // When images change (infinite scrolling), lightgallery will detect new anchor tags
   // No manual refresh needed - lightgallery handles it automatically
 
-  return <div ref={containerRef} data-lg-container>{children}</div>;
+  return (
+    <>
+      <div ref={containerRef} data-lg-container>{children}</div>
+      {toolbarEl &&
+        canSelect &&
+        onImageSelect &&
+        createPortal(
+          <LightGalleryToolbarButtons
+            currentIndex={currentGalleryIndex}
+            images={images}
+            selectedKeys={selectedKeys}
+            photoBookKeys={photoBookKeys ?? []}
+            photoPrintKeys={photoPrintKeys ?? []}
+            photoBookCount={photoBookCount ?? 0}
+            photoPrintCount={photoPrintCount ?? 0}
+            showPhotoBookUi={showPhotoBookUi}
+            showPhotoPrintUi={showPhotoPrintUi}
+            baseLimit={baseLimit}
+            extraPriceCents={extraPriceCents}
+            currentSelectedCount={currentSelectedCount}
+            onImageSelect={onImageSelect}
+            onTogglePhotoBook={onTogglePhotoBook}
+            onTogglePhotoPrint={onTogglePhotoPrint}
+          />,
+          toolbarEl
+        )}
+    </>
+  );
 }
