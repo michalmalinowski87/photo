@@ -129,35 +129,23 @@ export function useImageDownload() {
           return;
         }
 
-        // For Android and desktop browsers, use blob approach for better control
-        // Fetch the full-resolution original image as a blob (presigned URL points to originals/)
-        const response = await fetch(data.url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch image: ${response.statusText}`);
-        }
-        const blob = await response.blob();
-        
-        // Create a blob URL and trigger download
-        const blobUrl = URL.createObjectURL(blob);
+        // For Android and desktop browsers, trigger download via direct presigned URL.
+        // The backend sets ResponseContentDisposition on the presigned URL, so the browser
+        // receives the correct filename and starts the download immediately without
+        // loading the full image into JS (avoids multi-second delay for large files).
         const link = document.createElement("a");
-        link.href = blobUrl;
+        link.href = data.url;
         link.download = filename;
-        // Don't set target="_blank" - this forces download instead of opening in new tab
         link.style.display = "none";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         
-        // Clean up blob URL after a short delay
-        setTimeout(() => {
-          URL.revokeObjectURL(blobUrl);
-        }, 100);
-        
-        // Close overlay after download starts
+        // Close overlay shortly after triggering download (browser handles the rest)
         setTimeout(() => {
           setDownloadState({ showOverlay: false, isError: false });
           setDownloading(false);
-        }, 300);
+        }, 200);
       } catch (error) {
         console.error("Download error:", error);
         // Don't expose actual error message for security reasons
