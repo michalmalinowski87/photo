@@ -6,7 +6,7 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 import { cancelExpirySchedule, getScheduleName } from './expiry-scheduler';
 import { getUnpaidTransactionForGallery, updateTransactionStatus } from './transactions';
-import { createGalleryDeletedEmail } from './email';
+import { createGalleryDeletedEmail, createGalleryDeletedEmailForOwner } from './email';
 
 /**
  * Gets owner email from gallery or Cognito
@@ -275,19 +275,20 @@ async function sendDeletionEmails(
 	}
 
 	const deletionSummary = { s3ObjectsDeleted };
-	const emailTemplate = createGalleryDeletedEmail(galleryId, galleryName || galleryId, deletionSummary);
+	const ownerTemplate = createGalleryDeletedEmailForOwner(galleryId, galleryName || galleryId, deletionSummary);
+	const clientTemplate = createGalleryDeletedEmail(galleryId, galleryName || galleryId, deletionSummary);
 
-	// Send to photographer
+	// Send to photographer (owner-oriented copy)
 	if (ownerEmail) {
 		try {
 			await ses.send(new SendEmailCommand({
 				Source: sender,
 				Destination: { ToAddresses: [ownerEmail] },
 				Message: {
-					Subject: { Data: emailTemplate.subject },
+					Subject: { Data: ownerTemplate.subject },
 					Body: {
-						Text: { Data: emailTemplate.text },
-						Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
+						Text: { Data: ownerTemplate.text },
+						Html: ownerTemplate.html ? { Data: ownerTemplate.html } : undefined
 					}
 				}
 			}));
@@ -301,17 +302,17 @@ async function sendDeletionEmails(
 		}
 	}
 
-	// Send to client
+	// Send to client (client-oriented copy)
 	if (clientEmail) {
 		try {
 			await ses.send(new SendEmailCommand({
 				Source: sender,
 				Destination: { ToAddresses: [clientEmail] },
 				Message: {
-					Subject: { Data: emailTemplate.subject },
+					Subject: { Data: clientTemplate.subject },
 					Body: {
-						Text: { Data: emailTemplate.text },
-						Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
+						Text: { Data: clientTemplate.text },
+						Html: clientTemplate.html ? { Data: clientTemplate.html } : undefined
 					}
 				}
 			}));

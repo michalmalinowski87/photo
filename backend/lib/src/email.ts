@@ -272,7 +272,7 @@ export function createFinalLinkEmail(galleryId: string, galleryName: string, cli
 	const content = `
 		${createHeading('Twoje zdjęcia są gotowe!', 2)}
 		${createParagraphHtml(`Zdjęcia z galerii <strong>${escapeHtml(galleryDisplayName)}</strong> są już gotowe do pobrania.`)}
-		${createButton('Zobacz i pobierz zdjęcia', link, 'success')}
+		${createButton('Zobacz i pobierz zdjęcia', link, 'primary')}
 		${createParagraph('Dziękujemy za wybór naszych usług!', 'margin-top: 24px;')}
 	`;
 	
@@ -288,7 +288,7 @@ export function createFinalLinkEmailWithPasswordInfo(galleryId: string, galleryN
 	const content = `
 		${createHeading('Twoje zdjęcia są gotowe!', 2)}
 		${createParagraphHtml(`Zdjęcia z galerii <strong>${escapeHtml(galleryDisplayName)}</strong> są już gotowe do pobrania.`)}
-		${createButton('Zobacz i pobierz zdjęcia', link, 'success')}
+		${createButton('Zobacz i pobierz zdjęcia', link, 'primary')}
 		${createAlert('<strong>Ważne:</strong> Hasło do galerii zostanie wysłane w osobnej wiadomości e-mail ze względów bezpieczeństwa.', 'info')}
 		${createParagraph('Dziękujemy za wybór naszych usług!', 'margin-top: 24px;')}
 	`;
@@ -296,6 +296,32 @@ export function createFinalLinkEmailWithPasswordInfo(galleryId: string, galleryN
 	return {
 		subject: `Twoje zdjęcia są gotowe: ${galleryDisplayName}`,
 		text: `Witaj,\n\nTwoje zdjęcia z galerii ${galleryDisplayName} są gotowe!\n\nZobacz i pobierz: ${link}\n\nHasło do galerii zostanie wysłane w osobnej wiadomości e-mail ze względów bezpieczeństwa.\n\nDziękujemy za wybór naszych usług!`,
+		html: createEmailWrapper(content)
+	};
+}
+
+/**
+ * "Twoje zdjęcia są gotowe" with password in body (same style as zaproszenie do wyboru zdjec).
+ * Used for non-selection galleries so client gets one email with link + password.
+ */
+export function createFinalLinkEmailWithPassword(galleryId: string, galleryName: string, clientEmail: string, link: string, password: string): EmailTemplate {
+	const galleryDisplayName = sanitizeInlineText(galleryName || galleryId);
+	const passwordBlock = `<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; border-radius: 12px; padding: 16px; margin: 24px 0; text-align: center;">
+		<p style="margin: 0; font-size: 20px; font-weight: 800; color: ${COLORS.text.heading}; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; letter-spacing: 2px;">${escapeHtml(password)}</p>
+	</div>`;
+	const content = `
+		${createHeading('Twoje zdjęcia są gotowe!', 2)}
+		${createParagraphHtml(`Zdjęcia z galerii <strong>${escapeHtml(galleryDisplayName)}</strong> są już gotowe do pobrania.`)}
+		${createButton('Zobacz i pobierz zdjęcia', link, 'primary')}
+		${createParagraphHtml('Hasło do galerii:')}
+		${passwordBlock}
+		${createSmallText('Prosimy zachować to hasło w bezpiecznym miejscu. Jeśli nie spodziewałeś się tej wiadomości, skontaktuj się ze swoim fotografem.')}
+		${createParagraph('Dziękujemy za wybór naszych usług!', 'margin-top: 24px;')}
+	`;
+
+	return {
+		subject: `Twoje zdjęcia są gotowe: ${galleryDisplayName}`,
+		text: `Witaj,\n\nTwoje zdjęcia z galerii ${galleryDisplayName} są gotowe!\n\nZobacz i pobierz: ${link}\n\nHasło do galerii: ${password}\n\nProsimy zachować to hasło w bezpiecznym miejscu. Jeśli nie spodziewałeś się tej wiadomości, skontaktuj się ze swoim fotografem.\n\nDziękujemy za wybór naszych usług!`,
 		html: createEmailWrapper(content)
 	};
 }
@@ -514,6 +540,39 @@ export function createGalleryDeletedEmail(galleryId: string, galleryName: string
 	return {
 		subject: `Galeria została usunięta: ${galleryDisplayName}`,
 		text: `Witaj,\n\nTwoja galeria "${galleryDisplayName}" została trwale usunięta.${summaryText}\n\nWszystkie zdjęcia, podglądy, miniatury i powiązane dane zostały usunięte z naszego systemu.\n\nJeśli potrzebujesz odzyskać jakieś zdjęcia, skontaktuj się ze swoim fotografem.`,
+		html: createEmailWrapper(content)
+	};
+}
+
+/**
+ * Owner (photographer) version of gallery deletion email.
+ * Same subject and summary; copy is addressed to the photographer, not the client.
+ */
+export function createGalleryDeletedEmailForOwner(galleryId: string, galleryName: string, deletionSummary?: { s3ObjectsDeleted?: number }): EmailTemplate {
+	const galleryDisplayName = sanitizeInlineText(galleryName || galleryId);
+	const summaryText = deletionSummary?.s3ObjectsDeleted
+		? `\n\nPodsumowanie usunięcia:\n- Usunięte obiekty S3: ${deletionSummary.s3ObjectsDeleted}`
+		: '';
+	const summaryHtml = deletionSummary?.s3ObjectsDeleted
+		? `<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; border-radius: 12px; padding: 16px; margin: 24px 0;">
+			<p style="margin: 0 0 8px 0; font-weight: 800; color: ${COLORS.text.heading}; font-size: 14px; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">Podsumowanie usunięcia:</p>
+			<ul style="margin: 0; padding-left: 20px; color: ${COLORS.text.body}; font-size: 14px; line-height: 1.7; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+				<li>Usunięte obiekty S3: ${deletionSummary.s3ObjectsDeleted}</li>
+			</ul>
+		</div>`
+		: '';
+
+	const content = `
+		${createHeading('Galeria została usunięta', 2)}
+		${createParagraphHtml(`Galeria <strong>${escapeHtml(galleryDisplayName)}</strong> została trwale usunięta.`)}
+		${summaryHtml}
+		${createParagraph('Wszystkie zdjęcia, podglądy, miniatury i powiązane dane zostały usunięte z naszego systemu.')}
+		${createSmallText('Wysłano potwierdzenie usunięcia do klienta.')}
+	`;
+
+	return {
+		subject: `Galeria została usunięta: ${galleryDisplayName}`,
+		text: `Galeria "${galleryDisplayName}" została trwale usunięta.${summaryText}\n\nWszystkie zdjęcia, podglądy, miniatury i powiązane dane zostały usunięte z naszego systemu.\n\nWysłano potwierdzenie usunięcia do klienta.`,
 		html: createEmailWrapper(content)
 	};
 }

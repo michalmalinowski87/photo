@@ -4,7 +4,7 @@ import React, { memo, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { apiFetch, formatApiError } from "@/lib/api";
+import { apiFetch, formatApiError, type ApiError } from "@/lib/api";
 import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/AuthProvider";
 import { defaultLoginPageConfig } from "@/config/login-page";
@@ -16,6 +16,7 @@ export const LoginFormPane = memo(function LoginFormPane({
   galleryName,
   onLoginStart,
   onLoginComplete,
+  onGalleryRemoved,
   loginPageLayout,
 }: {
   galleryId: string;
@@ -23,6 +24,7 @@ export const LoginFormPane = memo(function LoginFormPane({
   galleryName: string | null;
   onLoginStart?: () => void;
   onLoginComplete?: () => void;
+  onGalleryRemoved?: () => void;
   loginPageLayout?: string | null;
 }) {
   const router = useRouter();
@@ -115,7 +117,12 @@ export const LoginFormPane = memo(function LoginFormPane({
         onLoginComplete?.();
       }, 500);
     } catch (err) {
-      setError(formatApiError(err));
+      const status = (err as ApiError).status;
+      if (status === 404 && onGalleryRemoved) {
+        onGalleryRemoved();
+      } else {
+        setError(formatApiError(err));
+      }
       setLoading(false);
       onLoginComplete?.();
     }

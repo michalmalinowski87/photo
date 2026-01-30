@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { LoginCoverPane, type GalleryPublicInfo } from "@/components/login/LoginCoverPane";
 import { LoginFormPane } from "@/components/login/LoginFormPane";
+import { GalleryRemoved } from "@/components/gallery/GalleryRemoved";
 import { FullPageLoading } from "@/components/ui/Loading";
 import { defaultLoginPageConfig } from "@/config/login-page";
 import { getPublicApiUrl } from "@/lib/public-env";
@@ -25,6 +26,7 @@ function LoginScreen() {
   const [loginPageLayout, setLoginPageLayout] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isPublicInfoLoading, setIsPublicInfoLoading] = useState(true);
+  const [galleryRemoved, setGalleryRemoved] = useState(false);
 
   // Memoize callbacks to prevent unnecessary re-renders and API calls
   const handlePublicInfoLoadingChange = useCallback((loading: boolean) => {
@@ -48,45 +50,24 @@ function LoginScreen() {
     setIsLoggingIn(false);
   }, []);
 
+  const handleGalleryRemoved = useCallback(() => {
+    setGalleryRemoved(true);
+  }, []);
+
   // Check if already logged in - memoize searchParams check
   const isLoginPreview = useMemo(
     () => searchParams?.get("loginPreview") === "1",
     [searchParams]
   );
 
-  useEffect(() => {
-    if (isLoginPreview) {
-      return;
-    }
-
-    if (isAuthenticated && galleryId) {
-      router.replace(`/${galleryId}`);
-    }
-  }, [galleryId, router, isAuthenticated, isLoginPreview]);
-
-  if (!galleryId) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center px-6">
-        <div className="max-w-md w-full text-center">
-          <div className="text-lg text-gray-900 font-medium">Wymagane ID galerii</div>
-          <div className="mt-2 text-sm text-gray-600">
-            Link do galerii jest nieprawidłowy lub niekompletny.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Show loading overlay until public-info is loaded OR during login
+  // Must be called before any early return (Rules of Hooks)
   const shouldShowLoading = useMemo(
     () => isPublicInfoLoading || isLoggingIn,
     [isPublicInfoLoading, isLoggingIn]
   );
 
-  // Determine layout classes based on loginPageLayout setting
   const layoutClasses = useMemo(() => {
     const layout = loginPageLayout || "split";
-    
     switch (layout) {
       case "angled-split":
         return {
@@ -113,7 +94,6 @@ function LoginScreen() {
         };
       case "split":
       default:
-        // Make layout 1 work like layout 2 - coverPane is full width, formPane overlays on top
         return {
           container: "min-h-screen relative",
           coverPane: "absolute inset-0 w-full h-full min-h-[320px] md:min-h-screen overflow-hidden bg-gray-50 z-0",
@@ -123,14 +103,38 @@ function LoginScreen() {
     }
   }, [loginPageLayout]);
 
+  useEffect(() => {
+    if (isLoginPreview) {
+      return;
+    }
+    if (isAuthenticated && galleryId) {
+      router.replace(`/${galleryId}`);
+    }
+  }, [galleryId, router, isAuthenticated, isLoginPreview]);
+
+  if (!galleryId) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center px-6">
+        <div className="max-w-md w-full text-center">
+          <div className="text-lg text-gray-900 font-medium">Wymagane ID galerii</div>
+          <div className="mt-2 text-sm text-gray-600">
+            Link do galerii jest nieprawidłowy lub niekompletny.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (galleryRemoved) {
+    return <GalleryRemoved />;
+  }
+
   return (
     <div className="min-h-screen bg-white">
-      {/* Loading overlay at page level - show until public-info loads, then during login */}
       <FullPageLoading
         isVisible={shouldShowLoading}
         text={isLoggingIn ? defaultLoginPageConfig.submitLoadingLabel : "Ładowanie..."}
       />
-      {/* Always render components so they can make API calls, but overlay will hide content */}
       <div className={layoutClasses.container} style={{ visibility: isPublicInfoLoading ? 'hidden' : 'visible' }}>
         <div className={layoutClasses.coverPane}>
           <LoginCoverPane
@@ -138,6 +142,7 @@ function LoginScreen() {
             apiUrl={apiUrl}
             onPublicInfoLoadingChange={handlePublicInfoLoadingChange}
             onPublicInfoLoaded={handlePublicInfoLoaded}
+            onGalleryRemoved={handleGalleryRemoved}
             loginPageLayout={loginPageLayout}
           />
         </div>
@@ -151,15 +156,16 @@ function LoginScreen() {
               }}
             />
           )}
-          <div 
+          <div
             className={loginPageLayout === "angled-split" ? "angled-split-form-wrapper" : "w-full"}
           >
-            <LoginFormPane 
-              galleryId={galleryId} 
-              apiUrl={apiUrl} 
+            <LoginFormPane
+              galleryId={galleryId}
+              apiUrl={apiUrl}
               galleryName={galleryName}
               onLoginStart={handleLoginStart}
               onLoginComplete={handleLoginComplete}
+              onGalleryRemoved={handleGalleryRemoved}
               loginPageLayout={loginPageLayout}
             />
           </div>

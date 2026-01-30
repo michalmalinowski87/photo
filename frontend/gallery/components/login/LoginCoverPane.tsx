@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, type ApiError } from "@/lib/api";
 import { CoverAreaLoading } from "@/components/ui/CoverAreaLoading";
 import { PhotoCloudMark } from "@/components/branding/PhotoCloudMark";
 import { getQuoteForGallery, getRotatingQuoteForGallery } from "@/lib/quotes";
@@ -23,6 +23,7 @@ interface LoginCoverPaneProps {
   apiUrl: string;
   onPublicInfoLoaded?: (info: GalleryPublicInfo) => void;
   onPublicInfoLoadingChange?: (loading: boolean) => void;
+  onGalleryRemoved?: () => void;
   loginPageLayout?: string | null;
 }
 
@@ -31,6 +32,7 @@ export const LoginCoverPane = memo(function LoginCoverPane({
   apiUrl,
   onPublicInfoLoaded,
   onPublicInfoLoadingChange,
+  onGalleryRemoved,
   loginPageLayout,
 }: LoginCoverPaneProps) {
   const [publicInfo, setPublicInfo] = React.useState<GalleryPublicInfo | null>(null);
@@ -83,10 +85,14 @@ export const LoginCoverPane = memo(function LoginCoverPane({
         setPublicInfo(info);
         lastFetchedRef.current = { galleryId, apiUrl };
         onPublicInfoLoaded?.(info);
-      } catch {
-        // Non-blocking: if we can't load public info, assume no cover and show PhotoCloud fallback.
-        setPublicInfo({ 
-          galleryName: null, 
+      } catch (err) {
+        const status = (err as ApiError).status;
+        if (status === 404) {
+          onGalleryRemoved?.();
+        }
+        // If we can't load public info (and it's not 404), assume no cover and show PhotoCloud fallback.
+        setPublicInfo({
+          galleryName: null,
           coverPhotoUrl: null,
           loginPageLayout: null,
           coverPhotoPosition: null,
@@ -105,7 +111,7 @@ export const LoginCoverPane = memo(function LoginCoverPane({
       controller.abort();
       fetchControllerRef.current = null;
     };
-  }, [galleryId, apiUrl, onPublicInfoLoaded, onPublicInfoLoadingChange]);
+  }, [galleryId, apiUrl, onPublicInfoLoaded, onPublicInfoLoadingChange, onGalleryRemoved]);
 
   const coverPhotoUrl = publicInfo?.coverPhotoUrl || null;
   const coverPhotoPosition = publicInfo?.coverPhotoPosition;

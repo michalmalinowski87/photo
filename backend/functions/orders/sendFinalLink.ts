@@ -8,7 +8,7 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 import { getUserIdFromEvent, requireOwnerOr403 } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
-import { createFinalLinkEmail, createFinalLinkEmailWithPasswordInfo, createGalleryPasswordEmail } from '../../lib/src/email';
+import { createFinalLinkEmail, createFinalLinkEmailWithPassword } from '../../lib/src/email';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { getRequiredConfigValue } from '../../lib/src/ssm-config';
 import {
@@ -97,7 +97,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleryName = gallery.galleryName || galleryId;
 	const isNonSelectionGallery = gallery.selectionEnabled === false;
 
-	// For non-selection galleries, send two emails: one with link and password info, another with password
+	// For non-selection galleries, send single "Twoje zdjęcia są gotowe" email with link and password in body
 	if (isNonSelectionGallery) {
 		// Check if password is available
 		if (!gallery.clientPasswordEncrypted) {
@@ -138,37 +138,37 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			return { statusCode: 500, body: JSON.stringify({ error: 'Failed to retrieve password' }) };
 		}
 
-		// Send first email: link with password info
-		const linkEmailTemplate = createFinalLinkEmailWithPasswordInfo(galleryId, galleryName, gallery.clientEmail, link);
+		// Send single email: "Twoje zdjęcia są gotowe" with link and password in body
+		const emailTemplate = createFinalLinkEmailWithPassword(galleryId, galleryName, gallery.clientEmail, link, password);
 		try {
-			logger.info('Sending SES email - Final Link (with password info)', {
+			logger.info('Sending SES email - Final Link (non-selection, with password)', {
 				from: sender,
 				to: gallery.clientEmail,
-				subject: linkEmailTemplate.subject,
+				subject: emailTemplate.subject,
 				galleryId,
 				orderId,
 				link,
 				selectionEnabled: false
 			});
-			const linkResult = await ses.send(new SendEmailCommand({
+			const result = await ses.send(new SendEmailCommand({
 				Source: sender,
 				Destination: { ToAddresses: [gallery.clientEmail] },
 				Message: {
-					Subject: { Data: linkEmailTemplate.subject },
+					Subject: { Data: emailTemplate.subject },
 					Body: {
-						Text: { Data: linkEmailTemplate.text },
-						Html: linkEmailTemplate.html ? { Data: linkEmailTemplate.html } : undefined
+						Text: { Data: emailTemplate.text },
+						Html: emailTemplate.html ? { Data: emailTemplate.html } : undefined
 					}
 				}
 			}));
-			logger.info('SES email sent successfully - Final Link (with password info)', {
-				messageId: linkResult.MessageId,
-				requestId: linkResult.$metadata?.requestId,
+			logger.info('SES email sent successfully - Final Link (non-selection)', {
+				messageId: result.MessageId,
+				requestId: result.$metadata?.requestId,
 				from: sender,
 				to: gallery.clientEmail
 			});
 		} catch (err: any) {
-			logger.error('SES send failed - Final Link Email (with password info)', {
+			logger.error('SES send failed - Final Link Email (non-selection)', {
 				error: {
 					name: err.name,
 					message: err.message,
@@ -180,7 +180,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				emailDetails: {
 					from: sender,
 					to: gallery.clientEmail,
-					subject: linkEmailTemplate.subject,
+					subject: emailTemplate.subject,
 					galleryId,
 					orderId,
 					link
@@ -191,59 +191,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				}
 			});
 			return { statusCode: 500, body: JSON.stringify({ error: 'email failed', message: err.message }) };
-		}
-
-		// Send second email: password
-		const passwordEmailTemplate = createGalleryPasswordEmail(galleryId, galleryName, gallery.clientEmail, password, link);
-		try {
-			logger.info('Sending SES email - Gallery Password (for final link)', {
-				from: sender,
-				to: gallery.clientEmail,
-				subject: passwordEmailTemplate.subject,
-				galleryId,
-				orderId,
-				selectionEnabled: false
-			});
-			const passwordResult = await ses.send(new SendEmailCommand({
-				Source: sender,
-				Destination: { ToAddresses: [gallery.clientEmail] },
-				Message: {
-					Subject: { Data: passwordEmailTemplate.subject },
-					Body: {
-						Text: { Data: passwordEmailTemplate.text },
-						Html: passwordEmailTemplate.html ? { Data: passwordEmailTemplate.html } : undefined
-					}
-				}
-			}));
-			logger.info('SES email sent successfully - Gallery Password (for final link)', {
-				messageId: passwordResult.MessageId,
-				requestId: passwordResult.$metadata?.requestId,
-				from: sender,
-				to: gallery.clientEmail
-			});
-		} catch (err: any) {
-			logger.error('SES send failed - Gallery Password Email (for final link)', {
-				error: {
-					name: err.name,
-					message: err.message,
-					code: err.code,
-					statusCode: err.$metadata?.httpStatusCode,
-					requestId: err.$metadata?.requestId,
-					stack: err.stack
-				},
-				emailDetails: {
-					from: sender,
-					to: gallery.clientEmail,
-					subject: passwordEmailTemplate.subject,
-					galleryId,
-					orderId
-				},
-				envCheck: {
-					senderConfigured: !!sender,
-					apiUrlConfigured: !!apiUrl
-				}
-			});
-			return { statusCode: 500, body: JSON.stringify({ error: 'password email failed', message: err.message }) };
 		}
 	} else {
 		// For selection galleries, send single email as before

@@ -92,9 +92,24 @@ export function ZipOverlay({
             {onDownloadZip && (
               <button
                 onClick={onDownloadZip}
-                className="mb-4 px-6 py-3 bg-white text-black font-medium rounded hover:bg-white/90 transition-colors"
+                className="mb-4 h-[44px] py-2 uppercase text-sm touch-manipulation min-w-[44px] flex items-center justify-center whitespace-nowrap gap-2 text-white hover:text-white/90 transition-colors font-medium"
+                style={{ letterSpacing: "0.05em" }}
+                aria-label="Pobierz ZIP"
               >
-                Pobierz ZIP
+                <svg
+                  className="w-4 h-4 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+                <span>Pobierz ZIP</span>
               </button>
             )}
           </>
