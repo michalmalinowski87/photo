@@ -1,27 +1,59 @@
 import { lambdaLogger } from '../../../packages/logger/src';
-import { S3Client, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, HeadObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { verifyGalleryAccess } from '../../lib/src/auth';
 import { getPaidTransactionForGallery } from '../../lib/src/transactions';
+import { getConfigValueFromSsm } from '../../lib/src/ssm-config';
+import { getCloudFrontSignedUrl, getCloudFrontPrivateKey, getCloudFrontKeyPairId } from '../../lib/src/cloudfront-signer';
 
-const s3 = new S3Client({});
+// S3Client for checking if ZIP exists in S3 (before CloudFront propagation)
+const s3 = new S3Client({
+	region: process.env.AWS_REGION || 'eu-west-1',
+	maxAttempts: 3,
+	requestHandler: {
+		requestTimeout: 30000, // 30s timeout
+		httpsAgent: {
+			keepAlive: true,
+			maxSockets: 50,
+			keepAliveMsecs: 30000
+		}
+	}
+});
+
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
-	const envProc = (globalThis as any).process;
-	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
-	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
-	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
+		const envProc = (globalThis as any).process;
+		const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
+		const stage = envProc?.env?.STAGE || 'dev';
 
-	if (!bucket || !galleriesTable || !ordersTable) {
-		return {
-			statusCode: 500,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ error: 'Missing required environment variables' })
-		};
-	}
+		if (!bucket || !galleriesTable || !ordersTable) {
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ error: 'Missing required environment variables' })
+			};
+		}
+
+		// Get CloudFront configuration
+		const cloudfrontDomain = await getConfigValueFromSsm(stage, 'CloudFrontDomain');
+		const cloudfrontPrivateKey = await getCloudFrontPrivateKey(stage);
+		const cloudfrontKeyPairId = await getCloudFrontKeyPairId(stage);
+
+		if (!cloudfrontDomain || !cloudfrontPrivateKey || !cloudfrontKeyPairId) {
+			return {
+				statusCode: 500,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'CloudFront configuration missing',
+					message: 'CloudFront domain, private key, or key pair ID not configured'
+				})
+			};
+		}
 
 	const galleryId = event?.pathParameters?.id;
 	const orderId = event?.pathParameters?.orderId;
@@ -103,45 +135,88 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 
-		// Check if final ZIP exists in S3 - this endpoint only returns presigned URLs, no generation
+		// Check if final ZIP exists - verify via CloudFront path
 		const filename = `gallery-${galleryId}-order-${orderId}-final.zip`;
 		const zipKey = `galleries/${galleryId}/orders/${orderId}/final-zip/${filename}`;
 		
+		// Check if ZIP exists in S3
+		// Note: We check S3 directly because CloudFront requires signed URLs for HEAD requests too,
+		// so an unsigned HEAD request will fail even if the file exists
 		let zipSize: number | undefined;
 		let zipExists = false;
 		
 		try {
-			const headResponse = await s3.send(new HeadObjectCommand({
+			// Check if ZIP exists in S3
+			const s3HeadResponse = await s3.send(new HeadObjectCommand({
 				Bucket: bucket,
 				Key: zipKey
 			}));
-			zipSize = headResponse.ContentLength;
+			zipSize = s3HeadResponse.ContentLength;
 			zipExists = true;
-		} catch (headErr: any) {
-			if (headErr.name === 'NoSuchKey' || headErr.name === 'NotFound') {
+		} catch (s3Err: any) {
+			if (s3Err.name === 'NoSuchKey' || s3Err.name === 'NotFound') {
 				zipExists = false;
 			} else {
-				throw headErr;
+				throw s3Err;
 			}
 		}
 		
-		// If ZIP exists, return presigned URL
+		// If ZIP exists in S3, generate CloudFront signed URL
+		// CloudFront will serve from cache if available, or fetch from S3 if not cached yet
+		// If CloudFront is not configured or fails, fall back to S3 presigned URL
 		if (zipExists) {
-			const getObjectCmd = new GetObjectCommand({
-				Bucket: bucket,
-				Key: zipKey,
-				ResponseContentDisposition: `attachment; filename="${filename}"`
-			});
-			const presignedUrl = await getSignedUrl(s3, getObjectCmd, { expiresIn: 3600 });
+			let downloadUrl: string;
+			let urlType: 'cloudfront' | 's3' = 'cloudfront';
+			
+			// Try CloudFront first (preferred for performance)
+			if (cloudfrontDomain && cloudfrontPrivateKey && cloudfrontKeyPairId) {
+				try {
+					// Build CloudFront URL
+					const cloudfrontPath = zipKey.split('/').map(encodeURIComponent).join('/');
+					const cloudfrontUrl = `https://${cloudfrontDomain}/${cloudfrontPath}`;
+					
+					downloadUrl = getCloudFrontSignedUrl(
+						cloudfrontUrl,
+						cloudfrontPrivateKey,
+						cloudfrontKeyPairId,
+						3600 // 1 hour expiration
+					);
+				} catch (cfError: any) {
+					// CloudFront signing failed - fall back to S3
+					const logger = (context as any).logger;
+					logger?.warn('CloudFront signed URL generation failed, falling back to S3', {
+						galleryId,
+						orderId,
+						error: cfError.message
+					});
+					
+					// Generate S3 presigned URL as fallback
+					const s3Command = new GetObjectCommand({
+						Bucket: bucket,
+						Key: zipKey
+					});
+					downloadUrl = await getSignedUrl(s3, s3Command, { expiresIn: 3600 });
+					urlType = 's3';
+				}
+			} else {
+				// CloudFront not configured - use S3 presigned URL
+				const s3Command = new GetObjectCommand({
+					Bucket: bucket,
+					Key: zipKey
+				});
+				downloadUrl = await getSignedUrl(s3, s3Command, { expiresIn: 3600 });
+				urlType = 's3';
+			}
 			
 			return {
 				statusCode: 200,
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
-					url: presignedUrl,
+					url: downloadUrl,
 					filename,
 					size: zipSize,
-					expiresIn: 3600
+					expiresIn: 3600,
+					source: urlType // Indicate whether URL is from CloudFront or S3
 				})
 			};
 		}

@@ -223,7 +223,7 @@
   flex-direction: row !important;
   flex-wrap: nowrap !important;
   align-items: center !important;
-  gap: 12px !important;
+  gap: 3px !important;
   flex-shrink: 0 !important;
   direction: ltr !important;
   z-index: 4 !important;

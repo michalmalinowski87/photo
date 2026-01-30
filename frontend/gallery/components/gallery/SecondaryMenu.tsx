@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { BookOpen, Image as ImageIcon } from "lucide-react";
 import { useSelection } from "@/hooks/useSelection";
 import { useAuth } from "@/providers/AuthProvider";
 import { hapticFeedback } from "@/utils/hapticFeedback";
@@ -218,9 +219,55 @@ export function SecondaryMenu({
   // and allow going over it (overageCount / overageCents).
   // If baseLimit is 0 and extra pricing exists, show "no limit" instead of "0".
   const limitDisplay = baseLimit > 0 ? baseLimit.toString() : extraPriceCents > 0 ? "no limit" : "0";
+  
+  // Album and Druk limits (only show when limits are less than included photos)
+  const photoBookCount = Math.max(0, selectionState?.pricingPackage?.photoBookCount ?? 0);
+  const photoPrintCount = Math.max(0, selectionState?.pricingPackage?.photoPrintCount ?? 0);
+  const photoBookKeys = selectionState?.photoBookKeys ?? [];
+  const photoPrintKeys = selectionState?.photoPrintKeys ?? [];
+  const currentPhotoBookCount = photoBookKeys.length;
+  const currentPhotoPrintCount = photoPrintKeys.length;
+  
+  // Show album/druk UI when limits exist and are less than included photos
+  const showPhotoBookUi = photoBookCount > 0 && photoBookCount < baseLimit;
+  const showPhotoPrintUi = photoPrintCount > 0 && photoPrintCount < baseLimit;
+
+  // Approval logic: must satisfy all requirements
   // In unselected view (buy more), can approve if at least one photo is selected
-  // In regular selecting state, can approve if selectedCount >= baseLimit
-  const canApprove = isUnselectedViewActive ? selectedCount > 0 : selectedCount >= baseLimit;
+  // In regular selecting state:
+  // - Must have all included photos selected (selectedCount >= baseLimit)
+  // - If album limit > 0 AND < included: must have all album photos (currentPhotoBookCount >= photoBookCount)
+  // - If print limit > 0 AND < included: must have all print photos (currentPhotoPrintCount >= photoPrintCount)
+  // - If album limit is 0 OR >= included: no album requirement
+  // - If print limit is 0 OR >= included: no print requirement
+  // - If both album and print limits are >= included (or 0), only need included photos
+  const canApprove = useMemo(() => {
+    if (isUnselectedViewActive) {
+      return selectedCount > 0;
+    }
+    
+    // Must have all included photos (always required)
+    if (selectedCount < baseLimit) {
+      return false;
+    }
+    
+    // Determine if album requirement applies
+    // Requirement applies if: photoBookCount > 0 AND photoBookCount < baseLimit
+    const albumRequirementApplies = photoBookCount > 0 && photoBookCount < baseLimit;
+    if (albumRequirementApplies && currentPhotoBookCount < photoBookCount) {
+      return false;
+    }
+    
+    // Determine if print requirement applies
+    // Requirement applies if: photoPrintCount > 0 AND photoPrintCount < baseLimit
+    const printRequirementApplies = photoPrintCount > 0 && photoPrintCount < baseLimit;
+    if (printRequirementApplies && currentPhotoPrintCount < photoPrintCount) {
+      return false;
+    }
+    
+    // All requirements met
+    return true;
+  }, [isUnselectedViewActive, selectedCount, baseLimit, photoBookCount, photoPrintCount, currentPhotoBookCount, currentPhotoPrintCount]);
 
   // Format price in PLN
   const formatPrice = (cents: number) => {
@@ -384,7 +431,7 @@ export function SecondaryMenu({
           </div>
 
           {/* Right: Selection status + Actions */}
-          <div className="flex items-center justify-end gap-6 sm:gap-8 ml-auto flex-shrink-0" style={{ alignSelf: 'center' }}>
+          <div className="flex items-center justify-end gap-3 sm:gap-4 ml-auto flex-shrink-0" style={{ alignSelf: 'center' }}>
             {/* Selection status display - HIDE when in DOSTARCZONE view (only show ZIP-related UI) */}
             {!showDeliveredView && isSelectionEnabled && state === "selecting" && extraPriceCents > 0 && computedOverageCount > 0 && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
@@ -395,6 +442,22 @@ export function SecondaryMenu({
             {!showDeliveredView && isSelectionEnabled && state === "selecting" && (
               <span className="text-xs text-gray-400 whitespace-nowrap">
                 Wybrane: {selectedCount} / {limitDisplay}
+              </span>
+            )}
+
+            {/* Album limit display - only show when limit is less than included photos */}
+            {!showDeliveredView && isSelectionEnabled && state === "selecting" && showPhotoBookUi && (
+              <span className="text-xs text-gray-400 whitespace-nowrap flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5" strokeWidth={2} />
+                {currentPhotoBookCount} / {photoBookCount}
+              </span>
+            )}
+
+            {/* Druk limit display - only show when limit is less than included photos */}
+            {!showDeliveredView && isSelectionEnabled && state === "selecting" && showPhotoPrintUi && (
+              <span className="text-xs text-gray-400 whitespace-nowrap flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5" strokeWidth={2} />
+                {currentPhotoPrintCount} / {photoPrintCount}
               </span>
             )}
 

@@ -342,10 +342,15 @@ export function getNextFallbackUrl(
       }
     }
 
-    // Try remaining CloudFront versions
+    // Try remaining CloudFront versions: preview → thumb
     const previewCf = tryCloudFront("preview", img.previewUrl);
     if (previewCf) {
       return previewCf;
+    }
+
+    const thumbCf = tryCloudFront("thumb", img.thumbUrl);
+    if (thumbCf) {
+      return thumbCf;
     }
 
     // All CloudFront options exhausted, try remaining S3 versions
@@ -360,6 +365,11 @@ export function getNextFallbackUrl(
     if (previewS3) {
       return previewS3;
     }
+
+    const thumbS3 = tryS3("thumb", img.thumbUrlFallback);
+    if (thumbS3) {
+      return thumbS3;
+    }
   } else if (detectedPreferredSize === "preview") {
     // If CloudFront preview failed, try S3 preview for same size first
     if (failedUrlWasCloudFront) {
@@ -369,12 +379,24 @@ export function getNextFallbackUrl(
       }
     }
 
+    // Try CloudFront thumb as fallback
+    const thumbCf = tryCloudFront("thumb", img.thumbUrl);
+    if (thumbCf) {
+      return thumbCf;
+    }
+
     // All CloudFront options exhausted, try S3 preview if not already tried
     if (!failedUrlWasCloudFront) {
       const previewS3 = tryS3("preview", img.previewUrlFallback);
       if (previewS3) {
         return previewS3;
       }
+    }
+
+    // Try S3 thumb as fallback
+    const thumbS3 = tryS3("thumb", img.thumbUrlFallback);
+    if (thumbS3) {
+      return thumbS3;
     }
   }
 

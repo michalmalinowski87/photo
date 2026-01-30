@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { RetryableImage } from "../ui/RetryableImage";
 import { Sparkles } from "lucide-react";
 import type { ImageData } from "@/types/gallery";
 import { EmptyState } from "./EmptyState";
@@ -124,26 +125,26 @@ export function ImageGrid({
                 className="block w-full h-full relative"
               >
                 {layout === "square" ? (
-                  <Image
-                    src={imageUrl ?? ""}
+                  <RetryableImage
+                    image={image}
                     alt={image.alt || `Image ${index + 1}`}
                     fill
                     className="object-cover"
+                    preferredSize="bigthumb"
                     priority={isPriority} // Prioritize first 3 images for LCP
                     loading={isPriority ? undefined : "lazy"}
                     sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    unoptimized={(imageUrl ?? "").startsWith("http")} // Don't optimize external URLs
                   />
                 ) : (
-                  <Image
-                    src={imageUrl ?? ""}
+                  <RetryableImage
+                    image={image}
                     alt={image.alt || `Image ${index + 1}`}
                     fill
                     className="object-contain"
+                    preferredSize="bigthumb"
                     priority={isPriority} // Prioritize first 3 images for LCP
                     loading={isPriority ? undefined : "lazy"}
                     sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    unoptimized={(imageUrl ?? "").startsWith("http")}
                   />
                 )}
               </a>

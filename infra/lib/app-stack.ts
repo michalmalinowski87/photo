@@ -2084,6 +2084,22 @@ export class AppStack extends Stack {
 			description: 'CloudFront distribution ID for cache invalidation'
 		});
 
+		// CloudFront key pair for signed URLs (for ZIP downloads)
+		// NOTE: These parameters must be created manually with actual values:
+		// 1. Create CloudFront key pair in AWS Console: https://console.aws.amazon.com/cloudfront/v3/home#/public-key
+		// 2. Store private key in SSM: aws ssm put-parameter --name "/PhotoHub/{stage}/CloudFrontPrivateKey" --type "SecureString" --value "$(cat private-key.pem)"
+		// 3. Store key pair ID in SSM: aws ssm put-parameter --name "/PhotoHub/{stage}/CloudFrontKeyPairId" --type "String" --value "K1234567890ABC"
+		// The parameters are created here as placeholders - actual values must be set manually
+		const cloudfrontKeyPairIdParam = new StringParameter(this, 'CloudFrontKeyPairIdParam', {
+			parameterName: `${ssmParameterPrefix}/CloudFrontKeyPairId`,
+			stringValue: 'PLACEHOLDER', // Must be replaced with actual key pair ID
+			description: 'CloudFront key pair ID for signed URLs (ZIP downloads). Must be set manually after creating CloudFront key pair.'
+		});
+
+		// CloudFront private key is stored as SecureString in SSM
+		// This is created manually via AWS CLI (see comment above)
+		// We don't create it here to avoid storing secrets in CDK code
+
 		// CloudFront invalidation permissions (must be added after distribution is created)
 		apiFn.addToRolePolicy(new PolicyStatement({
 			actions: ['cloudfront:CreateInvalidation'],

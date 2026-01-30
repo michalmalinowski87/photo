@@ -511,27 +511,26 @@ export default function GalleryPage() {
     showZipOverlay && !!overlayOrderId && hasMultipleOrders
   );
 
-  // Download ZIP
-  const handleDownloadZip = useCallback(async () => {
+  // Download ZIP. When overrideOrderId is provided (e.g. from ZipOverlay), download that order's ZIP and skip error/generating checks.
+  const handleDownloadZip = useCallback(async (overrideOrderId?: string) => {
     if (isOwnerPreview) {
       return;
     }
-    const orderId = selectedOrderId || singleOrder?.orderId;
+    const orderId = overrideOrderId ?? selectedOrderId ?? singleOrder?.orderId;
     if (!galleryId || !orderId) return;
 
-    // If ZIP has error status, show error overlay
-    if (zipStatus?.status === "error") {
-      setZipDownloadState({ showOverlay: false, isError: false });
-      setShowZipOverlay(true);
-      return;
-    }
-
-    // If ZIP is not ready (generating or not started), show ZIP overlay (status + ETA).
-    // We'll still attempt download below when status is unknown/not_started; 404 becomes a normal "preparing" state.
-    if (zipStatus?.generating) {
-      setZipDownloadState({ showOverlay: false, isError: false });
-      setShowZipOverlay(true);
-      return;
+    // When not overriding (e.g. from menu), check status and show overlay if error/generating.
+    if (!overrideOrderId) {
+      if (zipStatus?.status === "error") {
+        setZipDownloadState({ showOverlay: false, isError: false });
+        setShowZipOverlay(true);
+        return;
+      }
+      if (zipStatus?.generating) {
+        setZipDownloadState({ showOverlay: false, isError: false });
+        setShowZipOverlay(true);
+        return;
+      }
     }
 
     const token = getToken(galleryId);
@@ -543,13 +542,13 @@ export default function GalleryPage() {
     try {
       const API_URL = getPublicApiUrl();
 
-      // If status says "ready", just download.
-      // Otherwise, try anyway (to avoid stale status); treat 404/202 as "preparing".
-      if (!zipStatus?.ready) {
-        // Show immediate overlay while we probe the ZIP endpoint.
+      // If status says "ready" (or we're overriding from overlay), just download.
+      // Otherwise, show overlay while we probe the ZIP endpoint; treat 404/202 as "preparing".
+      const statusForOrder = overrideOrderId ? undefined : zipStatus;
+      if (!statusForOrder?.ready && !overrideOrderId) {
         setZipDownloadState({ showOverlay: true, isError: false });
         await new Promise(resolve => setTimeout(resolve, 100));
-      } else {
+      } else if (!overrideOrderId) {
         setZipDownloadState({ showOverlay: true, isError: false });
         await new Promise(resolve => setTimeout(resolve, 100));
       }
@@ -576,10 +575,10 @@ export default function GalleryPage() {
         throw new Error("Failed to download ZIP");
       }
 
-      // Backend returns JSON with presigned URL, not the ZIP blob directly
+      // Backend returns JSON with CloudFront signed URL, not the ZIP blob directly
       const data = await response.json();
       if (data.url) {
-        // Download from presigned URL
+        // Download from CloudFront signed URL
         const downloadUrl = data.url;
         const filename = data.filename || `gallery-${orderId}.zip`;
         const a = document.createElement("a");
@@ -1002,6 +1001,9 @@ export default function GalleryPage() {
           setShowZipOverlay(false);
           setZipOverlayOrderId(null);
         }}
+        onDownloadZip={() =>
+          handleDownloadZip(overlayOrderId ?? undefined)
+        }
       />
       </Suspense>
       <Suspense fallback={null}>

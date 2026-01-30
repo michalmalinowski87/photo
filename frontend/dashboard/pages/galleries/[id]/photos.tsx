@@ -1331,22 +1331,19 @@ export default function GalleryPhotos() {
   }, []);
 
   // Helper to normalize keys array from order (photoBookKeys, photoPrintKeys)
-  const normalizeOrderKeys = useCallback(
-    (keys: string[] | string | undefined): string[] => {
-      if (!keys) return [];
-      if (Array.isArray(keys)) return keys.map((k) => String(k).trim());
-      if (typeof keys === "string") {
-        try {
-          const parsed: unknown = JSON.parse(keys);
-          return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
-        } catch {
-          return [];
-        }
+  const normalizeOrderKeys = useCallback((keys: string[] | string | undefined): string[] => {
+    if (!keys) return [];
+    if (Array.isArray(keys)) return keys.map((k) => String(k).trim());
+    if (typeof keys === "string") {
+      try {
+        const parsed: unknown = JSON.parse(keys);
+        return Array.isArray(parsed) ? parsed.map((k: unknown) => String(k).trim()) : [];
+      } catch {
+        return [];
       }
-      return [];
-    },
-    []
-  );
+    }
+    return [];
+  }, []);
 
   // Render single image item (extracted for reuse)
   const renderImageItem = useCallback(
@@ -1380,8 +1377,7 @@ export default function GalleryPhotos() {
           : new Set<string>();
       const inBook = photoBookSet.has(imageKey);
       const inPrint = photoPrintSet.has(imageKey);
-      const showAlbumPrintIcons =
-        (showPhotoBookUi || showPhotoPrintUi) && (inBook || inPrint);
+      const showAlbumPrintIcons = (showPhotoBookUi || showPhotoPrintUi) && (inBook || inPrint);
       // Check if image has any available URLs
       const isProcessing = !img.thumbUrl && !img.previewUrl && !img.bigThumbUrl && !img.url;
       const isSelected = selectedKeys.has(imageKey);

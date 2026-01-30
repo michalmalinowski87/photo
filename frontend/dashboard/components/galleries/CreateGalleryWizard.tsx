@@ -217,8 +217,14 @@ const CreateGalleryWizard = ({
         includedCount: cap,
         extraPriceCents: Number(pkg.pricePerExtraPhoto) || 0,
         packagePriceCents: Number(pkg.price) || 0,
-        photoBookCount: Math.max(0, Math.min((pkg as { photoBookCount?: number }).photoBookCount ?? 0, cap)),
-        photoPrintCount: Math.max(0, Math.min((pkg as { photoPrintCount?: number }).photoPrintCount ?? 0, cap)),
+        photoBookCount: Math.max(
+          0,
+          Math.min((pkg as { photoBookCount?: number }).photoBookCount ?? 0, cap)
+        ),
+        photoPrintCount: Math.max(
+          0,
+          Math.min((pkg as { photoPrintCount?: number }).photoPrintCount ?? 0, cap)
+        ),
       };
       setData({ ...data, ...updates });
       // Clear related errors when package is selected
@@ -328,14 +334,12 @@ const CreateGalleryWizard = ({
         const cap = data.includedCount ?? 0;
         const nBook = data.photoBookCount ?? 0;
         if (nBook < 0 || nBook > cap) {
-          errors.photoBookCount =
-            "Liczba zdjęć do albumu musi być od 0 do liczby zdjęć w pakiecie";
+          errors.photoBookCount = "Liczba zdjęć do albumu musi być od 0 do liczby zdjęć w pakiecie";
           isValid = false;
         }
         const nPrint = data.photoPrintCount ?? 0;
         if (nPrint < 0 || nPrint > cap) {
-          errors.photoPrintCount =
-            "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie";
+          errors.photoPrintCount = "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie";
           isValid = false;
         }
         if (data.initialPaymentAmountCents < 0) {

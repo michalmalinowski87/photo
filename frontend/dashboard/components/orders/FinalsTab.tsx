@@ -95,7 +95,8 @@ export function FinalsTab({
   showPhotoBookUi = false,
   showPhotoPrintUi = false,
 }: FinalsTabProps) {
-  const showFilters = (showPhotoBookUi || showPhotoPrintUi) && images.length > 0;
+  // Filters disabled for Final Photos - always show all images
+  const showFilters = false;
   const [filter, setFilter] = useState<PhotoFilter>("all");
 
   const photoBookSet = useMemo(

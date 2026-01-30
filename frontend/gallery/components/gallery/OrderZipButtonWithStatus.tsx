@@ -84,10 +84,10 @@ export function OrderZipButtonWithStatus({
         throw new Error("Failed to download ZIP");
       }
 
-      // Backend returns JSON with presigned URL, not the ZIP blob directly
+      // Backend returns JSON with CloudFront signed URL, not the ZIP blob directly
       const data = await response.json();
       if (data.url) {
-        // Download from presigned URL
+        // Download from CloudFront signed URL
         const downloadUrl = data.url;
         const filename = data.filename || `gallery-${orderId}.zip`;
         const a = document.createElement("a");

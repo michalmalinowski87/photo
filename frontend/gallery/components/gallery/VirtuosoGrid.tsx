@@ -6,6 +6,11 @@ import Image from "next/image";
 import { Sparkles, BookOpen, BookOpenCheck, Image as ImageIcon, ImagePlus } from "lucide-react";
 import type { ImageData } from "@/types/gallery";
 import { EmptyState } from "./EmptyState";
+import { RetryableImage } from "../ui/RetryableImage";
+
+// Module-level cache to persist across React StrictMode renders
+// This prevents duplicate layout calculations when StrictMode runs useMemo twice
+const layoutCache = new Map<string, LayoutBox[]>();
 
 export type GridLayout = "square" | "standard" | "marble" | "carousel";
 
@@ -73,6 +78,114 @@ export function VirtuosoGridComponent({
   const [imageDimensions, setImageDimensions] = useState<
     Map<string, { width: number; height: number }>
   >(new Map());
+  
+  // Track extraction runs to prevent duplicate processing from React StrictMode
+  const extractionRunIdRef = useRef<number>(0);
+  
+  // Extract dimensions from loaded images - use DOM-based extraction like dashboard app
+  // This prevents React StrictMode double-render issues from onLoadingComplete callbacks
+  useEffect(() => {
+    if (layout !== "marble") {
+      // For non-marble layouts, dimensions aren't needed
+      return;
+    }
+
+    if (!containerRef.current || images.length === 0) {
+      return;
+    }
+
+    // Increment run ID to track this extraction cycle (prevents duplicate processing from StrictMode)
+    extractionRunIdRef.current += 1;
+    const currentRunId = extractionRunIdRef.current;
+
+    // Create a Set of valid image keys for quick lookup
+    const validImageKeys = new Set(
+      images.map((img) => img.key ?? "").filter(Boolean)
+    );
+
+    const extractDimensions = () => {
+      // Skip if this is a stale extraction run (StrictMode double-execution)
+      if (extractionRunIdRef.current !== currentRunId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:95',message:'extractDimensions - skipped stale run',data:{currentRunId,activeRunId:extractionRunIdRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        return;
+      }
+      const container = containerRef.current;
+      if (!container) return;
+
+      // Look for images in the container
+      const imgElements = Array.from(container.querySelectorAll("img"));
+      const dimensionsToAdd = new Map<string, { width: number; height: number }>();
+
+      imgElements.forEach((img) => {
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          // Find the image key from the parent structure
+          const imageContainer = img.closest("[data-image-key]");
+          if (imageContainer) {
+            const imageKey = imageContainer.getAttribute("data-image-key");
+            // Only extract dimensions for images that are in the current images array
+            if (imageKey && validImageKeys.has(imageKey)) {
+              dimensionsToAdd.set(imageKey, {
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+              });
+            }
+          }
+        }
+      });
+
+      if (dimensionsToAdd.size > 0) {
+        setImageDimensions((prev) => {
+          const updated = new Map(prev);
+          let hasNew = false;
+          dimensionsToAdd.forEach((dims, key) => {
+            // Only update if this image is still in the current images array and not already added
+            // Also check that dimensions haven't changed (prevents duplicate updates from StrictMode)
+            if (validImageKeys.has(key)) {
+              const existing = prev.get(key);
+              if (!existing || existing.width !== dims.width || existing.height !== dims.height) {
+                updated.set(key, dims);
+                hasNew = true;
+                // #region agent log
+                fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:120',message:'extractDimensions - adding dimension',data:{imageKey:key,width:dims.width,height:dims.height,prevSize:prev.size,hasExisting:!!existing},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
+              }
+            }
+          });
+
+          // #region agent log
+          fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:130',message:'extractDimensions - result',data:{hasNew,prevSize:prev.size,nextSize:hasNew?updated.size:prev.size,addedCount:dimensionsToAdd.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+
+          // Only return new Map if there are actual changes (prevents unnecessary re-renders)
+          return hasNew ? updated : prev;
+        });
+      }
+    };
+
+    // Extract dimensions immediately for already-loaded images, then periodically
+    extractDimensions(); // Immediate extraction for already-loaded images
+
+    // Use multiple timeouts to catch images as they load, but batch updates
+    const timeoutIds: NodeJS.Timeout[] = [];
+    [100, 300, 600].forEach((delay) => {
+      const timeoutId = setTimeout(() => {
+        extractDimensions();
+      }, delay);
+      timeoutIds.push(timeoutId);
+    });
+
+    return () => {
+      timeoutIds.forEach((id) => clearTimeout(id));
+    };
+  }, [images, layout]); // Re-run when images or layout change, but NOT when imageDimensions changes
+  
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:76',message:'images prop changed',data:{imagesLength:images.length,imageKeys:images.map(img => img.key).slice(0,5),imagesReference:images},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  }, [images]);
+  // #endregion
 
   // Update container width on resize and when images change - use full available width for edge-to-edge
   useEffect(() => {
@@ -85,6 +198,9 @@ export function VirtuosoGridComponent({
           containerRef.current.clientWidth || maxWidth,
           maxWidth
         );
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:89',message:'containerWidth update',data:{oldWidth:containerWidth,newWidth:width,clientWidth:containerRef.current.clientWidth,maxWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
         setContainerWidth(width);
       }
     };
@@ -104,7 +220,27 @@ export function VirtuosoGridComponent({
   }, [images.length, images]); // Recalculate when images change (e.g., switching views) - include images array to detect reference changes
 
   // Calculate layout boxes - justified for square/standard, masonry for marble
+  // Use imageDimensions directly in dependency array like dashboard app
+  // React's useMemo will handle caching - we ensure Map reference stability by returning prev when unchanged
   const layoutBoxes = useMemo(() => {
+    // Create a composite key from all dependencies
+    const layoutKey = `${images.length}:${layout}:${containerWidth}:${imageDimensions.size}`;
+    
+    // Check module-level cache (persists across React StrictMode renders)
+    const cached = layoutCache.get(layoutKey);
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:228',message:'layoutBoxes useMemo called',data:{layoutKey,cacheSize:layoutCache.size,hasCached:!!cached,cacheKeys:Array.from(layoutCache.keys()).slice(-5)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    if (cached) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:233',message:'layoutBoxes using cached result (module cache)',data:{layoutKey,imagesLength:images.length,layout,containerWidth,imageDimensionsSize:imageDimensions.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      return cached;
+    }
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:239',message:'layoutBoxes recalculating',data:{layoutKey,imagesLength:images.length,layout,containerWidth,imageDimensionsSize:imageDimensions.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     if (images.length === 0) return [];
 
     const boxSpacing = 7; // Very tight spacing (2x smaller than before) for edge-to-edge fill
@@ -182,6 +318,12 @@ export function VirtuosoGridComponent({
           }
         }
 
+        // Cache result before returning
+        layoutCache.set(layoutKey, boxes);
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:322',message:'layoutBoxes cache set (marble single-row)',data:{layoutKey,cacheSize:layoutCache.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        
         return boxes;
       }
 
@@ -240,6 +382,12 @@ export function VirtuosoGridComponent({
         columnHeights[shortestColumnIndex] = top + itemHeight + boxSpacing;
       });
 
+      // Cache result before returning
+      layoutCache.set(layoutKey, boxes);
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:380',message:'layoutBoxes cache set (marble multi-column)',data:{layoutKey,cacheSize:layoutCache.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      
       return boxes;
     }
 
@@ -267,8 +415,22 @@ export function VirtuosoGridComponent({
       containerPadding: 0,
     });
 
-    return justified.boxes as LayoutBox[];
-  }, [images, layout, containerWidth, imageDimensions]);
+    const result = justified.boxes as LayoutBox[];
+    
+    // Cache in module-level Map (persists across React StrictMode renders)
+    layoutCache.set(layoutKey, result);
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:407',message:'layoutBoxes cache set',data:{layoutKey,cacheSize:layoutCache.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    
+    // Limit cache size to prevent memory leaks (keep last 50 calculations)
+    if (layoutCache.size > 50) {
+      const firstKey = layoutCache.keys().next().value;
+      layoutCache.delete(firstKey);
+    }
+    
+    return result;
+  }, [images, layout, containerWidth, imageDimensions]); // Include imageDimensions to recalculate when extracted dimensions change
 
   // Calculate total height for the container
   // Use max bottom to handle masonry columns reliably.
@@ -379,6 +541,7 @@ export function VirtuosoGridComponent({
           return (
             <div
               key={`${image.key || image.url || "image"}-${index}`}
+              data-image-key={image.key}
               style={{
                 position: "absolute",
                 top: box.top + 8, // Container padding-top provides the spacing
@@ -438,28 +601,14 @@ export function VirtuosoGridComponent({
                   }
                 }}
               >
-                <Image
-                  src={imageUrl ?? ""}
+                <RetryableImage
+                  image={image}
                   alt={image.alt || `Image ${index + 1}`}
                   fill
                   className={imageClasses}
-                  onLoadingComplete={(img) => {
-                    // Capture natural dimensions for better aspect ratio layout when API didn't provide them.
-                    if (layout !== "marble") return;
-                    const w = img.naturalWidth;
-                    const h = img.naturalHeight;
-                    if (!(w > 0 && h > 0)) return;
-                    const key = image.key;
-                    setImageDimensions((prev) => {
-                      if (prev.has(key)) return prev;
-                      const next = new Map(prev);
-                      next.set(key, { width: w, height: h });
-                      return next;
-                    });
-                  }}
+                  preferredSize="bigthumb"
                   priority={index < 3} // Prioritize first 3 images for LCP
                   loading={index < 3 ? undefined : "lazy"}
-                  unoptimized={(imageUrl ?? "").startsWith("http")}
                 />
               </a>
 

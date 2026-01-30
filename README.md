@@ -237,6 +237,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` installs deps, runs basic scr
 - [Authentication Architecture](docs/authentication-architecture.md) - Authentication and authorization
 - [Silent OAuth Implementation](docs/silent-oauth-implementation.md) - OAuth flow details
 - [Three-Tier Image Optimization](docs/three-tier-image-optimization-strategy.md) - Image optimization strategy
+- [CloudFront ZIP Downloads Setup](docs/cloudfront-zip-downloads-setup.md) - Setup guide for CloudFront signed URLs for ZIP downloads
 
 ## Roadmap (from plan)
 - Phase 1: MVP – gallery creation/payment, uploads, selection flow, final delivery, emails. ✅

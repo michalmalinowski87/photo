@@ -80,13 +80,19 @@ export function useGalleryImages(
       const apiData = response.data as GalleryImagesApiResponse;
 
       // Map API response to our ImageData format (url is never sent to gallery app by backend)
+      // Preserve fallback URLs separately for RetryableImage component
       const mappedImages: ImageData[] = apiData.images.map((img) => ({
         key: img.key,
         ...(img.url != null && { url: img.url }),
         previewUrl: img.previewUrl || img.previewUrlFallback,
+        previewUrlFallback: img.previewUrlFallback,
         thumbnailUrl: img.thumbUrl || img.thumbUrlFallback,
         thumbUrl: img.thumbUrl || img.thumbUrlFallback,
+        thumbUrlFallback: img.thumbUrlFallback,
         bigThumbUrl: img.bigThumbUrl || img.bigThumbUrlFallback,
+        bigThumbUrlFallback: img.bigThumbUrlFallback,
+        finalUrl: img.finalUrl,
+        lastModified: img.lastModified,
         width: img.width,
         height: img.height,
         alt: img.key,

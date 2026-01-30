@@ -54,18 +54,7 @@ export const handler = lambdaLogger(async (event: any) => {
 		hasDeliveredOrders = orders.some((o: any) => o.deliveryStatus === 'DELIVERED');
 	}
 	
-	// Block all updates if CLIENT_APPROVED or PREPARING_DELIVERY orders exist (unless change request is pending)
-	if (hasApprovedOrder && !changeRequestPending) {
-		return {
-			statusCode: 403,
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ 
-				error: 'Cannot update pricing package: Selection is approved and no change request is pending. Client must request changes first.' 
-			})
-		};
-	}
-
-	// Get current pricing package to preserve values when only DELIVERED orders exist
+	// Get current pricing package to preserve values when only limited updates are allowed
 	const currentPricingPackage = gallery.pricingPackage as
 		| {
 				packageName?: string;
@@ -77,9 +66,13 @@ export const handler = lambdaLogger(async (event: any) => {
 		  }
 		| undefined;
 
-	// If only DELIVERED orders exist (no CLIENT_APPROVED/PREPARING_DELIVERY), only allow updating extraPriceCents
-	// This allows adjusting price for future "buy more" purchases without affecting delivered orders
-	if (hasDeliveredOrders && !hasApprovedOrder) {
+	// When approved order exists (CLIENT_APPROVED/PREPARING_DELIVERY) or only DELIVERED orders exist,
+	// allow only extraPriceCents (price per additional photo) to be updated.
+	const onlyExtraPriceAllowed =
+		(hasApprovedOrder && !changeRequestPending) ||
+		(hasDeliveredOrders && !hasApprovedOrder);
+
+	if (onlyExtraPriceAllowed) {
 		// Verify that only extraPriceCents is being changed
 		const currentExtraPrice = currentPricingPackage?.extraPriceCents ?? 0;
 		const newExtraPrice = pkg.extraPriceCents;
@@ -95,15 +88,16 @@ export const handler = lambdaLogger(async (event: any) => {
 		const includedCountChanged = pkg.includedCount !== currentIncludedCount;
 		const packagePriceChanged = pkg.packagePriceCents !== currentPackagePrice;
 		const packageNameChanged = packageName !== undefined && packageName !== currentPackageName;
-		const photoBookCountChanged = (pkg.photoBookCount ?? 0) !== currentPhotoBookCount;
-		const photoPrintCountChanged = (pkg.photoPrintCount ?? 0) !== currentPhotoPrintCount;
+		// Treat missing optional fields as unchanged (frontend locked path may omit photoBookCount/photoPrintCount)
+		const photoBookCountChanged = (pkg.photoBookCount ?? currentPhotoBookCount) !== currentPhotoBookCount;
+		const photoPrintCountChanged = (pkg.photoPrintCount ?? currentPhotoPrintCount) !== currentPhotoPrintCount;
 
 		if (includedCountChanged || packagePriceChanged || packageNameChanged || photoBookCountChanged || photoPrintCountChanged) {
 			return {
 				statusCode: 403,
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
-					error: 'Cannot update pricing package: Gallery has delivered orders. Only the price for additional photos (extraPriceCents) can be updated.'
+					error: 'Cannot update pricing package: Gallery has approved or delivered orders. Only the price for additional photos (extraPriceCents) can be updated.'
 				})
 			};
 		}

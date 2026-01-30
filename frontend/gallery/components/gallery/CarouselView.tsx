@@ -2,6 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import Image from "next/image";
+import { RetryableImage } from "../ui/RetryableImage";
 import { Sparkles } from "lucide-react";
 import type { ImageData } from "@/types/gallery";
 import { EmptyState } from "./EmptyState";
@@ -96,14 +97,14 @@ export function CarouselView({
                 className="block w-full h-full relative rounded-lg overflow-hidden bg-gray-100 transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg active:scale-[1.015] active:-translate-y-[1px] active:shadow-md will-change-transform"
               >
                 <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
-                  <Image
-                    src={imageUrl ?? ""}
+                  <RetryableImage
+                    image={image}
                     alt={image.alt || `Image ${index + 1}`}
                     fill
                     className="object-contain"
+                    preferredSize="bigthumb"
                     priority={index < 3}
                     loading={index < 3 ? undefined : "lazy"}
-                    unoptimized={(imageUrl ?? "").startsWith("http")}
                     sizes="(max-width: 768px) 85vw, (max-width: 1024px) 70vw, 60vw"
                   />
                 </div>

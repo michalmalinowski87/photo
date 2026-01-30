@@ -71,6 +71,9 @@ export function GallerySettingsForm({
   const hasDeliveredOrders = deliveredOrders.length > 0;
 
   const { data: orders = [] } = useOrders(galleryId);
+  const hasApprovedOrder = orders.some(
+    (o) => o.deliveryStatus === "CLIENT_APPROVED" || o.deliveryStatus === "PREPARING_DELIVERY"
+  );
   const hasDeliveredOrPreparingDelivery = orders.some(
     (o) => o.deliveryStatus === "DELIVERED" || o.deliveryStatus === "PREPARING_DELIVERY"
   );
@@ -197,13 +200,11 @@ export function GallerySettingsForm({
     const cap = settingsForm.includedCount;
     const nBook = settingsForm.photoBookCount ?? 0;
     if (nBook < 0 || nBook > cap) {
-      newErrors.photoBookCount =
-        "Liczba zdjęć do albumu musi być od 0 do liczby zdjęć w pakiecie";
+      newErrors.photoBookCount = "Liczba zdjęć do albumu musi być od 0 do liczby zdjęć w pakiecie";
     }
     const nPrint = settingsForm.photoPrintCount ?? 0;
     if (nPrint < 0 || nPrint > cap) {
-      newErrors.photoPrintCount =
-        "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie";
+      newErrors.photoPrintCount = "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie";
     }
 
     setErrors(newErrors);
@@ -406,7 +407,9 @@ export function GallerySettingsForm({
     );
   }
 
-  if (hasDeliveredOrders) {
+  const hasLockedPackageEditing = hasDeliveredOrders || hasApprovedOrder;
+
+  if (hasLockedPackageEditing) {
     const currentPkg = gallery?.pricingPackage as
       | {
           packageName?: string;
@@ -467,6 +470,14 @@ export function GallerySettingsForm({
           const includedCount = Number(settingsForm.includedCount) || 0;
           const extraPriceCents = Number(settingsForm.extraPriceCents) || 0;
           const packagePriceCents = Number(settingsForm.packagePriceCents) || 0;
+          const photoBookCount = Math.max(
+            0,
+            Math.min(settingsForm.photoBookCount ?? 0, includedCount)
+          );
+          const photoPrintCount = Math.max(
+            0,
+            Math.min(settingsForm.photoPrintCount ?? 0, includedCount)
+          );
           await updatePricingPackageMutation.mutateAsync({
             galleryId,
             pricingPackage: {
@@ -474,6 +485,8 @@ export function GallerySettingsForm({
               includedCount,
               extraPriceCents,
               packagePriceCents,
+              photoBookCount,
+              photoPrintCount,
             },
           });
         }
@@ -515,8 +528,8 @@ export function GallerySettingsForm({
               </h2>
             </div>
             <p className="text-base text-gray-500 dark:text-gray-400">
-              Galeria ma dostarczone zlecenia, dlatego większość ustawień jest zablokowana. Możesz
-              jednak zmienić nazwę galerii w dowolnym momencie.
+              Galeria ma zatwierdzone lub dostarczone zlecenia, dlatego większość ustawień pakietu
+              jest zablokowana. Możesz zmienić nazwę galerii oraz cenę za dodatkowe zdjęcie.
             </p>
           </div>
 
@@ -647,6 +660,40 @@ export function GallerySettingsForm({
                       error={!!errors.extraPriceCents}
                       errorMessage={errors.extraPriceCents}
                     />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                        Liczba zdjęć do Albumu
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        min="0"
+                        value={
+                          settingsForm.photoBookCount === 0
+                            ? ""
+                            : String(settingsForm.photoBookCount)
+                        }
+                        disabled={true}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                        Liczba zdjęć do Druku
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        min="0"
+                        value={
+                          settingsForm.photoPrintCount === 0
+                            ? ""
+                            : String(settingsForm.photoPrintCount)
+                        }
+                        disabled={true}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -909,9 +956,7 @@ export function GallerySettingsForm({
                       placeholder="0"
                       min="0"
                       value={
-                        settingsForm.photoBookCount === 0
-                          ? ""
-                          : String(settingsForm.photoBookCount)
+                        settingsForm.photoBookCount === 0 ? "" : String(settingsForm.photoBookCount)
                       }
                       onChange={(e) => {
                         const v = e.target.value;
@@ -919,8 +964,7 @@ export function GallerySettingsForm({
                         if (v === "" || (!Number.isNaN(n) && n >= 0)) {
                           setSettingsForm({
                             ...settingsForm,
-                            photoBookCount:
-                              v === "" ? 0 : Math.min(n, settingsForm.includedCount),
+                            photoBookCount: v === "" ? 0 : Math.min(n, settingsForm.includedCount),
                           });
                           if (errors.photoBookCount)
                             setErrors({ ...errors, photoBookCount: undefined });
@@ -949,8 +993,7 @@ export function GallerySettingsForm({
                         if (v === "" || (!Number.isNaN(n) && n >= 0)) {
                           setSettingsForm({
                             ...settingsForm,
-                            photoPrintCount:
-                              v === "" ? 0 : Math.min(n, settingsForm.includedCount),
+                            photoPrintCount: v === "" ? 0 : Math.min(n, settingsForm.includedCount),
                           });
                           if (errors.photoPrintCount)
                             setErrors({ ...errors, photoPrintCount: undefined });

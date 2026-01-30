@@ -190,8 +190,14 @@ export default function Packages() {
       includedPhotos: cap,
       pricePerExtraPhoto: pkg.pricePerExtraPhoto ?? undefined,
       price: pkg.price ?? 0,
-      photoBookCount: Math.max(0, Math.min((pkg as { photoBookCount?: number }).photoBookCount ?? 0, cap)),
-      photoPrintCount: Math.max(0, Math.min((pkg as { photoPrintCount?: number }).photoPrintCount ?? 0, cap)),
+      photoBookCount: Math.max(
+        0,
+        Math.min((pkg as { photoBookCount?: number }).photoBookCount ?? 0, cap)
+      ),
+      photoPrintCount: Math.max(
+        0,
+        Math.min((pkg as { photoPrintCount?: number }).photoPrintCount ?? 0, cap)
+      ),
     });
     setPricePerExtraPhotoInput(null);
     setPriceInput(null);
@@ -211,11 +217,7 @@ export default function Packages() {
     }
     const nPrint = formData.photoPrintCount ?? 0;
     if (nPrint < 0 || nPrint > cap) {
-      showToast(
-        "error",
-        "Błąd",
-        "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie."
-      );
+      showToast("error", "Błąd", "Liczba zdjęć do druku musi być od 0 do liczby zdjęć w pakiecie.");
       return;
     }
     try {

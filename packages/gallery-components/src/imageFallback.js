@@ -47,6 +47,7 @@ export function getInitialImageUrl(img, preferredSize = 'thumb') {
 	} else if (preferredSize === 'preview') {
 		url = img.previewUrl || img.bigThumbUrl || img.thumbUrl || img.finalUrl || img.url || "";
 	} else {
+		// bigthumb: prefer bigThumbUrl, then preview, then thumb, then original
 		url = img.bigThumbUrl || img.previewUrl || img.thumbUrl || img.finalUrl || img.url || "";
 	}
 	
@@ -102,6 +103,10 @@ export function getNextFallbackUrl(currentUrl, img, attemptedSizes, preferredSiz
 		if (hasAttemptedSize(size) || !url || urlsMatch(failedUrl, url)) {
 			return null;
 		}
+		// Only return if it's actually a CloudFront URL
+		if (!isCloudFrontUrl(url)) {
+			return null;
+		}
 		return url;
 	};
 
@@ -137,10 +142,14 @@ export function getNextFallbackUrl(currentUrl, img, attemptedSizes, preferredSiz
 		if (previewS3) return previewS3;
 		
 	} else if (detectedPreferredSize === 'bigthumb') {
-		// Bigthumb strategy: CloudFront bigthumb → preview → S3 bigthumb → preview → original
+		// Bigthumb strategy: CloudFront bigthumb → preview → thumb → S3 bigthumb → preview → thumb → original
 		// If CloudFront bigthumb failed, try CloudFront preview
 		const previewCf = tryCloudFront('preview', img.previewUrl);
 		if (previewCf) return previewCf;
+		
+		// If CloudFront preview failed or not available, try CloudFront thumb
+		const thumbCf = tryCloudFront('thumb', img.thumbUrl);
+		if (thumbCf) return thumbCf;
 		
 		// All CloudFront options exhausted, try S3 bigthumb
 		const bigThumbS3 = tryS3('bigthumb', img.bigThumbUrlFallback);
@@ -150,11 +159,23 @@ export function getNextFallbackUrl(currentUrl, img, attemptedSizes, preferredSiz
 		const previewS3 = tryS3('preview', img.previewUrlFallback);
 		if (previewS3) return previewS3;
 		
+		// If S3 preview failed or not available, try S3 thumb
+		const thumbS3 = tryS3('thumb', img.thumbUrlFallback);
+		if (thumbS3) return thumbS3;
+		
 	} else if (detectedPreferredSize === 'preview') {
-		// Preview strategy: CloudFront preview → S3 preview → original
-		// If CloudFront preview failed, try S3 preview
+		// Preview strategy: CloudFront preview → thumb → S3 preview → thumb → original
+		// If CloudFront preview failed, try CloudFront thumb
+		const thumbCf = tryCloudFront('thumb', img.thumbUrl);
+		if (thumbCf) return thumbCf;
+		
+		// All CloudFront options exhausted, try S3 preview
 		const previewS3 = tryS3('preview', img.previewUrlFallback);
 		if (previewS3) return previewS3;
+		
+		// If S3 preview failed or not available, try S3 thumb
+		const thumbS3 = tryS3('thumb', img.thumbUrlFallback);
+		if (thumbS3) return thumbS3;
 	}
 
 	// Final fallback: try original photo (S3)
