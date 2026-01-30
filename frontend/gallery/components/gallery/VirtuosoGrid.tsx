@@ -70,199 +70,55 @@ export function VirtuosoGridComponent({
   const [containerWidth, setContainerWidth] = useState(1200);
   const containerRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
-  // Store measured dimensions for images that didn't come with width/height from the API.
-  // This helps preserve original portrait/landscape ratios, especially for small sets.
-  const [imageDimensions, setImageDimensions] = useState<
-    Map<string, { width: number; height: number }>
-  >(new Map());
-  
-  // Track previous images length to detect actual image changes (not dimension extraction updates)
-  const prevImagesLengthRef = useRef<number>(images.length);
-  
-  // Freeze layout updates after initial window to prevent constant reshuffling
-  // We only apply dimensions from the first ~400ms; after that we keep current layout stable
-  const layoutFrozenRef = useRef(false);
-  const layoutFreezeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Use images in original order - do NOT reorder by failed/loaded (that caused full layout recalc on every failure)
-  
-  // Reset layout freeze when images array changes
+  const lastContainerWidthRef = useRef(1200);
+  const resizeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const WIDTH_SNAP_PX = 50; // Snap width so scrollbar (~17px) doesn't change snapped value → no mid-scroll reshuffle
+  const RESIZE_DEBOUNCE_MS = 150;
+
+  // No dimension extraction for any layout - we use fixed/estimated boxes only.
+  // This prevents reshuffle when images load or on scroll (layout only depends on images.length, layout, containerWidth).
+
+  // Update container width on resize and when images change - use full available width for edge-to-edge.
+  // Snap width to WIDTH_SNAP_PX so scrollbar appearing/disappearing (e.g. 1200→1183) keeps same snapped value (1200) → no reshuffle.
   useEffect(() => {
-    layoutFrozenRef.current = false;
-    if (layoutFreezeTimeoutRef.current) {
-      clearTimeout(layoutFreezeTimeoutRef.current);
-      layoutFreezeTimeoutRef.current = null;
-    }
-  }, [images.length]);
-  
-  // Extract dimensions from loaded images - only for images in current images array
-  // Match dashboard app approach exactly: DOM querying + event delegation
-  useEffect(() => {
-    if (layout !== "marble") {
-      // For non-marble layouts, dimensions aren't needed
-      return;
-    }
-
-    if (!containerRef.current || images.length === 0) {
-      return;
-    }
-
-    // No longer reset dimensionsReady - we render immediately with estimates and refine as dimensions are extracted
-    // Update ref to track current images length for future reference
-    prevImagesLengthRef.current = images.length;
-
-    // Create a Set of valid image keys for quick lookup
-    const validImageKeys = new Set(
-      images.map((img) => img.key ?? "").filter(Boolean)
-    );
-
-    const extractDimensions = () => {
-      const container = containerRef.current;
-      if (!container) return;
-
-      // Look for images in the container and any hidden extraction containers (siblings)
-      const parent = container.parentElement;
-      const searchRoot = parent ?? container;
-      const imgElements = Array.from(searchRoot.querySelectorAll("img"));
-      const dimensionsToAdd = new Map<string, { width: number; height: number }>();
-
-      imgElements.forEach((img) => {
-        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-          // Find the image key from the parent structure
-          const imageContainer = img.closest("[data-image-key]");
-          if (imageContainer) {
-            const imageKey = imageContainer.getAttribute("data-image-key");
-            // Only extract dimensions for images that are in the current images array
-            if (imageKey && validImageKeys.has(imageKey)) {
-              dimensionsToAdd.set(imageKey, {
-                width: img.naturalWidth,
-                height: img.naturalHeight,
-              });
-            }
-          }
-        }
-      });
-
-      if (dimensionsToAdd.size > 0 && !layoutFrozenRef.current) {
-        setImageDimensions((prev) => {
-          const updated = new Map(prev);
-          let hasNew = false;
-          dimensionsToAdd.forEach((dims, key) => {
-            if (validImageKeys.has(key) && !updated.has(key)) {
-              updated.set(key, dims);
-              hasNew = true;
-            }
-          });
-          return hasNew ? updated : prev;
-        });
-      }
+    const applyWidth = (rawWidth: number) => {
+      const snapped = Math.round(rawWidth / WIDTH_SNAP_PX) * WIDTH_SNAP_PX;
+      const prev = lastContainerWidthRef.current;
+      if (snapped === prev) return;
+      lastContainerWidthRef.current = snapped;
+      setContainerWidth(snapped);
     };
 
-    // Extract dimensions immediately, then once more after a short window, then FREEZE
-    extractDimensions();
-    const timeoutId = setTimeout(() => {
-      extractDimensions();
-      // Freeze layout after this batch - no more dimension updates to prevent reshuffling
-      layoutFrozenRef.current = true;
-    }, 400);
-
-    // Also freeze after a safety timeout so we don't leave listener active forever
-    layoutFreezeTimeoutRef.current = timeoutId;
-
-    // Also extract on image load events - use event delegation on parent for better performance
-    const container = containerRef.current;
-    const parent = container?.parentElement;
-    const loadHandler = (e: Event) => {
-      // Don't update dimensions after layout is frozen - prevents reshuffling
-      if (layoutFrozenRef.current) return;
-      const img = e.target as HTMLImageElement;
-      if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
-        const imageContainer = img.closest("[data-image-key]");
-        if (imageContainer) {
-          const imageKey = imageContainer.getAttribute("data-image-key");
-          if (imageKey && validImageKeys.has(imageKey)) {
-            setImageDimensions((prev) => {
-              if (!prev.has(imageKey)) {
-                const updated = new Map(prev);
-                updated.set(imageKey, {
-                  width: img.naturalWidth,
-                  height: img.naturalHeight,
-                });
-                return updated;
-              }
-              return prev;
-            });
-          }
-        }
-      }
+    const doUpdate = () => {
+      if (!containerRef.current) return;
+      const maxWidth = typeof window !== "undefined" ? window.innerWidth : 1920;
+      const width = Math.min(containerRef.current.clientWidth || maxWidth, maxWidth);
+      applyWidth(width);
     };
 
-    // Use event delegation on parent to catch images in hidden container too
-    if (parent) {
-      parent.addEventListener("load", loadHandler, true);
-    } else if (container) {
-      container.addEventListener("load", loadHandler, true);
-    }
-
-    return () => {
-      clearTimeout(timeoutId);
-      if (layoutFreezeTimeoutRef.current) {
-        clearTimeout(layoutFreezeTimeoutRef.current);
-        layoutFreezeTimeoutRef.current = null;
-      }
-      if (parent) {
-        parent.removeEventListener("load", loadHandler, true);
-      } else if (container) {
-        container.removeEventListener("load", loadHandler, true);
-      }
-    };
-  }, [images, layout]);
-  
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:76',message:'images prop changed',data:{imagesLength:images.length,imageKeys:images.map(img => img.key).slice(0,5),imagesReference:images},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  }, [images]);
-  // #endregion
-
-  // Update container width on resize and when images change - use full available width for edge-to-edge
-  useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        // Use full container width (parent already handles padding)
-        // Ensure width doesn't exceed viewport
-        const maxWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
-        const width = Math.min(
-          containerRef.current.clientWidth || maxWidth,
-          maxWidth
-        );
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:89',message:'containerWidth update',data:{oldWidth:containerWidth,newWidth:width,clientWidth:containerRef.current.clientWidth,maxWidth},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        setContainerWidth(width);
-      }
+    const scheduleUpdate = () => {
+      if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
+      resizeDebounceRef.current = setTimeout(doUpdate, RESIZE_DEBOUNCE_MS);
     };
 
-    // Small delay to ensure DOM is ready
-    const timeoutId = setTimeout(updateWidth, 0);
-    const resizeObserver = new ResizeObserver(updateWidth);
+    // Initial measure (no debounce so first paint is correct)
+    const timeoutId = setTimeout(doUpdate, 0);
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
-    window.addEventListener("resize", updateWidth);
+    window.addEventListener("resize", scheduleUpdate);
     return () => {
       clearTimeout(timeoutId);
+      if (resizeDebounceRef.current) clearTimeout(resizeDebounceRef.current);
       resizeObserver.disconnect();
-      window.removeEventListener("resize", updateWidth);
+      window.removeEventListener("resize", scheduleUpdate);
     };
   }, [images.length, images]); // Recalculate when images change (e.g., switching views) - include images array to detect reference changes
 
-  // Calculate layout boxes - justified for square/standard, masonry for marble
-  // Always calculate layout immediately (like dashboard app) - use estimates if dimensions not available
+  // Calculate layout boxes - justified for square/standard, masonry for marble.
+  // Depend only on images.length (not images ref) so parent re-renders with new array reference don't trigger recalc/reshuffle.
   const layoutBoxes = useMemo(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:238',message:'layoutBoxes useMemo called',data:{imagesLength:images.length,layout,containerWidth,imageDimensionsSize:imageDimensions.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    
     if (images.length === 0) return [];
 
     const boxSpacing = 7; // Very tight spacing (2x smaller than before) for edge-to-edge fill
@@ -279,17 +135,10 @@ export function VirtuosoGridComponent({
       // - uses true aspect ratios (portrait/landscape)
       // - fills the full available width without cropping
       if (images.length <= maxColumns) {
-        const aspectRatios = images.map((image, index) => {
-          const extractedDims = imageDimensions.get(image.key);
-          const width = image.width ?? extractedDims?.width;
-          const height = image.height ?? extractedDims?.height;
-          if (width && height && width > 0 && height > 0) {
-            return width / height;
-          }
-          // Sensible fallback ratio if we don't know dimensions yet.
-          // (Most photos are closer to 4:3 / 3:2 than 1:1.)
-          return index % 3 === 0 ? 1.5 : 1.3333;
-        });
+        // Use estimates only - never real dimensions. Grid size is fixed; images fit inside with object-fit (no reshuffle).
+        const aspectRatios = images.map((_, index) =>
+          index % 3 === 0 ? 1.5 : 1.3333
+        );
 
         const rowWidthWithoutSpacing =
           effectiveWidth - (images.length - 1) * boxSpacing;
@@ -340,9 +189,6 @@ export function VirtuosoGridComponent({
           }
         }
 
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:335',message:'layoutBoxes - returning single-row boxes',data:{imagesLength:images.length,boxesLength:boxes.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         return boxes;
       }
 
@@ -351,26 +197,14 @@ export function VirtuosoGridComponent({
       const columnHeights = new Array(numColumns).fill(0);
       const boxes: LayoutBox[] = [];
 
+      // Use estimates only for marble - never real dimensions. Box sizes are fixed from first render;
+      // images render inside with object-fit so no reshuffle when lazy-loaded image has different aspect ratio.
       images.forEach((image, index) => {
-        // Calculate item dimensions based on actual image dimensions or estimate
         let itemHeight: number;
-
-        const extractedDims = imageDimensions.get(image.key);
-        const width = image.width ?? extractedDims?.width;
-        const height = image.height ?? extractedDims?.height;
-
-        if (width && height && width > 0 && height > 0) {
-          // Use actual aspect ratio to calculate height
-          const aspectRatio = width / height;
-          itemHeight = columnWidth / aspectRatio;
-        } else {
-          // Estimate based on index for variety (alternating between portrait and landscape)
-          // This creates natural variation in masonry layout
-          const isPortrait = index % 3 !== 0; // Roughly 2/3 portrait, 1/3 landscape
-          itemHeight = isPortrait 
-            ? columnWidth * 1.4  // Portrait: taller
-            : columnWidth * 0.75; // Landscape: shorter
-        }
+        const isPortrait = index % 3 !== 0; // Roughly 2/3 portrait, 1/3 landscape
+        itemHeight = isPortrait
+          ? columnWidth * 1.4   // Portrait: taller
+          : columnWidth * 0.75; // Landscape: shorter
 
         // Find the shortest column (true masonry algorithm)
         let shortestColumnIndex = 0;
@@ -401,28 +235,17 @@ export function VirtuosoGridComponent({
         columnHeights[shortestColumnIndex] = top + itemHeight + boxSpacing;
       });
 
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:393',message:'layoutBoxes - returning multi-column boxes',data:{imagesLength:images.length,boxesLength:boxes.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       return boxes;
     }
 
-    // For square and standard, use justified layout
+    // For square and standard, use justified layout with fixed box sizes only (no real dimensions).
+    // This keeps layout stable and prevents reshuffle when images load or on scroll.
     const targetRowHeight = layout === "square" ? 200 : 200;
-    
-    // Get image dimensions - use actual dimensions if available, or estimate
-    const items = images.map((image) => {
-      // Use actual dimensions if available
-      if (image.width && image.height) {
-        return { width: image.width, height: image.height };
-      }
-      // For square layout, force 1:1 aspect ratio
-      if (layout === "square") {
-        return { width: 300, height: 300 };
-      }
-      // For standard layout, use 4:3 aspect ratio
-      return { width: 400, height: 300 };
-    });
+    const items = images.map(() =>
+      layout === "square"
+        ? { width: 300, height: 300 }
+        : { width: 400, height: 300 }
+    );
 
     const justified = justifiedLayout(items, {
       containerWidth: effectiveWidth,
@@ -431,12 +254,8 @@ export function VirtuosoGridComponent({
       containerPadding: 0,
     });
 
-    const result = justified.boxes as LayoutBox[];
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtuosoGrid.tsx:420',message:'layoutBoxes - returning justified boxes',data:{imagesLength:images.length,resultLength:result.length,layout},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
-    return result;
-  }, [images, layout, containerWidth, imageDimensions]); // Include imageDimensions to recalculate when extracted dimensions change
+    return justified.boxes as LayoutBox[];
+  }, [images.length, layout, containerWidth]); // images.length only (not images ref) to avoid recalc on parent re-renders
 
   // Calculate total height for the container
   // Use max bottom to handle masonry columns reliably.

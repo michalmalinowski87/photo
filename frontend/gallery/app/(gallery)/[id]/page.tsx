@@ -1198,7 +1198,7 @@ export default function GalleryPage() {
             onTogglePhotoPrint={handleTogglePhotoPrint}
           >
             <VirtuosoGridComponent
-              key={`grid-${shouldShowDelivered ? 'delivered' : shouldShowBought ? 'bought' : shouldShowUnselected ? 'unselected' : 'selecting'}-${displayImages.length}`}
+              key={`grid-${shouldShowDelivered ? 'delivered' : shouldShowBought ? 'bought' : shouldShowUnselected ? 'unselected' : 'selecting'}`}
               images={displayImages}
               layout={gridLayout === "carousel" ? layoutBeforeCarouselRef.current : gridLayout}
               hasNextPage={
