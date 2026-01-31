@@ -27,6 +27,9 @@ interface OrderStatus {
       error?: string;
     };
     ready: boolean;
+    status?: "error";
+    canRetry?: boolean;
+    message?: string;
   };
   zipStatusFinal?: {
     isGenerating: boolean;
@@ -40,6 +43,9 @@ interface OrderStatus {
       error?: string;
     };
     ready: boolean;
+    status?: "error";
+    canRetry?: boolean;
+    message?: string;
   };
 }
 
@@ -301,27 +307,25 @@ export function useOrderStatusPolling(options: UseOrderStatusPollingOptions = {}
           });
         }
 
-        // Invalidate ZIP status queries when ZIP generation completes or starts
+        // Invalidate ZIP status queries when ZIP generation completes, starts, or fails
         // This ensures useZipStatusPolling refetches immediately to get the latest status
-        if (userSelectedZipStatusChanged) {
-          // Use the same query key format as useZipStatusPolling: ['zipStatus', galleryId, orderId, type]
+        const hasUserSelectedError = zipStatusUserSelected?.status === "error";
+        const hasFinalError = zipStatusFinal?.status === "error";
+        if (userSelectedZipStatusChanged || hasUserSelectedError) {
           const zipStatusKey = ["zipStatus", galleryId, orderId, "original"];
-          // Invalidate and refetch immediately to get ready status
           void queryClient.invalidateQueries({
             queryKey: zipStatusKey,
             type: "active",
-            refetchType: "active", // Force immediate refetch for active queries
+            refetchType: "active",
           });
         }
 
-        if (finalZipStatusChanged) {
-          // Use the same query key format as useZipStatusPolling: ['zipStatus', galleryId, orderId, type]
+        if (finalZipStatusChanged || hasFinalError) {
           const zipStatusKey = ["zipStatus", galleryId, orderId, "final"];
-          // Invalidate and refetch immediately to get ready status
           void queryClient.invalidateQueries({
             queryKey: zipStatusKey,
             type: "active",
-            refetchType: "active", // Force immediate refetch for active queries
+            refetchType: "active",
           });
         }
       } else {

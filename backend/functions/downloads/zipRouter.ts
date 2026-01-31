@@ -17,7 +17,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const envProc = (globalThis as any).process;
 	const createZipFnName = envProc?.env?.CREATE_ZIP_FN_NAME as string;
 	const stepFunctionArn = envProc?.env?.ZIP_STEP_FUNCTION_ARN as string;
-	const metricsTable = envProc?.env?.ZIP_METRICS_TABLE as string;
 	const chunkThreshold = parseInt(envProc?.env?.ZIP_CHUNK_THRESHOLD || String(DEFAULT_CHUNK_THRESHOLD), 10);
 
 	// Parse payload - same format as createZip (direct invoke or API Gateway)
@@ -160,20 +159,58 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		chunkKeys = splitIntoChunks(keys!, workerCount);
 	}
 
+	// Validate chunk distribution
+	if (chunkKeys.length !== workerCount) {
+		throw new Error(`Chunk count mismatch: expected ${workerCount} chunks, got ${chunkKeys.length}`);
+	}
+	
+	const totalChunkedFiles = chunkKeys.reduce((sum, keys) => sum + keys.length, 0);
+	if (totalChunkedFiles !== filesCount) {
+		logger?.warn('File count mismatch in chunking', {
+			expected: filesCount,
+			chunked: totalChunkedFiles,
+			workerCount
+		});
+	}
+	
 	const chunkItems = chunkKeys.map((keys, i) => ({ chunkIndex: i, keys }));
-	await sfn.send(new StartExecutionCommand({
-		stateMachineArn: stepFunctionArn,
-		input: JSON.stringify({
+	
+	try {
+		const execResp = await sfn.send(new StartExecutionCommand({
+			stateMachineArn: stepFunctionArn,
+			input: JSON.stringify({
+				galleryId,
+				orderId,
+				type: type || 'original',
+				finalFilesHash: isFinal ? finalFilesHash : undefined,
+				selectedKeysHash: !isFinal ? selectedKeysHash : undefined,
+				runId,
+				chunkItems,
+				workerCount
+			})
+		}));
+		
+		if (!execResp.executionArn) {
+			throw new Error('Step Function execution started but no execution ARN returned');
+		}
+		
+		logger?.info('Started chunked Step Function', { 
+			galleryId, 
+			orderId, 
+			runId, 
+			workerCount, 
+			filesCount,
+			executionArn: execResp.executionArn
+		});
+	} catch (sfnErr: any) {
+		logger?.error('Failed to start Step Function', {
 			galleryId,
 			orderId,
-			type: type || 'original',
-			finalFilesHash: isFinal ? finalFilesHash : undefined,
-			selectedKeysHash: !isFinal ? selectedKeysHash : undefined,
-			runId,
-			chunkItems,
-			workerCount
-		})
-	}));
+			error: sfnErr.message,
+			name: sfnErr.name
+		});
+		throw new Error(`Failed to start ZIP generation: ${sfnErr.message}`);
+	}
 
 	logger?.info('Started chunked Step Function', { galleryId, orderId, runId, workerCount, filesCount });
 	return {

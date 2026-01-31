@@ -91,21 +91,21 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const allChangesRequestedOrders = changesRequestedResult.orders || [];
 		
 		const clientApprovedOrdersWithZipActivity = allClientApprovedOrders.filter(
-			(order: any) => order.zipGenerating === true || order.zipSelectedKeysHash
+			(order: any) => order.zipGenerating === true || order.zipSelectedKeysHash || order.zipErrorFinalized
 		);
 		const preparingDeliveryOrdersWithZipActivity = allPreparingDeliveryOrders.filter(
-			(order: any) => order.zipGenerating === true || order.zipSelectedKeysHash
+			(order: any) => order.zipGenerating === true || order.zipSelectedKeysHash || order.zipErrorFinalized
 		);
 		const changesRequestedOrdersWithZipActivity = allChangesRequestedOrders.filter(
-			(order: any) => order.zipGenerating === true || order.zipSelectedKeysHash
+			(order: any) => order.zipGenerating === true || order.zipSelectedKeysHash || order.zipErrorFinalized
 		);
 		
-		// Filter DELIVERED orders to include those with finalZipGenerating=true OR finalZipFilesHash set
+		// Filter DELIVERED orders to include those with finalZipGenerating, finalZipFilesHash, or finalZipErrorFinalized
 		// This ensures we track DELIVERED orders that are actively generating final ZIPs OR have completed ZIPs
 		// (finalZipFilesHash is set when ZIP generation starts, so if it exists, a ZIP was attempted)
 		const allDeliveredOrders = deliveredResult.orders || [];
 		const deliveredOrdersWithZipActivity = allDeliveredOrders.filter(
-			(order: any) => order.finalZipGenerating === true || order.finalZipFilesHash
+			(order: any) => order.finalZipGenerating === true || order.finalZipFilesHash || order.finalZipErrorFinalized
 		);
 		
 		// Check S3 for regular ZIPs (CLIENT_APPROVED, PREPARING_DELIVERY, and CHANGES_REQUESTED orders)
@@ -262,31 +262,47 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				updatedAt: order.updatedAt
 			};
 			
-			// Include ZIP generation status for user-selected originals (if generating or completed)
-			if (order.zipGenerating || order.zipSelectedKeysHash) {
-				// Check if ZIP exists using the pre-computed map
+			// Include ZIP generation status for user-selected originals (if generating, completed, or failed)
+			if (order.zipGenerating || order.zipSelectedKeysHash || order.zipErrorFinalized) {
 				const orderKey = `${order.galleryId}:${order.orderId}`;
 				const zipExists = regularZipExistsMap.get(orderKey) || false;
 				const isGenerating = order.zipGenerating === true;
+				const isError = order.zipErrorFinalized === true || order.zipErrorFinalized === 'true';
+				const retryCount = (order.zipRetryCount as number | undefined) ?? 0;
+				const canRetry = retryCount < 1;
+				const zipErrorFinal = order.zipErrorFinal as { error?: { message?: string } } | undefined;
 				
 				orderData.zipStatusUserSelected = {
 					isGenerating,
 					type: 'original',
-					ready: !isGenerating && zipExists // Ready if not generating and ZIP exists
+					ready: !isGenerating && !isError && zipExists,
+					...(isError && {
+						status: 'error' as const,
+						canRetry,
+						message: zipErrorFinal?.error?.message || 'ZIP generation failed'
+					})
 				};
 			}
 			
-			// Include ZIP generation status for finals (if generating or completed)
-			if (order.finalZipGenerating || order.finalZipFilesHash) {
-				// Check if ZIP exists using the pre-computed map
+			// Include ZIP generation status for finals (if generating, completed, or failed)
+			if (order.finalZipGenerating || order.finalZipFilesHash || order.finalZipErrorFinalized) {
 				const orderKey = `${order.galleryId}:${order.orderId}`;
 				const zipExists = finalZipExistsMap.get(orderKey) || false;
 				const isGenerating = order.finalZipGenerating === true;
+				const isError = order.finalZipErrorFinalized === true || order.finalZipErrorFinalized === 'true';
+				const retryCount = (order.finalZipRetryCount as number | undefined) ?? 0;
+				const canRetry = retryCount < 1;
+				const finalZipErrorFinal = order.finalZipErrorFinal as { error?: { message?: string } } | undefined;
 				
 				orderData.zipStatusFinal = {
 					isGenerating,
 					type: 'final',
-					ready: !isGenerating && zipExists // Ready if not generating and ZIP exists
+					ready: !isGenerating && !isError && zipExists,
+					...(isError && {
+						status: 'error' as const,
+						canRetry,
+						message: finalZipErrorFinal?.error?.message || 'Final ZIP generation failed'
+					})
 				};
 			}
 			

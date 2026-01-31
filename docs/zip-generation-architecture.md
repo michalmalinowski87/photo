@@ -7,7 +7,7 @@ This document describes the chunked ZIP generation architecture for handling lar
 ZIP generation uses a **router** that dispatches to either:
 
 - **Single Lambda path** (≤100 files): Existing `createZip` Lambda processes all files in one run.
-- **Chunked path** (>100 files): Step Functions orchestrates parallel **chunk workers** that each build a partial ZIP, then a **merge** Lambda streams them into one final ZIP.
+- **Chunked path** (>100 files): Step Functions orchestrates parallel **workers** that copy raw files to temp prefix, then a **merge** Lambda streams them directly into final ZIP.
 
 ## Architecture Diagram
 
@@ -67,32 +67,56 @@ Each worker handles roughly 200 files. Maximum 10 workers for cost control. Exam
 
 ## Temp Storage
 
-Chunk ZIPs are written to S3 under:
+Workers copy raw files to a temp prefix:
 
 ```
-s3://bucket/galleries/{galleryId}/zips/tmp/{orderId}-chunk-{index}.zip
+s3://bucket/galleries/{galleryId}/tmp/{orderId}/{runId}/chunk-{index}/{key}
 ```
 
-They are deleted by the merge Lambda after the final ZIP is written.
+Temp files are deleted by the merge Lambda after the final ZIP is written.
 
-**Future optimization**: S3 Express One Zone can be used for temp chunks if merge latency is a bottleneck (requires VPC + same AZ, higher storage cost).
+**Future optimization**: S3 Express One Zone can be used for temp storage if merge latency is a bottleneck (requires VPC + same AZ, higher storage cost).
 
-## Merge Strategy
+## Merge Strategy (Direct Streaming)
 
-The merge Lambda:
+Workers copy raw files to temp prefix; merge streams them directly into final ZIP:
 
-1. Creates an S3 multipart upload for the final ZIP (50 MB parts for fewer UploadPart calls).
-2. Processes chunks sequentially (parallel was tried but caused ~2.5× slowdown due to archiver contention).
+1. **Workers**: Copy raw files to `galleries/{galleryId}/tmp/{orderId}/{runId}/chunk-{index}/{key}` (no chunk ZIP).
+   - Uses 20 concurrent copies per worker (increased from 10) for faster pre-processing
+   - Better error handling with exponential backoff retries
+   - Streams directly from source to temp prefix (no intermediate buffers)
+2. **Merge**: ListObjectsV2 on temp prefix, concurrent GetObject (p-limit 50), yazl.addReadStream each file directly into final ZIP.
+   - Optimized buffer management: avoids repeated `Buffer.concat()` calls (reduces GC pressure)
+   - Uses PassThrough streams for better backpressure handling
+   - Limits concurrent multipart uploads (max 5) to avoid memory pressure
+   - Pre-allocates buffer chunks and only combines when uploading parts
 3. Completes multipart upload.
-4. Deletes temp chunk objects.
+4. Batch-deletes temp files.
 5. Clears `finalZipGenerating` or `zipGenerating` in DynamoDB.
 
-Merge runs with 3008 MB memory (account max) for ~3× CPU. All operations are streamed; no full ZIP buffering in memory.
+Merge is pure ZIP creation from raw files - workers copy files to temp prefix, merge streams them directly into final ZIP. Merge runs with 3008 MB memory (account max).
 
-## Metrics and Monitoring
+### Performance Optimizations
 
-- **ZipMetrics DynamoDB table**: Each run (single or chunked) writes metrics: `runId`, `phase`, `durationMs`, `bottleneck`, `config`, `success`, etc.
-- **Dev dashboard**: `/dev/zip-metrics` shows raw metrics, summary stats, bottleneck distribution, and CSV export.
+- **Buffer Management**: Pre-allocated buffer chunks avoid repeated `Buffer.concat()` which causes GC pauses. Buffers are only combined when uploading parts.
+- **Backpressure Handling**: PassThrough streams with 64KB highWaterMark allow yazl to pull data when ready, preventing memory buildup.
+- **Concurrent Uploads**: Limited to 5 concurrent multipart uploads to balance throughput with memory usage.
+- **Worker Concurrency**: Increased from 10 to 20 concurrent copies per worker for faster pre-processing.
+
+### Future Enhancement: S3 Express One Zone
+
+For even faster temp storage (2–3× faster reads/writes), S3 Express One Zone can be used. This requires:
+- VPC configuration (Lambda in VPC with subnets in same AZ)
+- NAT Gateway for internet access (adds ~$32/month + data transfer)
+- Increased cold start time (~1–3 seconds)
+- Higher storage cost (~$0.16/GB vs ~$0.023/GB standard)
+
+Current optimizations should handle 1000+ files within the 15-minute Lambda timeout. Express One Zone can be added later if needed for very large orders (2000+ files).
+
+## Monitoring
+
+- **Step Functions Console**: View execution history, duration, and state transitions for chunked ZIP generation.
+- **CloudWatch Logs**: Check individual Lambda function logs for detailed execution information.
 - **CloudWatch alarms**: DLQ messages, Step Function failures, ZipMerge Lambda errors.
 
 See [zip-generation-monitoring.md](zip-generation-monitoring.md) for details.
@@ -101,7 +125,7 @@ See [zip-generation-monitoring.md](zip-generation-monitoring.md) for details.
 
 - **Single path**: 1× createZip invocation (up to 15 min, 1024 MB).
 - **Chunked path**: N workers (parallel) + 1 merge. Example: 300 files → 3 workers + 1 merge ≈ 4× single-run cost, but completes instead of timing out.
-- S3: Standard storage for final ZIP; temp chunks are short-lived and deleted after merge.
+- S3: Standard storage for final ZIP; temp files are short-lived and deleted after merge.
 
 ## Troubleshooting
 

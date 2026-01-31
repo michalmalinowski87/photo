@@ -80,6 +80,11 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
     ? order.deliveryStatus === "PREPARING_DELIVERY" || order.deliveryStatus === "DELIVERED"
     : false;
 
+  // Check if gallery is published (never show "Send to client" button for unpublished galleries)
+  const isGalleryPublished = gallery
+    ? gallery.state === "PAID_ACTIVE" || gallery.paymentStatus === "PAID"
+    : false;
+
   const selectedKeys = order?.selectedKeys;
   const hasSelectedKeys =
     selectedKeys && Array.isArray(selectedKeys) ? selectedKeys.length > 0 : Boolean(selectedKeys);
@@ -285,8 +290,8 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
           </Button>
         )}
 
-        {/* Send Finals to Client - Only show if finals are uploaded */}
-        {orderHasFinals && (
+        {/* Send Finals to Client - Only show if finals are uploaded AND gallery is published */}
+        {orderHasFinals && isGalleryPublished && (
           <Button
             size="md"
             variant="outline"

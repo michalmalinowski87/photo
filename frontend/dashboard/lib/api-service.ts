@@ -1663,51 +1663,6 @@ class ApiService {
       return await this._request("/dashboard/stats");
     },
 
-    /**
-     * Get ZIP generation metrics (raw records)
-     */
-    getZipMetrics: async (params?: {
-      from?: number;
-      to?: number;
-      galleryId?: string;
-      orderId?: string;
-      type?: "final" | "original";
-      limit?: number;
-    }): Promise<{ metrics: any[]; count: number; from: number; to: number }> => {
-      const q = new URLSearchParams();
-      if (params?.from != null) q.set("from", String(params.from));
-      if (params?.to != null) q.set("to", String(params.to));
-      if (params?.galleryId) q.set("galleryId", params.galleryId);
-      if (params?.orderId) q.set("orderId", params.orderId);
-      if (params?.type) q.set("type", params.type);
-      if (params?.limit != null) q.set("limit", String(params.limit));
-      const qs = q.toString();
-      return await this._request(`/dashboard/zip-metrics${qs ? `?${qs}` : ""}`);
-    },
-
-    /**
-     * Get ZIP generation metrics summary (aggregated stats)
-     */
-    getZipMetricsSummary: async (params?: {
-      from?: number;
-      to?: number;
-    }): Promise<{
-      from: number;
-      to: number;
-      totalRuns: number;
-      duration: { avgMs: number; p50Ms: number; p95Ms: number; p99Ms: number };
-      successRate: number;
-      successBreakdown: { single: number; chunked: number; fail: number };
-      bottleneckDistribution: Record<string, number>;
-      byWorkerCount: Record<string, { count: number; avgMs: number }>;
-      byFilesBucket: Record<string, { count: number; avgMs: number }>;
-    }> => {
-      const q = new URLSearchParams();
-      if (params?.from != null) q.set("from", String(params.from));
-      if (params?.to != null) q.set("to", String(params.to));
-      const qs = q.toString();
-      return await this._request(`/dashboard/zip-metrics/summary${qs ? `?${qs}` : ""}`);
-    },
 
     /**
      * Get Lambda memory metrics

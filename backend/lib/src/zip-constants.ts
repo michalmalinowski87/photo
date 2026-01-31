@@ -9,8 +9,17 @@ export const PART_SIZE = 15 * 1024 * 1024;
 export const MERGE_PART_SIZE = 50 * 1024 * 1024;
 export const MAX_PARTS = 10000; // S3 maximum
 
-// Parallel download concurrency (per worker)
+// Parallel download concurrency (per worker - single-path createZip)
 export const CONCURRENT_DOWNLOADS = 12;
+
+// Worker copy concurrency (bypass: raw file copy to temp prefix)
+// Increased to 20 for faster pre-processing - workers have 1024MB memory and can handle more concurrent streams
+export const CONCURRENT_COPIES = 20;
+
+// Merge concurrency (bypass: GetObject streams into yazl)
+// Increased to 50 to match S3 client maxSockets, ensuring downloads complete faster than yazl processes them
+// yazl processes files sequentially, so we need high download concurrency to keep it fed
+export const MERGE_CONCURRENT_GETS = 50;
 
 // Chunk configuration
 export const DEFAULT_CHUNK_THRESHOLD = 100; // Use chunked flow when files > this

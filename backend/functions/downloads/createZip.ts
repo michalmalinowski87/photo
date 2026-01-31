@@ -21,7 +21,6 @@ import pLimit from 'p-limit';
 import { createHash } from 'crypto';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { createZipGenerationFailedEmail } from '../../lib/src/email';
-import { writeZipMetric } from '../../lib/src/zip-metrics';
 
 // S3Client configured for production reliability
 // Note: AWS_NODEJS_CONNECTION_REUSE_ENABLED=1 is set in Lambda environment for connection reuse
@@ -29,7 +28,7 @@ import { writeZipMetric } from '../../lib/src/zip-metrics';
 const s3 = new S3Client({
 	maxAttempts: 5, // Retry up to 5 times for transient errors
 	requestHandler: {
-		requestTimeout: 60000, // 60s timeout per request
+		requestTimeout: 5 * 60 * 1000, // 5 min - GetObject/UploadPart for large ZIPs can exceed 60s
 		httpsAgent: {
 			keepAlive: true,
 			maxSockets: 50, // Connection pool size
@@ -1183,23 +1182,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			remainingTimeMs: remainingTime || 'unknown'
 		});
 
-		// Write success metric for single-path ZIP generation
-		const zipMetricsTable = envProc?.env?.ZIP_METRICS_TABLE as string;
-		if (zipMetricsTable) {
-			await writeZipMetric(zipMetricsTable, {
-				runId: requestId,
-				phase: 'single',
-				galleryId,
-				orderId,
-				type: isFinal ? 'final' : 'original',
-				filesCount: filesToZip.length,
-				zipSizeBytes: zipTotalSize,
-				durationMs,
-				bottleneck: 'none',
-				config: { memoryMB: 1024, timeoutSec: 900, concurrentDownloads: 12, partSizeMB: 15 },
-				success: true
-			}, logger);
-		}
 
 		// Clear ZIP generating flag based on type
 		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
@@ -1382,23 +1364,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					errorMessage: lastError.message
 				});
 
-				// Write failure metric for single-path ZIP generation
-				const zipMetricsTableFail = envProc?.env?.ZIP_METRICS_TABLE as string;
-				if (zipMetricsTableFail) {
-					await writeZipMetric(zipMetricsTableFail, {
-						runId: requestId,
-						phase: 'single',
-						galleryId: galleryId || 'unknown',
-						orderId: orderId || 'unknown',
-						type: isFinal ? 'final' : 'original',
-						filesCount: filesToZip?.length ?? 0,
-						durationMs: Date.now() - startTime,
-						bottleneck: 'none',
-						config: { memoryMB: 1024, timeoutSec: 900, concurrentDownloads: 12, partSizeMB: 15 },
-						success: false,
-						error: lastError?.message
-					}, logger);
-				}
 				
 				// Store final error state
 				if (ordersTable && galleryId && orderId) {

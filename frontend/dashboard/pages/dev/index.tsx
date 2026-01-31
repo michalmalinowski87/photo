@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical, Plus, Trash2, Clock, Activity, UserX, Package } from "lucide-react";
+import { FlaskConical, Plus, Trash2, Clock, Activity, UserX } from "lucide-react";
 import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import React from "react";
@@ -67,15 +67,6 @@ const devTools: DevTool[] = [
       "Analiza wykorzystania pamięci funkcji Lambda - sprawdź czy nie przydzielasz za dużo pamięci",
     path: "/dev/lambda-metrics",
     icon: <Activity size={24} />,
-    category: "API",
-    color: "purple",
-  },
-  {
-    title: "Metryki generowania ZIP",
-    description:
-      "Śledzenie wydajności ZIP (single vs chunked), wąskich gardeł, konfiguracji i statystyk",
-    path: "/dev/zip-metrics",
-    icon: <Package size={24} />,
     category: "API",
     color: "purple",
   },
