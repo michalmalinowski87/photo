@@ -6,7 +6,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 
 import type { GalleryImage } from "../../types";
 import { EmptyState } from "../ui/empty-state/EmptyState";
-import { Loading } from "../ui/loading/Loading";
+import { ThreeDotsIndicator } from "../ui/loading/Loading";
 
 import type { GridLayout } from "./LayoutSelector";
 
@@ -447,7 +447,7 @@ export function DashboardVirtuosoGrid({
       },
       {
         threshold: 0,
-        rootMargin: "3000px",
+        rootMargin: "5000px", // Prefetch when sentinel is ~5 viewport heights from bottom
         root: scrollContainer, // Use scroll container as root for proper intersection detection
       }
     );
@@ -466,8 +466,11 @@ export function DashboardVirtuosoGrid({
 
   if (isLoading && images.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loading size="sm" text="Ładowanie zdjęć..." />
+      <div className="flex flex-col items-center justify-center gap-3 h-64">
+        <ThreeDotsIndicator />
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+          Ładowanie zdjęć...
+        </p>
       </div>
     );
   }
@@ -522,8 +525,11 @@ export function DashboardVirtuosoGrid({
       {/* Observer target for infinite scroll */}
       {hasNextPage && <div ref={observerTarget} className="h-4" />}
       {isFetchingNextPage && (
-        <div className="text-center py-8 text-gray-400">
-          <Loading size="sm" text="Ładowanie więcej zdjęć..." />
+        <div className="flex flex-col items-center justify-center gap-3 py-10">
+          <ThreeDotsIndicator />
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            Ładowanie zdjęć...
+          </p>
         </div>
       )}
     </div>

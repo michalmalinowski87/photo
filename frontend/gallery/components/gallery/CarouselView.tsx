@@ -6,12 +6,15 @@ import { RetryableImage } from "../ui/RetryableImage";
 import { Sparkles } from "lucide-react";
 import type { ImageData } from "@/types/gallery";
 import { EmptyState } from "./EmptyState";
+import { ThreeDotsIndicator } from "../ui/Loading";
 
 interface CarouselViewProps {
   images: ImageData[];
   hasNextPage?: boolean;
   onLoadMore?: () => void;
   isFetchingNextPage?: boolean;
+  /** When set, presigned URL is fetched on demand when CloudFront fails */
+  galleryId?: string;
 }
 
 export function CarouselView({
@@ -19,6 +22,7 @@ export function CarouselView({
   hasNextPage,
   onLoadMore,
   isFetchingNextPage,
+  galleryId,
 }: CarouselViewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -41,7 +45,7 @@ export function CarouselView({
           }, 1000);
         }
       },
-      { threshold: 0.1, rootMargin: "200px" }
+      { threshold: 0, rootMargin: "800px" } // Prefetch sooner when scrolling horizontally
     );
 
     const currentTarget = observerTarget.current;
@@ -106,6 +110,7 @@ export function CarouselView({
                     priority={index < 3}
                     loading={index < 3 ? undefined : "lazy"}
                     sizes="(max-width: 768px) 85vw, (max-width: 1024px) 70vw, 60vw"
+                    galleryId={galleryId}
                   />
                 </div>
               </a>
@@ -117,8 +122,11 @@ export function CarouselView({
           <div ref={observerTarget} className="flex-shrink-0 w-4" />
         )}
         {isFetchingNextPage && (
-          <div className="flex-shrink-0 flex items-center justify-center w-32 text-gray-500">
-            Loading more...
+          <div className="flex-shrink-0 flex flex-col items-center justify-center gap-3 min-w-[7rem] py-4">
+            <ThreeDotsIndicator />
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              Ładowanie zdjęć...
+            </p>
           </div>
         )}
       </div>

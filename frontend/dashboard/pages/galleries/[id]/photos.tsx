@@ -1486,6 +1486,7 @@ export default function GalleryPhotos() {
                     } as ImageFallbackUrls & { key?: string; filename?: string }
                   }
                   alt={imageKey}
+                  galleryId={galleryIdForQuery}
                   className={`w-full h-full ${
                     currentLayout === "square"
                       ? "object-cover rounded-lg"

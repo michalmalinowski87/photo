@@ -9,6 +9,8 @@ import { galleriesRoutes } from './routes/galleries';
 import * as galleriesClientLogin from '../galleries/clientLogin';
 import * as galleriesGetPublicInfo from '../galleries/getPublicInfo';
 import * as galleriesListImages from '../galleries/listImages';
+import * as galleriesListImageKeys from '../galleries/listImageKeys';
+import * as galleriesGetImagePresignedUrl from '../galleries/getImagePresignedUrl';
 import * as galleriesDownloadImage from '../galleries/downloadImage';
 import * as galleriesGetStatus from '../galleries/getStatus';
 import { ordersRoutes } from './routes/orders';
@@ -30,6 +32,7 @@ import * as selectionsGet from '../../functions/selections/getSelection';
 import * as selectionsApprove from '../../functions/selections/approveSelection';
 import * as selectionsChangeRequest from '../../functions/selections/changeRequest';
 import * as ordersListFinalImages from '../../functions/orders/listFinalImages';
+import * as ordersListFinalImageKeys from '../../functions/orders/listFinalImageKeys';
 import * as ordersDownloadFinalZip from '../../functions/orders/downloadFinalZip';
 import { dashboardRoutes } from './routes/dashboard';
 import { userDeletionRoutes, undoDeletionPublicRoutes } from './routes/userDeletion';
@@ -99,7 +102,10 @@ app.get('/galleries/:id/public-info', wrapHandler(galleriesGetPublicInfo.handler
 
 // Client gallery endpoints (use client JWT tokens, not Cognito)
 // These endpoints verify client JWT tokens in the Lambda function itself
+// Keys-only endpoints first (more specific) - lightweight for Uppy collision detection
+app.get('/galleries/:id/images/keys', wrapHandler(galleriesListImageKeys.handler));
 app.get('/galleries/:id/images', wrapHandler(galleriesListImages.handler));
+app.get('/galleries/:id/images/:imageKey/presigned-url', wrapHandler(galleriesGetImagePresignedUrl.handler));
 app.get('/galleries/:id/images/:imageKey/download', wrapHandler(galleriesDownloadImage.handler));
 app.get('/galleries/:id/status', wrapHandler(galleriesGetStatus.handler));
 app.get('/galleries/:id/orders', wrapHandler(ordersList.handler));
@@ -110,6 +116,7 @@ app.post('/galleries/:id/selections/approve', wrapHandler(selectionsApprove.hand
 app.post('/galleries/:id/selection-change-request', wrapHandler(selectionsChangeRequest.handler));
 app.get('/galleries/:id/orders/:orderId/zip', wrapHandler(ordersDownloadZip.handler));
 app.get('/galleries/:id/orders/:orderId/zip/status', wrapHandler(ordersGetZipStatus.handler));
+app.get('/galleries/:id/orders/:orderId/final/images/keys', wrapHandler(ordersListFinalImageKeys.handler));
 app.get('/galleries/:id/orders/:orderId/final/images', wrapHandler(ordersListFinalImages.handler));
 app.get('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));
 app.post('/galleries/:id/orders/:orderId/final/zip', wrapHandler(ordersDownloadFinalZip.handler));

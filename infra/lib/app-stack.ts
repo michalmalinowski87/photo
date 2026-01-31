@@ -20,6 +20,8 @@ import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { EmailSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
+import { Map, StateMachine, Chain } from 'aws-cdk-lib/aws-stepfunctions';
+import { LambdaInvoke } from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import { SqsEventSource, DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { StringParameter, ParameterType, CfnParameter } from 'aws-cdk-lib/aws-ssm';
@@ -417,6 +419,26 @@ export class AppStack extends Stack {
 		sortKey: { name: 'orderId', type: AttributeType.STRING }
 	});
 
+	// ZipMetrics table - performance tracking for ZIP generation (chunked and single)
+	const zipMetrics = new Table(this, 'ZipMetricsTable', {
+		partitionKey: { name: 'runId', type: AttributeType.STRING },
+		sortKey: { name: 'phase', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+	zipMetrics.addGlobalSecondaryIndex({
+		indexName: 'galleryIdOrderIdTimestamp-index',
+		partitionKey: { name: 'galleryIdOrderId', type: AttributeType.STRING },
+		sortKey: { name: 'timestamp', type: AttributeType.NUMBER }
+	});
+	zipMetrics.addGlobalSecondaryIndex({
+		indexName: 'typeTimestamp-index',
+		partitionKey: { name: 'type', type: AttributeType.STRING },
+		sortKey: { name: 'timestamp', type: AttributeType.NUMBER }
+	});
+	const zipMetricsCfn = zipMetrics.node.defaultChild as CfnTable;
+	zipMetricsCfn.timeToLiveSpecification = { enabled: true, attributeName: 'ttl' };
+
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
 			selfSignUpEnabled: true,
 			signInAliases: { email: true },
@@ -676,7 +698,8 @@ export class AppStack extends Stack {
 			WALLET_LEDGER_TABLE: walletLedger.tableName,
 			ORDERS_TABLE: orders.tableName,
 			TRANSACTIONS_TABLE: transactions.tableName,
-			IMAGES_TABLE: images.tableName
+			IMAGES_TABLE: images.tableName,
+			ZIP_METRICS_TABLE: zipMetrics.tableName
 			// Note: INACTIVITY_SCANNER_FN_NAME is added via addEnvironment() after inactivityScannerFn is created
 		};
 
@@ -747,8 +770,169 @@ export class AppStack extends Stack {
 		// Grant DLQ permissions
 		zipGenerationDLQ.grantSendMessages(zipFn);
 		zipFn.addToRolePolicy(ssmPolicy);
-		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipFn.functionName;
-		
+		zipMetrics.grantReadWriteData(zipFn);
+
+		// ZIP Chunk Worker - creates one chunk ZIP, invoked by Step Functions Map
+		const zipChunkWorkerFn = new NodejsFunction(this, 'ZipChunkWorkerFn', {
+			entry: path.join(__dirname, '../../../backend/functions/downloads/zipChunkWorker.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 1024,
+			timeout: Duration.minutes(15),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/lib-dynamodb'
+				],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: {
+				GALLERIES_BUCKET: galleriesBucket.bucketName,
+				ZIP_METRICS_TABLE: zipMetrics.tableName
+			}
+		});
+		galleriesBucket.grantReadWrite(zipChunkWorkerFn);
+		zipMetrics.grantReadWriteData(zipChunkWorkerFn);
+
+		// ZIP Merge - streams chunk ZIPs into final ZIP, invoked after Map completes
+		// 3008 MB: max allowed in many accounts - ~3x CPU vs 1024 MB for (de)compression/parse
+		const zipMergeFn = new NodejsFunction(this, 'ZipMergeFn', {
+			entry: path.join(__dirname, '../../../backend/functions/downloads/zipMerge.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 3008,
+			timeout: Duration.minutes(15),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-s3',
+					'@aws-sdk/lib-dynamodb'
+				],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: {
+				GALLERIES_BUCKET: galleriesBucket.bucketName,
+				ORDERS_TABLE: orders.tableName,
+				GALLERIES_TABLE: galleries.tableName,
+				ZIP_METRICS_TABLE: zipMetrics.tableName
+			}
+		});
+		galleriesBucket.grantReadWrite(zipMergeFn);
+		orders.grantReadWriteData(zipMergeFn);
+		galleries.grantReadData(zipMergeFn);
+		zipMetrics.grantReadWriteData(zipMergeFn);
+
+		// Step Function: Map (parallel chunk workers) -> Merge
+		// ItemSelector merges parent state with current item so Lambda gets full context
+		const workerTask = new LambdaInvoke(this, 'ZipChunkWorkerTask', {
+			lambdaFunction: zipChunkWorkerFn,
+			payload: {
+				'galleryId.$': '$.galleryId',
+				'orderId.$': '$.orderId',
+				'type.$': '$.type',
+				'runId.$': '$.runId',
+				'workerCount.$': '$.workerCount',
+				'chunkIndex.$': '$.chunkIndex',
+				'keys.$': '$.keys'
+			},
+			resultSelector: {
+				'chunkIndex.$': '$.Payload.chunkIndex',
+				'chunkZipKey.$': '$.Payload.chunkZipKey',
+				'filesAdded.$': '$.Payload.filesAdded',
+				'zipSizeBytes.$': '$.Payload.zipSizeBytes',
+				'durationMs.$': '$.Payload.durationMs'
+			}
+		});
+		const zipMapState = new Map(this, 'ZipChunkMap', {
+			itemsPath: '$.chunkItems',
+			maxConcurrency: 4, // Avoid Lambda 429; many accounts have low burst limits
+			resultPath: '$.chunkResults',
+			itemSelector: {
+				'galleryId.$': '$.galleryId',
+				'orderId.$': '$.orderId',
+				'type.$': '$.type',
+				'runId.$': '$.runId',
+				'workerCount.$': '$.workerCount',
+				'chunkIndex.$': '$$.Map.Item.Value.chunkIndex',
+				'keys.$': '$$.Map.Item.Value.keys'
+			}
+		});
+		zipMapState.iterator(workerTask);
+		const mergeTask = new LambdaInvoke(this, 'ZipMergeTask', {
+			lambdaFunction: zipMergeFn,
+			payload: {
+				'galleryId.$': '$.galleryId',
+				'orderId.$': '$.orderId',
+				'type.$': '$.type',
+				'runId.$': '$.runId',
+				'workerCount.$': '$.workerCount',
+				'finalFilesHash.$': '$.finalFilesHash',
+				'selectedKeysHash.$': '$.selectedKeysHash',
+				'chunkResults.$': '$.chunkResults'
+			}
+		});
+		const zipStateMachine = new StateMachine(this, 'ZipChunkedStateMachine', {
+			definition: zipMapState.next(mergeTask)
+		});
+
+		// ZIP Router - dispatches to single createZip or chunked Step Function
+		const zipRouterFn = new NodejsFunction(this, 'ZipRouterFn', {
+			entry: path.join(__dirname, '../../../backend/functions/downloads/zipRouter.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 512,
+			timeout: Duration.minutes(2),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-lambda',
+					'@aws-sdk/client-sfn',
+					'@aws-sdk/lib-dynamodb'
+				],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: {
+				CREATE_ZIP_FN_NAME: zipFn.functionName,
+				ZIP_STEP_FUNCTION_ARN: zipStateMachine.stateMachineArn,
+				ZIP_CHUNK_THRESHOLD: '100',
+				ZIP_METRICS_TABLE: zipMetrics.tableName,
+				IMAGES_TABLE: images.tableName,
+				GALLERIES_BUCKET: galleriesBucket.bucketName
+			}
+		});
+		zipFn.grantInvoke(zipRouterFn);
+		zipStateMachine.grantStartExecution(zipRouterFn);
+		zipMetrics.grantReadWriteData(zipRouterFn);
+		images.grantReadData(zipRouterFn);
+		zipRouterFn.addToRolePolicy(new PolicyStatement({
+			actions: ['dynamodb:Query'],
+			resources: [images.tableArn, `${images.tableArn}/index/*`]
+		}));
+
+		envVars['DOWNLOADS_ZIP_FN_NAME'] = zipRouterFn.functionName;
+
 		// Lambda function to handle order delivery (pre-generate finals ZIP and trigger cleanup)
 		const onOrderDeliveredFn = new NodejsFunction(this, 'OnOrderDeliveredFn', {
 			entry: path.join(__dirname, '../../../backend/functions/orders/onOrderDelivered.ts'),
@@ -776,14 +960,14 @@ export class AppStack extends Stack {
 				IMAGES_TABLE: images.tableName,
 				ORDERS_TABLE: orders.tableName,
 				GALLERIES_BUCKET: galleriesBucket.bucketName,
-				DOWNLOADS_ZIP_FN_NAME: zipFn.functionName,
+				DOWNLOADS_ZIP_FN_NAME: zipRouterFn.functionName,
 				CLEANUP_DELIVERED_ORDER_FN_NAME: '' // Will be set after cleanup function is created
 			}
 		});
 		orders.grantReadWriteData(onOrderDeliveredFn);
 		images.grantReadData(onOrderDeliveredFn);
 		galleriesBucket.grantRead(onOrderDeliveredFn);
-		zipFn.grantInvoke(onOrderDeliveredFn);
+		zipRouterFn.grantInvoke(onOrderDeliveredFn);
 		envVars['ON_ORDER_DELIVERED_FN_NAME'] = onOrderDeliveredFn.functionName;
 		
 		// Lambda function to cleanup originals/finals after order is delivered
@@ -886,13 +1070,13 @@ export class AppStack extends Stack {
 				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
 			},
 			environment: {
-				DOWNLOADS_ZIP_FN_NAME: zipFn.functionName,
+				DOWNLOADS_ZIP_FN_NAME: zipRouterFn.functionName,
 				ORDERS_TABLE: orders.tableName,
 				GALLERIES_BUCKET: galleriesBucket.bucketName
 			}
 		});
 		orders.grantReadWriteData(orderStatusChangeProcessor);
-		zipFn.grantInvoke(orderStatusChangeProcessor);
+		zipRouterFn.grantInvoke(orderStatusChangeProcessor);
 		
 		// Connect DynamoDB stream to Lambda function
 		// The Lambda function filters for MODIFY events where deliveryStatus changes to CLIENT_APPROVED or PREPARING_DELIVERY
@@ -915,6 +1099,85 @@ export class AppStack extends Stack {
 			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
 			treatMissingData: TreatMissingData.NOT_BREACHING
 		});
+
+		// CloudWatch alarm for Step Function ZIP chunked flow failures
+		const zipStepFnAlarm = new Alarm(this, 'ZipStepFunctionFailedAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-ZipStepFunction-Failed`,
+			alarmDescription: 'Alert when ZIP chunked Step Function executions fail',
+			metric: new Metric({
+				namespace: 'AWS/States',
+				metricName: 'ExecutionsFailed',
+				dimensionsMap: { StateMachineArn: zipStateMachine.stateMachineArn },
+				statistic: Statistic.SUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 1,
+			evaluationPeriods: 1,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+
+		// CloudWatch alarm for ZipMerge Lambda errors
+		const zipMergeAlarm = new Alarm(this, 'ZipMergeErrorsAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-ZipMerge-Errors`,
+			alarmDescription: 'Alert when ZipMerge Lambda reports errors',
+			metric: zipMergeFn.metricErrors({
+				statistic: Statistic.SUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 1,
+			evaluationPeriods: 1,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+
+		// ZIP Chunked Failure Handler - triggered by EventBridge when Step Function fails
+		// Clears generating flags and sets error state so UI shows failure + retry
+		const zipChunkedFailureHandlerFn = new NodejsFunction(this, 'ZipChunkedFailureHandlerFn', {
+			entry: path.join(__dirname, '../../../backend/functions/downloads/zipChunkedFailureHandler.ts'),
+			handler: 'handler',
+			runtime: Runtime.NODEJS_20_X,
+			memorySize: 256,
+			timeout: Duration.seconds(30),
+			layers: [awsSdkLayer],
+			bundling: {
+				externalModules: [
+					'aws-sdk',
+					'@aws-sdk/client-dynamodb',
+					'@aws-sdk/client-sfn',
+					'@aws-sdk/lib-dynamodb'
+				],
+				minify: true,
+				treeShaking: true,
+				sourceMap: false,
+				format: 'cjs',
+				mainFields: ['module', 'main'],
+				depsLockFilePath: path.join(__dirname, '../../../yarn.lock')
+			},
+			environment: {
+				ORDERS_TABLE: orders.tableName,
+				ZIP_STEP_FUNCTION_ARN: zipStateMachine.stateMachineArn
+			}
+		});
+		orders.grantReadWriteData(zipChunkedFailureHandlerFn);
+		zipChunkedFailureHandlerFn.addToRolePolicy(new PolicyStatement({
+			actions: ['states:DescribeExecution'],
+			resources: [`${zipStateMachine.stateMachineArn.replace(':stateMachine:', ':execution:')}:*`]
+		}));
+
+		// EventBridge rule: Step Function execution failed -> invoke failure handler
+		const zipStepFnFailedRule = new Rule(this, 'ZipStepFunctionFailedRule', {
+			eventPattern: {
+				source: ['aws.states'],
+				'detail-type': ['Step Functions Execution Status Change'],
+				detail: {
+					status: ['FAILED'],
+					stateMachineArn: [zipStateMachine.stateMachineArn]
+				}
+			},
+			description: 'Trigger ZIP failure handler when chunked Step Function fails'
+		});
+		zipStepFnFailedRule.addTarget(new LambdaFunction(zipChunkedFailureHandlerFn));
 
 		// Auth Lambda function - handles all authentication endpoints (signup, login, password reset)
 		const authFn = new NodejsFunction(this, 'AuthFunction', {
@@ -1028,6 +1291,7 @@ export class AppStack extends Stack {
 		orders.grantReadWriteData(apiFn);
 		images.grantReadWriteData(apiFn);
 		transactions.grantReadWriteData(apiFn);
+		zipMetrics.grantReadData(apiFn);
 		clients.grantReadWriteData(apiFn);
 		packages.grantReadWriteData(apiFn);
 		notifications.grantReadWriteData(apiFn);
@@ -1068,6 +1332,7 @@ export class AppStack extends Stack {
 
 		// Lambda invoke permissions (for zip generation functions)
 		zipFn.grantInvoke(apiFn);
+		zipRouterFn.grantInvoke(apiFn);
 		onOrderDeliveredFn.grantInvoke(apiFn);
 
 		// Create a single wildcard permission for HTTP API to invoke the Lambda
@@ -1153,11 +1418,22 @@ export class AppStack extends Stack {
 		// These endpoints verify client JWT tokens in the Lambda function itself
 		// Note: HttpLambdaIntegration will create individual permissions, but we have a wildcard permission above
 		// that covers all routes. After deployment, run the cleanup script to remove individual permissions.
+		// Keys-only endpoints first (more specific) - lightweight for Uppy collision detection
+		httpApi.addRoutes({
+			path: '/galleries/{id}/images/keys',
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiGalleryImageKeysIntegration', apiFn)
+		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/images',
 			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiGalleryImagesIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/images/{imageKey}/presigned-url',
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiGalleryImagePresignedUrlIntegration', apiFn)
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/images/{imageKey}/download',
@@ -1218,6 +1494,11 @@ export class AppStack extends Stack {
 			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
 			integration: new HttpLambdaIntegration('ApiOrdersZipStatusIntegration', apiFn)
 			// No authorizer - uses client JWT token verification
+		});
+		httpApi.addRoutes({
+			path: '/galleries/{id}/orders/{orderId}/final/images/keys',
+			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
+			integration: new HttpLambdaIntegration('ApiOrdersFinalImageKeysIntegration', apiFn)
 		});
 		httpApi.addRoutes({
 			path: '/galleries/{id}/orders/{orderId}/final/images',
@@ -1381,7 +1662,7 @@ export class AppStack extends Stack {
 		// Grant API Lambda permission to invoke zipFn
 		apiFn.addToRolePolicy(new PolicyStatement({
 			actions: ['lambda:InvokeFunction'],
-			resources: [zipFn.functionArn]
+			resources: [zipFn.functionArn, zipRouterFn.functionArn]
 		}));
 
 		// Gallery delete helper - used by expiry event handlers

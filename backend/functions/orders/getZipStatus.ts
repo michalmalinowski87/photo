@@ -122,18 +122,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					? zipErrorFinal.attempts
 					: (hasErrorDetails ? zipErrorDetails.length : (hasLegacyError ? 1 : 0));
 			
+			// One retry only: canRetry = owner AND retryCount < 1
+			const retryCount = (order.zipRetryCount as number | undefined) ?? 0;
+			const canRetry = access.isOwner && retryCount < 1;
+			
 			if (hasLegacyError) {
 				// Legacy error format
 				errorInfo = {
 					message: zipProgress.error?.message || zipProgress.message || 'ZIP generation failed',
 					attempts: attempts,
-					canRetry: access.isOwner
+					canRetry
 				};
 			} else if (zipErrorFinal) {
 				errorInfo = {
 					message: zipErrorFinal.error?.message || 'ZIP generation failed after multiple attempts',
 					attempts: attempts,
-					canRetry: access.isOwner, // Only owners can retry
+					canRetry,
 					timestamp: zipErrorFinal.timestamp
 				};
 				
@@ -146,7 +150,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				errorInfo = {
 					message: 'ZIP generation failed',
 					attempts: attempts,
-					canRetry: access.isOwner
+					canRetry
 				};
 				
 				// Include detailed error information for owners only
@@ -158,21 +162,33 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				errorInfo = {
 					message: 'ZIP generation failed',
 					attempts: attempts,
-					canRetry: access.isOwner
+					canRetry
 				};
 			}
 		} else if (zipExists) {
 			status = 'ready';
 		} else if (order.zipGenerating) {
-			status = 'generating';
-			generating = true;
-			// Include attempts count even during generation if there were previous failed attempts
-			if (typeof zipErrorAttempts === 'number' && zipErrorAttempts > 0) {
+			// Stale generating: >25 min with no ZIP = likely failed without clearing flag
+			const generatingSince = (order.zipGeneratingSince as number | undefined) ?? 0;
+			const staleThresholdMs = 25 * 60 * 1000;
+			if (generatingSince > 0 && Date.now() - generatingSince > staleThresholdMs) {
+				status = 'error';
 				errorInfo = {
-					message: 'Retrying ZIP generation',
-					attempts: zipErrorAttempts,
-					canRetry: false // Can't retry while generating
+					message: 'ZIP generation timed out or failed. Please try again.',
+					attempts: 1,
+					canRetry: access.isOwner && ((order.zipRetryCount as number | undefined) ?? 0) < 1
 				};
+			} else {
+				status = 'generating';
+				generating = true;
+				// Include attempts count even during generation if there were previous failed attempts
+				if (typeof zipErrorAttempts === 'number' && zipErrorAttempts > 0) {
+					errorInfo = {
+						message: 'Retrying ZIP generation',
+						attempts: zipErrorAttempts,
+						canRetry: false // Can't retry while generating
+					};
+				}
 			}
 		}
 

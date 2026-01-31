@@ -3,6 +3,24 @@
 import React from "react";
 import { createPortal } from "react-dom";
 
+/** Themed three-dots loading indicator for infinite scroll and inline loading states */
+export const ThreeDotsIndicator = ({ className = "" }: { className?: string }) => (
+  <div className={`flex items-center justify-center gap-1.5 ${className}`} role="status" aria-label="Ładowanie">
+    <div
+      className="w-2 h-2 rounded-full bg-primary opacity-80 animate-pulse"
+      style={{ animationDelay: "0ms" }}
+    />
+    <div
+      className="w-2 h-2 rounded-full bg-primary opacity-80 animate-pulse"
+      style={{ animationDelay: "150ms" }}
+    />
+    <div
+      className="w-2 h-2 rounded-full bg-primary opacity-80 animate-pulse"
+      style={{ animationDelay: "300ms" }}
+    />
+  </div>
+);
+
 // Full page loading component
 // Fixed overlay that covers the entire screen including header
 export const FullPageLoading = ({

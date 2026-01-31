@@ -607,6 +607,59 @@ class ApiService {
     },
 
     /**
+     * Get gallery image keys only (lightweight, for Uppy collision detection).
+     * Paginated; supports 5000 keys per page. Loop until hasMore is false for full list.
+     */
+    getImageKeys: async (
+      galleryId: string,
+      pagination?: { limit?: number; cursor?: string | null }
+    ): Promise<{ keys: string[]; hasMore: boolean; nextCursor?: string | null }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      const params = new URLSearchParams();
+      if (pagination?.limit) {
+        params.append("limit", pagination.limit.toString());
+      }
+      if (pagination?.cursor) {
+        params.append("cursor", pagination.cursor);
+      }
+      const queryString = params.toString();
+      const url = queryString
+        ? `/galleries/${galleryId}/images/keys?${queryString}`
+        : `/galleries/${galleryId}/images/keys`;
+      return await this._request(url);
+    },
+
+    /**
+     * Get presigned URL(s) for a single image (per-image fallback when CloudFront fails).
+     * @param size - Optional single size or comma-separated: thumb, preview, bigthumb, original (original only for owners)
+     */
+    getImagePresignedUrl: async (
+      galleryId: string,
+      imageKey: string,
+      size?: "thumb" | "preview" | "bigthumb" | "original" | string
+    ): Promise<{
+      thumbUrl?: string | null;
+      previewUrl?: string | null;
+      bigThumbUrl?: string | null;
+      url?: string | null;
+    }> => {
+      if (!galleryId || !imageKey) {
+        throw new Error("Gallery ID and image key are required");
+      }
+      const params = new URLSearchParams();
+      if (size) {
+        params.append("size", size);
+      }
+      const queryString = params.toString();
+      const url = queryString
+        ? `/galleries/${galleryId}/images/${encodeURIComponent(imageKey)}/presigned-url?${queryString}`
+        : `/galleries/${galleryId}/images/${encodeURIComponent(imageKey)}/presigned-url`;
+      return await this._request(url);
+    },
+
+    /**
      * Delete gallery images (handles both single and batch operations)
      * For single deletion, pass an array with one image key: [imageKey]
      */
@@ -1020,6 +1073,35 @@ class ApiService {
       const url = queryString
         ? `/galleries/${galleryId}/orders/${orderId}/final/images?${queryString}`
         : `/galleries/${galleryId}/orders/${orderId}/final/images`;
+      return await this._request(url);
+    },
+
+    /**
+     * Get final image keys only (lightweight, for Uppy collision detection).
+     * Paginated; supports 5000 keys per page. Loop until hasMore is false for full list.
+     */
+    getFinalImageKeys: async (
+      galleryId: string,
+      orderId: string,
+      pagination?: { limit?: number; cursor?: string | null }
+    ): Promise<{ keys: string[]; hasMore: boolean; nextCursor?: string | null }> => {
+      if (!galleryId) {
+        throw new Error("Gallery ID is required");
+      }
+      if (!orderId) {
+        throw new Error("Order ID is required");
+      }
+      const params = new URLSearchParams();
+      if (pagination?.limit) {
+        params.append("limit", pagination.limit.toString());
+      }
+      if (pagination?.cursor) {
+        params.append("cursor", pagination.cursor);
+      }
+      const queryString = params.toString();
+      const url = queryString
+        ? `/galleries/${galleryId}/orders/${orderId}/final/images/keys?${queryString}`
+        : `/galleries/${galleryId}/orders/${orderId}/final/images/keys`;
       return await this._request(url);
     },
 
@@ -1579,6 +1661,52 @@ class ApiService {
       totalRevenue: number;
     }> => {
       return await this._request("/dashboard/stats");
+    },
+
+    /**
+     * Get ZIP generation metrics (raw records)
+     */
+    getZipMetrics: async (params?: {
+      from?: number;
+      to?: number;
+      galleryId?: string;
+      orderId?: string;
+      type?: "final" | "original";
+      limit?: number;
+    }): Promise<{ metrics: any[]; count: number; from: number; to: number }> => {
+      const q = new URLSearchParams();
+      if (params?.from != null) q.set("from", String(params.from));
+      if (params?.to != null) q.set("to", String(params.to));
+      if (params?.galleryId) q.set("galleryId", params.galleryId);
+      if (params?.orderId) q.set("orderId", params.orderId);
+      if (params?.type) q.set("type", params.type);
+      if (params?.limit != null) q.set("limit", String(params.limit));
+      const qs = q.toString();
+      return await this._request(`/dashboard/zip-metrics${qs ? `?${qs}` : ""}`);
+    },
+
+    /**
+     * Get ZIP generation metrics summary (aggregated stats)
+     */
+    getZipMetricsSummary: async (params?: {
+      from?: number;
+      to?: number;
+    }): Promise<{
+      from: number;
+      to: number;
+      totalRuns: number;
+      duration: { avgMs: number; p50Ms: number; p95Ms: number; p99Ms: number };
+      successRate: number;
+      successBreakdown: { single: number; chunked: number; fail: number };
+      bottleneckDistribution: Record<string, number>;
+      byWorkerCount: Record<string, { count: number; avgMs: number }>;
+      byFilesBucket: Record<string, { count: number; avgMs: number }>;
+    }> => {
+      const q = new URLSearchParams();
+      if (params?.from != null) q.set("from", String(params.from));
+      if (params?.to != null) q.set("to", String(params.to));
+      const qs = q.toString();
+      return await this._request(`/dashboard/zip-metrics/summary${qs ? `?${qs}` : ""}`);
     },
 
     /**

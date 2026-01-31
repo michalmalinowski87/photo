@@ -21,6 +21,7 @@ import pLimit from 'p-limit';
 import { createHash } from 'crypto';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { createZipGenerationFailedEmail } from '../../lib/src/email';
+import { writeZipMetric } from '../../lib/src/zip-metrics';
 
 // S3Client configured for production reliability
 // Note: AWS_NODEJS_CONNECTION_REUSE_ENABLED=1 is set in Lambda environment for connection reuse
@@ -599,8 +600,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			try {
 				if (isFinal) {
 					const updateExpr = finalFilesHash
-						? 'REMOVE finalZipGenerating, finalZipGeneratingSince SET finalZipFilesHash = :h'
-						: 'REMOVE finalZipGenerating, finalZipGeneratingSince';
+						? 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipRetryCount SET finalZipFilesHash = :h'
+						: 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipRetryCount';
 					const updateValues = finalFilesHash ? { ':h': finalFilesHash } : undefined;
 					await ddb.send(new UpdateCommand({
 						TableName: ordersTable,
@@ -611,8 +612,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				} else {
 					// Clear original ZIP flag and store hash
 					const updateExpr = currentHash
-						? 'REMOVE zipGenerating, zipGeneratingSince SET zipSelectedKeysHash = :h'
-						: 'REMOVE zipGenerating, zipGeneratingSince';
+						? 'REMOVE zipGenerating, zipGeneratingSince, zipRetryCount SET zipSelectedKeysHash = :h'
+						: 'REMOVE zipGenerating, zipGeneratingSince, zipRetryCount';
 					const updateValues = currentHash ? { ':h': currentHash } : undefined;
 					
 					await ddb.send(new UpdateCommand({
@@ -1182,6 +1183,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			remainingTimeMs: remainingTime || 'unknown'
 		});
 
+		// Write success metric for single-path ZIP generation
+		const zipMetricsTable = envProc?.env?.ZIP_METRICS_TABLE as string;
+		if (zipMetricsTable) {
+			await writeZipMetric(zipMetricsTable, {
+				runId: requestId,
+				phase: 'single',
+				galleryId,
+				orderId,
+				type: isFinal ? 'final' : 'original',
+				filesCount: filesToZip.length,
+				zipSizeBytes: zipTotalSize,
+				durationMs,
+				bottleneck: 'none',
+				config: { memoryMB: 1024, timeoutSec: 900, concurrentDownloads: 12, partSizeMB: 15 },
+				success: true
+			}, logger);
+		}
+
 		// Clear ZIP generating flag based on type
 		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 		if (ordersTable) {
@@ -1189,8 +1208,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				if (isFinal) {
 					// Clear final ZIP flags and store hash
 					const updateExpr = finalFilesHash
-						? 'REMOVE finalZipGenerating, finalZipGeneratingSince SET finalZipFilesHash = :h'
-						: 'REMOVE finalZipGenerating, finalZipGeneratingSince';
+						? 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipRetryCount SET finalZipFilesHash = :h'
+						: 'REMOVE finalZipGenerating, finalZipGeneratingSince, finalZipRetryCount';
 					const updateValues = finalFilesHash ? { ':h': finalFilesHash } : undefined;
 					
 					await ddb.send(new UpdateCommand({
@@ -1202,8 +1221,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				} else {
 					// Clear original ZIP flag and store hash
 					const updateExpr = currentHash
-						? 'REMOVE zipGenerating, zipGeneratingSince SET zipSelectedKeysHash = :h'
-						: 'REMOVE zipGenerating, zipGeneratingSince';
+						? 'REMOVE zipGenerating, zipGeneratingSince, zipRetryCount SET zipSelectedKeysHash = :h'
+						: 'REMOVE zipGenerating, zipGeneratingSince, zipRetryCount';
 					const updateValues = currentHash ? { ':h': currentHash } : undefined;
 					
 					await ddb.send(new UpdateCommand({
@@ -1362,6 +1381,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					errorName: lastError.name,
 					errorMessage: lastError.message
 				});
+
+				// Write failure metric for single-path ZIP generation
+				const zipMetricsTableFail = envProc?.env?.ZIP_METRICS_TABLE as string;
+				if (zipMetricsTableFail) {
+					await writeZipMetric(zipMetricsTableFail, {
+						runId: requestId,
+						phase: 'single',
+						galleryId: galleryId || 'unknown',
+						orderId: orderId || 'unknown',
+						type: isFinal ? 'final' : 'original',
+						filesCount: filesToZip?.length ?? 0,
+						durationMs: Date.now() - startTime,
+						bottleneck: 'none',
+						config: { memoryMB: 1024, timeoutSec: 900, concurrentDownloads: 12, partSizeMB: 15 },
+						success: false,
+						error: lastError?.message
+					}, logger);
+				}
 				
 				// Store final error state
 				if (ordersTable && galleryId && orderId) {

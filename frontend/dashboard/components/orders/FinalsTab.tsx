@@ -297,6 +297,7 @@ export function FinalsTab({
             <LazyRetryableImage
               imageData={img as ImageFallbackUrls}
               alt={imageKey}
+              galleryId={galleryId}
               className={`w-full h-full ${
                 layout === "square"
                   ? "object-cover rounded-lg"

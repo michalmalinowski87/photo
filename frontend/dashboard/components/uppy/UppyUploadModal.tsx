@@ -284,6 +284,7 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
     uploadStats,
     isPaused,
     isFinalizing,
+    isLoadingKeys,
     collisionPrompt,
     resolveCollisionChoice,
     addFilesWithCollisionCheck,
@@ -292,7 +293,7 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
     pauseUpload,
     resumeUpload,
     resetUploadState,
-  } = useUppyUpload(config);
+  } = useUppyUpload({ ...config, isOpen });
 
   const [files, setFiles] = useState<TypedUppyFile[]>([]);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
@@ -687,7 +688,7 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!uploading && !uploadComplete) {
+    if (!uploading && !uploadComplete && !isLoadingKeys) {
       setIsDragging(true);
     }
   };
@@ -703,7 +704,7 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
     e.stopPropagation();
     setIsDragging(false);
 
-    if (uploading || uploadComplete || !uppy) {
+    if (uploading || uploadComplete || isLoadingKeys || !uppy) {
       return;
     }
 
@@ -950,7 +951,7 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`flex flex-col ${isDragging ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
+          className={`flex flex-col relative ${isDragging ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
           style={{
             height: "calc(70vh + 200px)",
             maxHeight: "90vh",
@@ -958,6 +959,21 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
             flexDirection: "column",
           }}
         >
+          {/* Loading overlay until existing keys are fetched - prevents race and makes collision detection functional */}
+          {isLoadingKeys && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 rounded-lg">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-10 h-10 border-4 border-brand-500 dark:border-brand-400 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Przygotowywanie listy zdjęć…
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Sprawdzanie istniejących plików (wykrywanie duplikatów)
+                </p>
+              </div>
+            </div>
+          )}
+
           <div
             style={{
               flex: "1 1 0%",
@@ -980,9 +996,9 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
                     isDragging
                       ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
                       : "border-gray-400 dark:border-gray-600 bg-white dark:bg-gray-800"
-                  } ${uploading || uploadComplete ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                  } ${uploading || uploadComplete || isLoadingKeys ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                   onClick={() => {
-                    if (!uploading && !uploadComplete) {
+                    if (!uploading && !uploadComplete && !isLoadingKeys) {
                       fileInputRef.current?.click();
                     }
                   }}
@@ -994,7 +1010,7 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
                     accept="image/*"
                     onChange={handleFileInputChange}
                     className="hidden"
-                    disabled={uploading || uploadComplete}
+                    disabled={uploading || uploadComplete || isLoadingKeys}
                   />
                   <div className="space-y-2">
                     <Upload className="mx-auto h-12 w-12 text-gray-400" strokeWidth={2} />
@@ -1018,7 +1034,7 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
                   accept="image/*"
                   onChange={handleFileInputChange}
                   className="hidden"
-                  disabled={uploading || uploadComplete}
+                  disabled={uploading || uploadComplete || isLoadingKeys}
                 />
               )}
 

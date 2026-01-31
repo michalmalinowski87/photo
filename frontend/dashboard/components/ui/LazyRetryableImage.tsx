@@ -5,8 +5,10 @@ import {
   ImageSize,
   getInitialImageUrl,
   getNextFallbackUrl,
+  isCloudFrontUrl,
 } from "../../lib/image-fallback";
 import { imageFallbackThrottler } from "../../lib/image-fallback-throttler";
+import api from "../../lib/api-service";
 
 interface LazyRetryableImageProps {
   imageData: ImageFallbackUrls & {
@@ -14,6 +16,8 @@ interface LazyRetryableImageProps {
     filename?: string;
   };
   alt: string;
+  /** When set, presigned URL is fetched on demand when CloudFront fails (list response may omit presigned URLs for speed) */
+  galleryId?: string;
   className?: string;
   preferredSize?: ImageSize; // Preferred size for initial load (thumb/preview/bigthumb)
   rootMargin?: string; // Intersection Observer root margin (default: "50px")
@@ -39,6 +43,7 @@ interface LazyRetryableImageProps {
 export const LazyRetryableImage = ({
   imageData,
   alt,
+  galleryId,
   className = "",
   preferredSize = "thumb",
   rootMargin = "50px",
@@ -329,6 +334,44 @@ export const LazyRetryableImage = ({
       }, backoffDelay);
 
       return;
+    }
+
+    // When list omits presigned URLs (CloudFront-only for speed), fetch presigned URL on demand as last resort
+    if (
+      !nextUrl &&
+      galleryId &&
+      isCloudFrontUrl(failedUrl) &&
+      !imageFallbackThrottler.isCircuitOpen()
+    ) {
+      const imageKey = imageData.key ?? imageData.filename ?? alt;
+      if (imageKey) {
+        imageFallbackThrottler.recordFailure();
+        api.galleries
+          .getImagePresignedUrl(galleryId, imageKey, preferredSize)
+          .then((presigned) => {
+            const url =
+              presigned?.thumbUrl ??
+              presigned?.previewUrl ??
+              presigned?.bigThumbUrl ??
+              presigned?.url ??
+              null;
+            if (url) {
+              setCurrentSrc(url);
+              setIsLoading(true);
+              setHasError(false);
+              return;
+            }
+            isLoadingRef.current = false;
+            setIsLoading(false);
+            setHasError(true);
+          })
+          .catch(() => {
+            isLoadingRef.current = false;
+            setIsLoading(false);
+            setHasError(true);
+          });
+        return;
+      }
     }
 
     // No more fallbacks available

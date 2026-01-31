@@ -995,6 +995,7 @@ export default function OrderDetail() {
           selectedKeys={selectedKeys}
           selectionEnabled={selectionEnabled}
           deliveryStatus={order.deliveryStatus}
+          galleryId={galleryIdForQuery}
           isLoading={originalImagesLoading}
           error={originalImagesError}
           fetchNextPage={fetchNextOriginalPage}

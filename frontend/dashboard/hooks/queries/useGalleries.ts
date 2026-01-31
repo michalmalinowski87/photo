@@ -117,8 +117,10 @@ export function useGalleryImages(
       if (!galleryId) {
         throw new Error("Gallery ID is required");
       }
-      // Always request all image sizes (thumb, preview, bigthumb) regardless of type
-      const response = await api.galleries.getImages(galleryId, "thumb,preview,bigthumb");
+      // Always request all image sizes (thumb, preview, bigthumb) regardless of type. Use pagination to avoid unbounded response.
+      const response = await api.galleries.getImages(galleryId, "thumb,preview,bigthumb", {
+        limit: 100,
+      });
       return (response.images || []) as GalleryImage[];
     },
     enabled: !!galleryId,

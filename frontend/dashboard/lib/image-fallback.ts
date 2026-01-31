@@ -44,7 +44,7 @@ export type ImageSize = "thumb" | "preview" | "bigthumb";
  * Check if a URL is a CloudFront URL (vs S3 presigned URL)
  * CloudFront URLs typically have a specific domain pattern
  */
-function isCloudFrontUrl(url: string): boolean {
+export function isCloudFrontUrl(url: string): boolean {
   try {
     const urlObj = new URL(url);
     // CloudFront URLs typically use cloudfront.net domain or a custom CloudFront domain

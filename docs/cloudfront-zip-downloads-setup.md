@@ -2,6 +2,8 @@
 
 This guide explains how to set up CloudFront signed URLs for secure ZIP downloads. CloudFront provides faster downloads via edge locations and signed URLs ensure only authorized users can download ZIP files.
 
+For large orders (100+ images), ZIP generation uses a chunked flow with parallel workers. See [zip-generation-architecture.md](zip-generation-architecture.md) for details.
+
 ## Quick Start
 
 **Automated Setup (Recommended):**

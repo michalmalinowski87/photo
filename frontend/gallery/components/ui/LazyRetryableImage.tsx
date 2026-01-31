@@ -20,6 +20,23 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 // @ts-ignore - JavaScript module
 import { getNextFallbackUrl, getInitialImageUrl } from "../../../../packages/gallery-components/src/imageFallback";
+import { apiFetch } from "@/lib/api";
+import { getPublicApiUrl } from "@/lib/public-env";
+import { getToken } from "@/lib/token";
+
+function isCloudFrontUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    return (
+      hostname.includes("cloudfront.net") ||
+      hostname.includes("cloudfront") ||
+      (!hostname.includes("s3") && !hostname.includes("amazonaws.com"))
+    );
+  } catch {
+    return false;
+  }
+}
 
 export interface LazyRetryableImageProps {
   image: {
@@ -42,6 +59,8 @@ export interface LazyRetryableImageProps {
   sizes?: string; // Not used with native img, but kept for API compatibility
   priority?: boolean; // If true, loads immediately without IntersectionObserver
   preferredSize?: "thumb" | "preview" | "bigthumb";
+  /** When set, presigned URL is fetched on demand when CloudFront fails (list may omit presigned URLs for speed) */
+  galleryId?: string;
   onLoadingComplete?: (img: HTMLImageElement) => void;
   onFallback?: () => void; // Called when image falls back from preferred size
   rootMargin?: string; // Intersection Observer root margin (default: "200px" for prefetching)
@@ -55,6 +74,7 @@ export function LazyRetryableImage({
   sizes,
   priority = false,
   preferredSize = "bigthumb",
+  galleryId,
   onLoadingComplete,
   onFallback,
   rootMargin = "200px", // Prefetch images 200px before they become visible
@@ -290,6 +310,41 @@ export function LazyRetryableImage({
       }, backoffDelay);
 
       return;
+    }
+
+    // When list omits presigned URLs (CloudFront-only for speed), fetch presigned URL on demand as last resort
+    if (!nextUrl && galleryId && isCloudFrontUrl(failedUrl) && image.key) {
+      const API_URL = getPublicApiUrl();
+      const token = getToken(galleryId);
+      if (token) {
+        const url = `${API_URL}/galleries/${galleryId}/images/${encodeURIComponent(image.key)}/presigned-url?size=${preferredSize}`;
+        apiFetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((res: { data: { thumbUrl?: string; previewUrl?: string; bigThumbUrl?: string; url?: string } }) => {
+            const presigned =
+              res.data?.thumbUrl ??
+              res.data?.previewUrl ??
+              res.data?.bigThumbUrl ??
+              res.data?.url ??
+              null;
+            if (presigned) {
+              setCurrentSrc(presigned);
+              setIsLoading(true);
+              setHasError(false);
+              return;
+            }
+            isLoadingRef.current = false;
+            setIsLoading(false);
+            setHasError(true);
+          })
+          .catch(() => {
+            isLoadingRef.current = false;
+            setIsLoading(false);
+            setHasError(true);
+          });
+        return;
+      }
     }
 
     // No more fallbacks available

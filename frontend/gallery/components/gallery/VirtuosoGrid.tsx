@@ -7,6 +7,7 @@ import { Sparkles, BookOpen, BookOpenCheck, Image as ImageIcon, ImagePlus } from
 import type { ImageData } from "@/types/gallery";
 import { EmptyState } from "./EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
+import { ThreeDotsIndicator } from "../ui/Loading";
 
 
 export type GridLayout = "square" | "standard" | "marble" | "carousel";
@@ -50,6 +51,7 @@ export function VirtuosoGridComponent({
   hasNextPage,
   onLoadMore,
   isFetchingNextPage,
+  galleryId,
   selectedKeys = new Set(),
   onImageSelect,
   canSelect = false,
@@ -296,7 +298,7 @@ export function VirtuosoGridComponent({
           }, 1000);
         }
       },
-      { threshold: 0, rootMargin: "3000px" } // Very aggressive prefetching - start loading 3000px before reaching the end (threshold 0 = trigger as soon as any part is visible)
+      { threshold: 0, rootMargin: "5000px" } // Prefetch when sentinel is ~5 viewport heights from bottom
     );
 
     const currentTarget = observerTarget.current;
@@ -322,8 +324,21 @@ export function VirtuosoGridComponent({
   }
 
   return (
-    <div ref={containerRef} className={`w-full overflow-hidden ${hideBorders ? "bg-transparent" : "bg-white"}`}>
-      <div style={{ position: "relative", height: containerHeight, width: "100%", maxWidth: "100%", paddingTop: "8px", paddingBottom: "8px" }} className={`overflow-hidden ${hideBorders ? "bg-transparent" : "bg-white"}`}>
+    <div
+      ref={containerRef}
+      className={`w-full overflow-hidden ${hideBorders ? "bg-transparent" : "bg-white"}`}
+    >
+      <div
+        style={{
+          position: "relative",
+          height: containerHeight,
+          width: "100%",
+          maxWidth: "100%",
+          paddingTop: "8px",
+          paddingBottom: "8px",
+        }}
+        className={`overflow-hidden ${hideBorders ? "bg-transparent" : "bg-white"}`}
+      >
         {images.map((image, index) => {
           const box = layoutBoxes[index];
           if (!box) return null;
@@ -331,38 +346,41 @@ export function VirtuosoGridComponent({
           const imageUrl = image.bigThumbUrl || image.thumbnailUrl || image.url;
           const previewUrl = image.previewUrl || image.url;
           // Best available; original never exposed in gallery app
-          const fullImageUrl = image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
-          const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
+          const fullImageUrl =
+            image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
+          const carouselThumbUrl =
+            image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
 
-          const marbleMaxColumns =
-            containerWidth < 640 ? 2 : containerWidth < 1024 ? 3 : 4;
+          const marbleMaxColumns = containerWidth < 640 ? 2 : containerWidth < 1024 ? 3 : 4;
           const isSingleRowMarble = layout === "marble" && images.length <= marbleMaxColumns;
 
-          const imageClasses =
-            hideBorders
-              ? layout === "square"
-                ? "object-cover"
-                : layout === "standard"
+          const imageClasses = hideBorders
+            ? layout === "square"
+              ? "object-cover"
+              : layout === "standard"
                 ? "object-contain"
                 : isSingleRowMarble
-                ? "object-contain"
-                : "object-cover"
-              : layout === "square"
+                  ? "object-contain"
+                  : "object-cover"
+            : layout === "square"
               ? "object-cover rounded-[2px]"
               : layout === "standard"
-              ? "object-contain rounded-[2px]"
-              : isSingleRowMarble
-              ? "object-contain rounded-[2px]"
-              : "object-cover rounded-[2px]";
+                ? "object-contain rounded-[2px]"
+                : isSingleRowMarble
+                  ? "object-contain rounded-[2px]"
+                  : "object-cover rounded-[2px]";
 
           const isSelected = selectedKeys.has(image.key);
           const showIndicator = showSelectionIndicators && (isSelected || showUnselectedIndicators);
           const inBook = !!(showPhotoBookUi && photoBookKeys.includes(image.key));
           const inPrint = !!(showPhotoPrintUi && photoPrintKeys.includes(image.key));
           const canAddToBook = showPhotoBookUi && (inBook || photoBookKeys.length < photoBookCount);
-          const canAddToPrint = showPhotoPrintUi && (inPrint || photoPrintKeys.length < photoPrintCount);
+          const canAddToPrint =
+            showPhotoPrintUi && (inPrint || photoPrintKeys.length < photoPrintCount);
           const showBookPrint =
-            isSelected && (canAddToBook || canAddToPrint) && (onTogglePhotoBook || onTogglePhotoPrint);
+            isSelected &&
+            (canAddToBook || canAddToPrint) &&
+            (onTogglePhotoBook || onTogglePhotoPrint);
 
           return (
             <div
@@ -433,6 +451,7 @@ export function VirtuosoGridComponent({
                   fill
                   className={imageClasses}
                   preferredSize="bigthumb"
+                  galleryId={galleryId}
                   priority={index < 3} // Prioritize first 3 images for LCP
                   rootMargin="300px" // Prefetch images 300px before they become visible
                 />
@@ -586,8 +605,11 @@ export function VirtuosoGridComponent({
       {/* Observer target for infinite scroll - only show if there are more pages */}
       {hasNextPage && <div ref={observerTarget} className="h-4" />}
       {isFetchingNextPage && (
-        <div className="text-center py-8 text-gray-400 bg-white">
-          Loading more images...
+        <div className="flex flex-col items-center justify-center gap-3 py-10">
+          <ThreeDotsIndicator />
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+            Ładowanie zdjęć...
+          </p>
         </div>
       )}
     </div>

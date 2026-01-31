@@ -844,39 +844,6 @@ export default function GalleryPage() {
     photoPrintCount < baseLimit;
   const photoBookKeys = selectionState?.photoBookKeys ?? [];
   const photoPrintKeys = selectionState?.photoPrintKeys ?? [];
-  // #region agent log
-  if (typeof fetch !== "undefined") {
-    const pricingPackage = selectionState?.pricingPackage;
-    fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: "page.tsx:photoBookPrintVisibility",
-        message: "photo book/print icon visibility inputs",
-        data: {
-          photoBookCount,
-          photoPrintCount,
-          baseLimit,
-          includedCountFromPkg: pricingPackage?.includedCount ?? null,
-          isSelectingState,
-          shouldShowBought,
-          shouldShowUnselected,
-          isOwnerPreview,
-          showPhotoBookUi,
-          showPhotoPrintUi,
-          photoBookCountGt0: photoBookCount > 0,
-          photoBookCountLtBase: photoBookCount < baseLimit,
-          photoPrintCountGt0: photoPrintCount > 0,
-          photoPrintCountLtBase: photoPrintCount < baseLimit,
-        },
-        timestamp: Date.now(),
-        sessionId: "debug-session",
-        runId: "post-fix",
-        hypothesisId: "A",
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
 
   const handleTogglePhotoBook = useCallback(
     (key: string) => {

@@ -344,72 +344,59 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const bigThumbUrl = requestedSizes.has('bigthumb') ? buildCloudFrontUrl(bigThumbWebpKey) : null;
 				const thumbUrl = requestedSizes.has('thumb') ? buildCloudFrontUrl(thumbWebpKey) : null;
 
-				// Generate S3 presigned URLs as fallback (24 hour expiry)
-				// Generate for all requested sizes - client-side fallback handles missing files
-				// These will be used if CloudFront returns 403/404 or fails
+				// When CloudFront is configured, skip S3 presigned URLs in list response for speed.
+				// Client (RetryableImage) requests presigned URL per image only when CloudFront fails (last resort).
 				let previewUrlFallback: string | null = null;
 				let bigThumbUrlFallback: string | null = null;
 				let thumbUrlFallback: string | null = null;
 				let originalUrl: string | null = null;
 
-				try {
-					// Helper function to generate presigned URL
-					const generatePresignedUrl = async (key: string): Promise<string | null> => {
-						try {
-							const cmd = new GetObjectCommand({
-								Bucket: bucket,
-								Key: key
-							});
-							return await getSignedUrl(s3, cmd, { expiresIn: 86400 });
-						} catch (err: any) {
-							// Log but don't fail - fallback URLs are optional
-							// File may not exist (e.g., original deleted, thumbnails not generated yet)
-							// Client-side fallback will handle this gracefully
-							return null;
+				if (!cloudfrontDomain) {
+					try {
+						const generatePresignedUrl = async (key: string): Promise<string | null> => {
+							try {
+								const cmd = new GetObjectCommand({
+									Bucket: bucket,
+									Key: key
+								});
+								return await getSignedUrl(s3, cmd, { expiresIn: 86400 });
+							} catch (err: any) {
+								return null;
+							}
+						};
+
+						const presignedUrlPromises: Promise<void>[] = [];
+						if (requestedSizes.has('preview')) {
+							presignedUrlPromises.push(
+								generatePresignedUrl(previewWebpKey)
+									.then(url => { previewUrlFallback = url; })
+							);
 						}
-					};
-
-					// Generate presigned URLs in parallel for better performance
-					// Generate for all requested sizes - client fallback handles missing files
-					const presignedUrlPromises: Promise<void>[] = [];
-
-					if (requestedSizes.has('preview')) {
-						presignedUrlPromises.push(
-							generatePresignedUrl(previewWebpKey)
-								.then(url => { previewUrlFallback = url; })
-						);
+						if (requestedSizes.has('bigthumb')) {
+							presignedUrlPromises.push(
+								generatePresignedUrl(bigThumbWebpKey)
+									.then(url => { bigThumbUrlFallback = url; })
+							);
+						}
+						if (requestedSizes.has('thumb')) {
+							presignedUrlPromises.push(
+								generatePresignedUrl(thumbWebpKey)
+									.then(url => { thumbUrlFallback = url; })
+							);
+						}
+						if (!access.isClient) {
+							presignedUrlPromises.push(
+								generatePresignedUrl(originalKey)
+									.then(url => { originalUrl = url; })
+							);
+						}
+						await Promise.all(presignedUrlPromises);
+					} catch (err: any) {
+						logger.warn('Failed to generate presigned URLs for fallback', {
+							filename,
+							error: err.message
+						});
 					}
-
-					if (requestedSizes.has('bigthumb')) {
-						presignedUrlPromises.push(
-							generatePresignedUrl(bigThumbWebpKey)
-								.then(url => { bigThumbUrlFallback = url; })
-						);
-					}
-
-					if (requestedSizes.has('thumb')) {
-						presignedUrlPromises.push(
-							generatePresignedUrl(thumbWebpKey)
-								.then(url => { thumbUrlFallback = url; })
-						);
-					}
-
-					// Original URL only for owners (dashboard). NEVER expose original to gallery app (clients).
-					if (!access.isClient) {
-						presignedUrlPromises.push(
-							generatePresignedUrl(originalKey)
-								.then(url => { originalUrl = url; })
-						);
-					}
-
-					// Wait for all presigned URL generations to complete
-					await Promise.all(presignedUrlPromises);
-				} catch (err: any) {
-					// Log error but don't fail - fallback URLs are optional
-					logger.warn('Failed to generate presigned URLs for fallback', {
-						filename,
-						error: err.message
-					});
 				}
 
 				// Use size and lastModified from DynamoDB record

@@ -265,64 +265,40 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const bigThumbUrl = buildCloudFrontUrl(true, bigThumbWebpKey);
 				const thumbUrl = buildCloudFrontUrl(true, thumbWebpKey);
 
-				// Generate S3 presigned URLs as fallback (24 hour expiry)
-				// Always generate for all sizes - client-side fallback handles missing files gracefully
-				// These will be used if CloudFront returns 403/404 or fails
+				// When CloudFront is configured, skip S3 presigned URLs in list response for speed.
+				// Client requests presigned URL per image only when CloudFront fails (e.g. on-demand endpoint).
 				let previewUrlFallback: string | null = null;
 				let bigThumbUrlFallback: string | null = null;
 				let thumbUrlFallback: string | null = null;
 				let finalUrlFallback: string | null = null;
 
-				try {
-					// Helper function to generate presigned URL
-					const generatePresignedUrl = async (key: string): Promise<string | null> => {
-						try {
-							const cmd = new GetObjectCommand({
-								Bucket: bucket,
-								Key: key
-							});
-							return await getSignedUrl(s3, cmd, { expiresIn: 86400 });
-						} catch (err: any) {
-							// Log but don't fail - fallback URLs are optional
-							// File may not exist (e.g., thumbnails not generated yet)
-							// Client-side fallback will handle this gracefully
-							return null;
-						}
-					};
+				if (!cloudfrontDomain) {
+					try {
+						const generatePresignedUrl = async (key: string): Promise<string | null> => {
+							try {
+								const cmd = new GetObjectCommand({
+									Bucket: bucket,
+									Key: key
+								});
+								return await getSignedUrl(s3, cmd, { expiresIn: 86400 });
+							} catch (err: any) {
+								return null;
+							}
+						};
 
-					// Generate presigned URLs in parallel for better performance
-					// Always generate for all sizes - client fallback handles missing files
-					const presignedUrlPromises: Promise<void>[] = [];
-
-					presignedUrlPromises.push(
-						generatePresignedUrl(previewWebpKey)
-							.then(url => { previewUrlFallback = url; })
-					);
-
-					presignedUrlPromises.push(
-						generatePresignedUrl(bigThumbWebpKey)
-							.then(url => { bigThumbUrlFallback = url; })
-					);
-
-					presignedUrlPromises.push(
-						generatePresignedUrl(thumbWebpKey)
-							.then(url => { thumbUrlFallback = url; })
-					);
-
-					// Always generate presigned URL for final image (ultimate fallback)
-					presignedUrlPromises.push(
-						generatePresignedUrl(finalKey)
-							.then(url => { finalUrlFallback = url; })
-					);
-
-					// Wait for all presigned URL generations to complete
-					await Promise.all(presignedUrlPromises);
-				} catch (err: any) {
-					// Log error but don't fail - fallback URLs are optional
-					logger.warn('Failed to generate presigned URLs for fallback', {
-						filename,
-						error: err.message
-					});
+						const presignedUrlPromises: Promise<void>[] = [
+							generatePresignedUrl(previewWebpKey).then(url => { previewUrlFallback = url; }),
+							generatePresignedUrl(bigThumbWebpKey).then(url => { bigThumbUrlFallback = url; }),
+							generatePresignedUrl(thumbWebpKey).then(url => { thumbUrlFallback = url; }),
+							generatePresignedUrl(finalKey).then(url => { finalUrlFallback = url; })
+						];
+						await Promise.all(presignedUrlPromises);
+					} catch (err: any) {
+						logger.warn('Failed to generate presigned URLs for fallback', {
+							filename,
+							error: err.message
+						});
+					}
 				}
 
 				return {

@@ -15,6 +15,8 @@ interface ImageGridProps {
   onLayoutChange?: (layout: GridLayout) => void;
   selectedKeys?: Set<string>;
   onImageSelect?: (key: string) => void;
+  /** When set, presigned URL is fetched on demand when CloudFront fails */
+  galleryId?: string;
 }
 
 export function ImageGrid({
@@ -23,6 +25,7 @@ export function ImageGrid({
   onLayoutChange,
   selectedKeys = new Set(),
   onImageSelect,
+  galleryId,
 }: ImageGridProps) {
   const [internalLayout, setInternalLayout] = useState<GridLayout>("standard");
   
@@ -134,6 +137,7 @@ export function ImageGrid({
                     priority={isPriority} // Prioritize first 3 images for LCP
                     loading={isPriority ? undefined : "lazy"}
                     sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    galleryId={galleryId}
                   />
                 ) : (
                   <RetryableImage
@@ -145,6 +149,7 @@ export function ImageGrid({
                     priority={isPriority} // Prioritize first 3 images for LCP
                     loading={isPriority ? undefined : "lazy"}
                     sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    galleryId={galleryId}
                   />
                 )}
               </a>

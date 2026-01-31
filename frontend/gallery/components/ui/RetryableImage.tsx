@@ -16,6 +16,23 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 // @ts-ignore - JavaScript module
 import { getNextFallbackUrl, getInitialImageUrl } from "../../../../packages/gallery-components/src/imageFallback";
+import { apiFetch } from "@/lib/api";
+import { getPublicApiUrl } from "@/lib/public-env";
+import { getToken } from "@/lib/token";
+
+function isCloudFrontUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    return (
+      hostname.includes("cloudfront.net") ||
+      hostname.includes("cloudfront") ||
+      (!hostname.includes("s3") && !hostname.includes("amazonaws.com"))
+    );
+  } catch {
+    return false;
+  }
+}
 
 export interface RetryableImageProps {
   image: {
@@ -39,6 +56,8 @@ export interface RetryableImageProps {
   priority?: boolean;
   loading?: "lazy" | "eager" | undefined;
   preferredSize?: "thumb" | "preview" | "bigthumb";
+  /** When set, presigned URL is fetched on demand when CloudFront fails (list may omit presigned URLs for speed) */
+  galleryId?: string;
   onLoadingComplete?: (img: HTMLImageElement) => void;
 }
 
@@ -51,6 +70,7 @@ export function RetryableImage({
   priority = false,
   loading,
   preferredSize = "bigthumb",
+  galleryId,
   onLoadingComplete,
 }: RetryableImageProps) {
   const [currentSrc, setCurrentSrc] = useState<string>("");
@@ -114,14 +134,44 @@ export function RetryableImage({
       if (nextSize) {
         attemptedSizesRef.current.add(nextSize);
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RetryableImage.tsx:110',message:'Image fallback triggered',data:{imageKey:image.key,failedUrl,nextUrl,nextSize},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       // Try next fallback URL
       setCurrentSrc(nextUrl);
       setIsLoading(true);
       setHasError(false);
       return;
+    }
+
+    // When list omits presigned URLs (CloudFront-only for speed), fetch presigned URL on demand as last resort
+    if (!nextUrl && galleryId && isCloudFrontUrl(failedUrl) && image.key) {
+      const API_URL = getPublicApiUrl();
+      const token = getToken(galleryId);
+      if (token) {
+        const url = `${API_URL}/galleries/${galleryId}/images/${encodeURIComponent(image.key)}/presigned-url?size=${preferredSize}`;
+        apiFetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((res: { data: { thumbUrl?: string; previewUrl?: string; bigThumbUrl?: string; url?: string } }) => {
+            const presigned =
+              res.data?.thumbUrl ??
+              res.data?.previewUrl ??
+              res.data?.bigThumbUrl ??
+              res.data?.url ??
+              null;
+            if (presigned) {
+              setCurrentSrc(presigned);
+              setIsLoading(true);
+              setHasError(false);
+              return;
+            }
+            setIsLoading(false);
+            setHasError(true);
+          })
+          .catch(() => {
+            setIsLoading(false);
+            setHasError(true);
+          });
+        return;
+      }
     }
 
     // No more fallbacks available

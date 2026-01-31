@@ -14,6 +14,8 @@ export interface UseUppyUploadConfig {
   galleryId: string;
   orderId?: string; // Required for 'finals' type
   type: UploadType;
+  /** When false/undefined, existing keys are not prefetched (avoids redundant /images or /final/images calls until modal opens) */
+  isOpen?: boolean;
   onUploadComplete?: () => void;
   onValidationNeeded?: (data: {
     uploadedSizeBytes: number;
@@ -206,7 +208,7 @@ function getTypeLabel(type: UploadType): string {
   return type === "finals" ? "zdjęć finalnych" : "zdjęć";
 }
 
-const PAGINATION_LIMIT = 500;
+const KEYS_PAGE_LIMIT = 5000;
 
 function isImageFile(file: File): boolean {
   return (
@@ -217,7 +219,8 @@ function isImageFile(file: File): boolean {
 
 /**
  * Fetch all existing image keys (filenames) for the gallery or order.
- * Used for collision detection before upload.
+ * Uses lightweight /images/keys and /final/images/keys endpoints (keys only, no URLs).
+ * Paginates until hasMore is false so collision detection works for 2000+ images.
  */
 async function fetchExistingImageKeys(
   galleryId: string,
@@ -229,12 +232,11 @@ async function fetchExistingImageKeys(
   if (type === "finals" && orderId) {
     let cursor: string | null = null;
     do {
-      const response = await api.orders.getFinalImages(galleryId, orderId, {
-        limit: PAGINATION_LIMIT,
+      const response = await api.orders.getFinalImageKeys(galleryId, orderId, {
+        limit: KEYS_PAGE_LIMIT,
         cursor,
       });
-      for (const img of response.images ?? []) {
-        const key = img.key ?? (img as { filename?: string }).filename;
+      for (const key of response.keys ?? []) {
         if (key) keys.add(key);
       }
       cursor = response.hasMore ? (response.nextCursor ?? null) : null;
@@ -242,12 +244,11 @@ async function fetchExistingImageKeys(
   } else {
     let cursor: string | null = null;
     do {
-      const response = await api.galleries.getImages(galleryId, undefined, {
-        limit: PAGINATION_LIMIT,
+      const response = await api.galleries.getImageKeys(galleryId, {
+        limit: KEYS_PAGE_LIMIT,
         cursor,
       });
-      for (const img of response.images ?? []) {
-        const key = img.key ?? (img as { filename?: string }).filename;
+      for (const key of response.keys ?? []) {
         if (key) keys.add(key);
       }
       cursor = response.hasMore ? (response.nextCursor ?? null) : null;
@@ -499,17 +500,39 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     timestamp: number;
     cacheKey: string;
   } | null>(null);
+  const fetchInFlightRef = useRef<string | null>(null);
+  const [isLoadingKeys, setIsLoadingKeys] = useState(false);
 
-  // Prefetch existing image keys when hook is ready so drop/add is instant
+  // Prefetch existing image keys only when modal is open; show loading until keys are ready to prevent race and make collision detection functional
   useEffect(() => {
+    if (config.isOpen !== true) {
+      setIsLoadingKeys(false);
+      return;
+    }
     if (!config.galleryId || (config.type === "finals" && !config.orderId)) {
+      setIsLoadingKeys(false);
       return;
     }
     const cacheKey = `${config.galleryId}-${config.type}-${config.orderId ?? ""}`;
-    void fetchExistingImageKeys(config.galleryId, config.type, config.orderId).then((keys) => {
-      existingKeysCacheRef.current = { keys, timestamp: Date.now(), cacheKey };
-    });
-  }, [config.galleryId, config.type, config.orderId]);
+    if (fetchInFlightRef.current === cacheKey) {
+      return;
+    }
+    const cached = existingKeysCacheRef.current;
+    if (cached && cached.cacheKey === cacheKey && Date.now() - cached.timestamp < 60_000) {
+      setIsLoadingKeys(false);
+      return;
+    }
+    fetchInFlightRef.current = cacheKey;
+    setIsLoadingKeys(true);
+    void fetchExistingImageKeys(config.galleryId, config.type, config.orderId)
+      .then((keys) => {
+        existingKeysCacheRef.current = { keys, timestamp: Date.now(), cacheKey };
+      })
+      .finally(() => {
+        fetchInFlightRef.current = null;
+        setIsLoadingKeys(false);
+      });
+  }, [config.galleryId, config.type, config.orderId, config.isOpen]);
 
   const resolveCollisionChoice = useCallback((action: CollisionAction, applyToAll: boolean) => {
     collisionResolveRef.current?.({ action, applyToAll });
@@ -1200,6 +1223,7 @@ export function useUppyUpload(config: UseUppyUploadConfig) {
     uploadStats,
     isPaused,
     isFinalizing,
+    isLoadingKeys,
     collisionPrompt,
     resolveCollisionChoice,
     addFilesWithCollisionCheck,

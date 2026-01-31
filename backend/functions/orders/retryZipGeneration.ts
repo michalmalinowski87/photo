@@ -81,9 +81,26 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 
-		// Check if there's an error to retry
+		// Check if there's an error to retry, or stale generating (>25 min)
 		const errorFinalized = isFinal ? order.finalZipErrorFinalized : order.zipErrorFinalized;
-		if (!errorFinalized) {
+		const generating = isFinal ? order.finalZipGenerating : order.zipGenerating;
+		const generatingSince = (isFinal ? order.finalZipGeneratingSince : order.zipGeneratingSince) as number | undefined;
+		const staleThresholdMs = 25 * 60 * 1000;
+		const isStale = !!generating && !!generatingSince && Date.now() - generatingSince > staleThresholdMs;
+		const retryCount = (isFinal ? order.finalZipRetryCount : order.zipRetryCount) as number | undefined;
+		const hasRetriedOnce = (retryCount ?? 0) >= 1;
+
+		if (hasRetriedOnce) {
+			return {
+				statusCode: 400,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ 
+					error: 'Already retried', 
+					message: 'ZIP generation has already been retried once. Please contact support for assistance.' 
+				})
+			};
+		}
+		if (!errorFinalized && !isStale) {
 			return {
 				statusCode: 400,
 				headers: { 'content-type': 'application/json' },
@@ -94,21 +111,23 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			};
 		}
 
-		// Clear error fields and reset generating flag
+		// Clear error fields, increment retry count, and reset generating flag
 		const errorFields = isFinal
 			? 'finalZipErrorAttempts, finalZipErrorDetails, finalZipErrorFinal, finalZipErrorFinalized'
 			: 'zipErrorAttempts, zipErrorDetails, zipErrorFinal, zipErrorFinalized';
-		
+		const retryCountField = isFinal ? 'finalZipRetryCount' : 'zipRetryCount';
 		const generatingField = isFinal ? 'finalZipGenerating' : 'zipGenerating';
 		const generatingSinceField = isFinal ? 'finalZipGeneratingSince' : 'zipGeneratingSince';
+		const newRetryCount = (retryCount ?? 0) + 1;
 
 		await ddb.send(new UpdateCommand({
 			TableName: ordersTable,
 			Key: { galleryId, orderId },
-			UpdateExpression: `REMOVE ${errorFields} SET ${generatingField} = :g, ${generatingSinceField} = :ts`,
+			UpdateExpression: `REMOVE ${errorFields} SET ${generatingField} = :g, ${generatingSinceField} = :ts, ${retryCountField} = :rc`,
 			ExpressionAttributeValues: {
 				':g': true,
-				':ts': Date.now()
+				':ts': Date.now(),
+				':rc': newRetryCount
 			}
 		}));
 

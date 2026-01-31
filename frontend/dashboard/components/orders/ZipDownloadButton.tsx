@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Download, Loader2, AlertCircle, RefreshCw } from "lucide-react";
-import React from "react";
+import React, { useState } from "react";
 
 import {
   useDownloadZip,
@@ -11,6 +11,7 @@ import { useZipStatusPolling } from "../../hooks/useZipStatusPolling";
 import { queryKeys } from "../../lib/react-query";
 import type { Order } from "../../types";
 import Button from "../ui/button/Button";
+import { Modal } from "../ui/modal";
 
 interface ZipProgress {
   processed: number;
@@ -90,8 +91,18 @@ export function ZipDownloadButton({
     }
   };
 
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
+
   const handleRetry = () => {
     retryZipMutation.mutate({ galleryId, orderId, type });
+  };
+
+  const handleErrorClick = () => {
+    if (canRetry) {
+      handleRetry();
+    } else {
+      setSupportModalOpen(true);
+    }
   };
 
   // Use generating flag from ZIP status polling (authoritative source)
@@ -112,11 +123,9 @@ export function ZipDownloadButton({
   const canRetry = errorInfo?.canRetry ?? false;
 
   // Determine button state
-  // Button should always be visible when order is in the right state, but disabled until ZIP is ready
-  // For error state, allow retry if user is owner
+  // For error state: button is enabled - click triggers retry (if canRetry) or support modal (if !canRetry)
   const isDisabled = Boolean(
     (!effectiveReady && !hasError) ||
-    (hasError && !canRetry) ||
     isGenerating ||
     downloadZipMutation.isPending ||
     downloadFinalZipMutation.isPending ||
@@ -174,11 +183,32 @@ export function ZipDownloadButton({
     </span>
   );
 
-  // Use retry handler for error state with retry capability, otherwise use download handler
-  const onClickHandler = hasError && canRetry ? handleRetry : handleDownload;
+  // Use error handler (retry or support modal) for error state, otherwise download
+  const onClickHandler = hasError ? handleErrorClick : handleDownload;
 
   return (
     <div className={`w-full ${className}`}>
+      <Modal
+        isOpen={supportModalOpen}
+        onClose={() => setSupportModalOpen(false)}
+        className="max-w-md p-6"
+      >
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-photographer-heading dark:text-gray-100">
+            Błąd generowania ZIP
+          </h3>
+          <p className="text-photographer-text dark:text-gray-300">
+            Generowanie pliku ZIP nie powiodło się po ponownej próbie. Skontaktuj się z supportem,
+            aby uzyskać pomoc w pobraniu zdjęć.
+          </p>
+          <p className="text-sm text-photographer-mutedText dark:text-gray-400">
+            Zespół supportu będzie mógł sprawdzić logi i ręcznie uruchomić generowanie archiwum.
+          </p>
+          <Button variant="outline" onClick={() => setSupportModalOpen(false)}>
+            Zamknij
+          </Button>
+        </div>
+      </Modal>
       <Button
         size="md"
         variant={buttonVariant}

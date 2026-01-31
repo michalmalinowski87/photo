@@ -32,6 +32,7 @@ interface OriginalsTabProps {
   selectedKeys: string[];
   selectionEnabled: boolean;
   deliveryStatus?: string;
+  galleryId?: string;
   isLoading?: boolean;
   error?: unknown;
   fetchNextPage?: () => void;
@@ -49,6 +50,7 @@ export function OriginalsTab({
   selectedKeys,
   selectionEnabled,
   deliveryStatus,
+  galleryId,
   isLoading = false,
   error,
   fetchNextPage,
@@ -99,6 +101,7 @@ export function OriginalsTab({
             <LazyRetryableImage
               imageData={img as ImageFallbackUrls}
               alt={String(imgKey)}
+              galleryId={galleryId}
               className={`w-full h-full ${
                 layout === "square"
                   ? "object-cover rounded-lg"
