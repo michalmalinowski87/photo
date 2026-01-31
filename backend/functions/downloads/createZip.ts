@@ -16,23 +16,27 @@ const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 import archiver from 'archiver';
-import { Readable } from 'stream';
+import { Readable, PassThrough } from 'stream';
 import pLimit from 'p-limit';
 import { createHash } from 'crypto';
 import { getSenderEmail } from '../../lib/src/email-config';
 import { createZipGenerationFailedEmail } from '../../lib/src/email';
+import { MERGE_PART_SIZE, MAX_PARTS, MERGE_CONCURRENT_GETS } from '../../lib/src/zip-constants';
 
 // S3Client configured for production reliability
 // Note: AWS_NODEJS_CONNECTION_REUSE_ENABLED=1 is set in Lambda environment for connection reuse
 // Configured with retries and timeouts for production-scale reliability
+// Increased timeout to 10 minutes to handle large files and slow streams (matching zipMerge)
+const S3_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 const s3 = new S3Client({
 	maxAttempts: 5, // Retry up to 5 times for transient errors
 	requestHandler: {
-		requestTimeout: 5 * 60 * 1000, // 5 min - GetObject/UploadPart for large ZIPs can exceed 60s
+		requestTimeout: S3_REQUEST_TIMEOUT_MS,
 		httpsAgent: {
 			keepAlive: true,
-			maxSockets: 50, // Connection pool size
-			keepAliveMsecs: 30000
+			maxSockets: 100, // Increased to match zipMerge for higher concurrency
+			keepAliveMsecs: 30000,
+			timeout: S3_REQUEST_TIMEOUT_MS // Socket timeout matches request timeout
 		}
 	}
 });
@@ -44,18 +48,11 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({
 	}
 });
 
-// Multipart upload constants
-// Set to 15MB - optimized for best performance with 1024MB Lambda memory
-// Fewer parts = faster CompleteMultipartUpload (tested: 9 parts @ 10MB → ~4-5 parts @ 20MB)
-// 15MB parts provide optimal balance for 1024MB memory allocation
-const PART_SIZE = 15 * 1024 * 1024; // 15MB per part (well above 5MB minimum, below 5GB max)
-const MAX_PARTS = 10000; // S3 maximum
-
-// Parallel download concurrency
-// Set to 12 - balanced for reliability with 1024MB Lambda memory
-// Connection reuse enabled (AWS_NODEJS_CONNECTION_REUSE_ENABLED=1) allows efficient connection handling
-// Slightly reduced from 15 to 12 to reduce connection pressure and ECONNRESET errors
-const CONCURRENT_DOWNLOADS = 12;
+// Use optimized constants from zipMerge for consistent performance
+// 50MB parts - fewer UploadPart calls, faster CompleteMultipartUpload
+const PART_SIZE = MERGE_PART_SIZE; // 50MB per part
+// Higher concurrency - matches zipMerge for better throughput
+const CONCURRENT_DOWNLOADS = MERGE_CONCURRENT_GETS; // 50 concurrent downloads
 
 interface MultipartPart {
 	partNumber: number;
@@ -301,22 +298,27 @@ async function sendFailureEmail(
 }
 
 export const handler = lambdaLogger(async (event: any, context: any) => {
-	try {
-		const logger = (context as any).logger;
-		const startTime = Date.now();
-		const requestId = context?.requestId || context?.awsRequestId || 'unknown';
-	
-	logger?.info('ZIP generation Lambda invoked', {
-		requestId,
-		eventType: typeof event,
-		hasBody: !!event.body,
-		eventKeys: Object.keys(event),
-		eventPreview: JSON.stringify(event).substring(0, 200),
-		remainingTimeMs: context?.getRemainingTimeInMillis?.() || 'unknown'
-	});
-	
+	// Declare variables at function scope so catch block can access them
+	const logger = (context as any).logger;
+	const startTime = Date.now();
+	const requestId = context?.requestId || context?.awsRequestId || 'unknown';
+	let galleryId: string | undefined;
+	let orderId: string | undefined;
+	let isFinal: boolean | undefined;
 	const envProc = (globalThis as any).process;
-	const bucket = envProc?.env?.GALLERIES_BUCKET as string;
+	
+	try {
+	
+		logger?.info('ZIP generation Lambda invoked', {
+			requestId,
+			eventType: typeof event,
+			hasBody: !!event.body,
+			eventKeys: Object.keys(event),
+			eventPreview: JSON.stringify(event).substring(0, 200),
+			remainingTimeMs: context?.getRemainingTimeInMillis?.() || 'unknown'
+		});
+		
+		const bucket = envProc?.env?.GALLERIES_BUCKET as string;
 	if (!bucket) {
 		logger?.error('Missing GALLERIES_BUCKET environment variable');
 		return {
@@ -354,8 +356,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		};
 	}
 
-	const { galleryId, keys, orderId, type, finalFilesHash, selectedKeysHash } = payload;
-	const isFinal = type === 'final';
+		const { keys, type, finalFilesHash, selectedKeysHash } = payload;
+		galleryId = payload.galleryId;
+		orderId = payload.orderId;
+		isFinal = type === 'final';
 	
 	logger?.info('ZIP generation started', {
 			requestId,
@@ -862,9 +866,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		let totalBytesAdded = 0;
 		// parts already declared outside try block
 		let currentPartNumber = 1;
-		let currentPartBuffer = Buffer.alloc(0);
+		// Pre-allocate buffer chunks to avoid repeated Buffer.concat (GC pressure) - matching zipMerge optimization
+		const bufferChunks: Buffer[] = [];
+		let bufferTotalSize = 0;
 		let zipTotalSize = 0;
 		let archiveError: Error | null = null;
+		let uploadQueueSize = 0;
+		const MAX_UPLOAD_QUEUE = 5; // Limit concurrent uploads to avoid memory pressure (matching zipMerge)
+		let excessiveBufferWarningLogged = false;
+		let lastExcessiveBufferWarningCount = 0;
 
 		// Set up error handler
 		archive.on('error', (err: Error) => {
@@ -882,20 +892,60 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		});
 
-		// Stream archiver output to multipart upload parts
-		// Use sequential queue to ensure parts upload in order
+		// Optimized buffer management: collect chunks, upload when threshold reached (matching zipMerge)
 		archive.on('data', (chunk: Buffer) => {
 			if (archiveError) {
 				return; // Stop processing if archive errored
 			}
 
 			zipTotalSize += chunk.length;
-			currentPartBuffer = Buffer.concat([currentPartBuffer, chunk]);
+			bufferChunks.push(chunk);
+			bufferTotalSize += chunk.length;
 
-			// When part buffer reaches PART_SIZE, queue sequential upload
-			while (currentPartBuffer.length >= PART_SIZE) {
-				const partData = currentPartBuffer.slice(0, PART_SIZE);
-				currentPartBuffer = currentPartBuffer.slice(PART_SIZE);
+			// Safety check: prevent excessive buffer growth (shouldn't happen, but safeguard)
+			// Log only once when first exceeded, then periodically (every 500 chunks) to avoid log spam
+			if (bufferChunks.length > 1000) {
+				if (!excessiveBufferWarningLogged) {
+					logger?.warn('Excessive buffer chunks detected', { 
+						count: bufferChunks.length, 
+						bufferTotalSize,
+						note: 'This may be normal for large files. Will log periodically if condition persists.'
+					});
+					excessiveBufferWarningLogged = true;
+					lastExcessiveBufferWarningCount = bufferChunks.length;
+				} else if (bufferChunks.length - lastExcessiveBufferWarningCount >= 500) {
+					// Log periodically every 500 chunks to monitor if condition persists
+					logger?.warn('Excessive buffer chunks (periodic check)', { 
+						count: bufferChunks.length, 
+						bufferTotalSize 
+					});
+					lastExcessiveBufferWarningCount = bufferChunks.length;
+				}
+			}
+
+			// Upload parts when we have enough data, but limit concurrent uploads
+			while (bufferTotalSize >= PART_SIZE && uploadQueueSize < MAX_UPLOAD_QUEUE && !archiveError) {
+				// Collect exactly PART_SIZE bytes
+				const partBuffers: Buffer[] = [];
+				let partSize = 0;
+				while (partSize < PART_SIZE && bufferChunks.length > 0) {
+					const nextChunk = bufferChunks[0];
+					const remaining = PART_SIZE - partSize;
+					if (nextChunk.length <= remaining) {
+						partBuffers.push(bufferChunks.shift()!);
+						partSize += nextChunk.length;
+						bufferTotalSize -= nextChunk.length;
+					} else {
+						// Split chunk
+						partBuffers.push(nextChunk.slice(0, remaining));
+						bufferChunks[0] = nextChunk.slice(remaining);
+						partSize += remaining;
+						bufferTotalSize -= remaining;
+					}
+				}
+
+				// Combine into single buffer for upload (only when needed)
+				const partData = partBuffers.length === 1 ? partBuffers[0] : Buffer.concat(partBuffers);
 				const partNum = currentPartNumber;
 
 				// Store first part for ZIP signature validation
@@ -903,7 +953,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					firstPartBuffer = Buffer.from(partData);
 				}
 
-				// Chain uploads sequentially to ensure order
+				uploadQueueSize++;
+
+				// Chain uploads sequentially to ensure order, but allow queue management
 				lastUploadPromise = lastUploadPromise.then(async () => {
 					if (archiveError) {
 						throw archiveError;
@@ -945,7 +997,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						});
 						archiveError = partErr;
 						throw partErr;
+					} finally {
+						uploadQueueSize--;
 					}
+				}).catch((err) => {
+					// Mark archiveError so other uploads stop
+					archiveError = err instanceof Error ? err : new Error(String(err));
+					throw err;
 				});
 
 				currentPartNumber++;
@@ -978,19 +1036,28 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					return false;
 				}
 
-				// Stream directly to archiver (no buffering)
+				// Use PassThrough to handle backpressure - archiver will pull when ready (matching zipMerge optimization)
 				const s3Stream = getObjectResponse.Body as Readable;
+				const passThrough = new PassThrough({ highWaterMark: 64 * 1024 }); // 64KB buffer
 				
-				// Critical: Attach error handlers early and permanently
-				s3Stream.on('error', (err) => {
-					logger?.error(`S3 stream error for ${s3Key}`, {}, err);
-					s3Stream.resume(); // Prevent hanging in paused state
-				});
+				// Set up error handlers BEFORE piping to catch all errors
+				const errorHandler = (err: Error) => {
+					logger?.error('Stream error', { s3Key, zipFilename, error: err.message, name: err.name });
+					if (passThrough && !passThrough.destroyed) {
+						passThrough.destroy(err);
+					}
+					if (s3Stream && !s3Stream.destroyed) {
+						s3Stream.destroy();
+					}
+				};
 				
-				// Destroy stream on error to force cleanup
-				s3Stream.once('error', () => s3Stream.destroy());
+				s3Stream.on('error', errorHandler);
+				passThrough.on('error', errorHandler);
 				
-				archive.append(s3Stream, { name: zipFilename });
+				// Pipe with backpressure handling - PassThrough will buffer data if archiver isn't ready
+				s3Stream.pipe(passThrough);
+				
+				archive.append(passThrough, { name: zipFilename });
 				
 				filesAdded++;
 				totalBytesAdded += contentLength;
@@ -1098,39 +1165,46 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// Wait for all queued part uploads to complete
 		await lastUploadPromise;
 
-		// Upload remaining buffer as final part (if any)
-		if (currentPartBuffer.length > 0) {
-			// Last part can be smaller than MIN_PART_SIZE
-			const uploadPartResponse = await s3.send(new UploadPartCommand({
-				Bucket: bucket,
-				Key: zipKey,
-				UploadId: multipartUploadId,
-				PartNumber: currentPartNumber,
-				Body: currentPartBuffer
-			}));
+		// Upload remaining buffer chunks as final part (if any) - matching zipMerge optimization
+		if (bufferChunks.length > 0) {
+			const finalBuffer = bufferChunks.length === 1 
+				? bufferChunks[0] 
+				: Buffer.concat(bufferChunks);
+			if (finalBuffer.length > 0) {
+				// Last part can be smaller than PART_SIZE
+				const uploadPartResponse = await s3.send(new UploadPartCommand({
+					Bucket: bucket,
+					Key: zipKey,
+					UploadId: multipartUploadId,
+					PartNumber: currentPartNumber,
+					Body: finalBuffer
+				}));
 
-			if (!uploadPartResponse.ETag) {
-				throw new Error(`Failed to upload final part ${currentPartNumber}: no ETag returned`);
+				if (!uploadPartResponse.ETag) {
+					throw new Error(`Failed to upload final part ${currentPartNumber}: no ETag returned`);
+				}
+
+				parts.push({
+					partNumber: currentPartNumber,
+					etag: uploadPartResponse.ETag
+				});
+
+				logger?.debug('Uploaded final multipart part', {
+					partNumber: currentPartNumber,
+					partSize: finalBuffer.length,
+					totalParts: parts.length
+				});
 			}
-
-			parts.push({
-				partNumber: currentPartNumber,
-				etag: uploadPartResponse.ETag
-			});
-
-			logger?.debug('Uploaded final multipart part', {
-				partNumber: currentPartNumber,
-				partSize: currentPartBuffer.length,
-				totalParts: parts.length
-			});
 		}
 
 		// Validate ZIP signature (PK header) from first part
-		// For small ZIPs, all data might be in currentPartBuffer (single part upload)
+		// For small ZIPs, all data might be in bufferChunks (single part upload)
 		// For larger ZIPs, firstPartBuffer contains the first part
 		const bufferToValidate = firstPartBuffer && firstPartBuffer.length >= 2 
 			? firstPartBuffer 
-			: (currentPartBuffer.length >= 2 ? currentPartBuffer : null);
+			: (bufferChunks.length > 0 && bufferChunks[0] && bufferChunks[0].length >= 2 
+				? bufferChunks[0] 
+				: null);
 		
 		if (!bufferToValidate || bufferToValidate.length < 2) {
 			throw new Error('ZIP archive is empty or too small');
@@ -1461,11 +1535,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// (e.g., payload parsing, missing env vars, etc.)
 		// Errors during ZIP generation are handled by the retry loop above
 		const durationMs = Date.now() - startTime;
+		const errorGalleryId = galleryId || 'unknown';
+		const errorOrderId = orderId || 'unknown';
+		const errorIsFinal = isFinal || false;
 		
 		logger?.error('ZIP generation failed (before retry loop)', {
 			requestId,
-			galleryId: galleryId || 'unknown',
-			orderId: orderId || 'unknown',
+			galleryId: errorGalleryId,
+			orderId: errorOrderId,
 			errorName: error.name,
 			errorMessage: error.message,
 			durationSeconds: Math.round(durationMs / 1000)
@@ -1473,27 +1550,27 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		
 		// Clear ZIP generating flag if we got far enough to set it
 		const ordersTable = envProc?.env?.ORDERS_TABLE as string;
-		if (ordersTable && galleryId && orderId) {
+		if (ordersTable && errorGalleryId !== 'unknown' && errorOrderId !== 'unknown') {
 			try {
-				const updateExpr = isFinal
+				const updateExpr = errorIsFinal
 					? 'REMOVE finalZipGenerating, finalZipGeneratingSince'
 					: 'REMOVE zipGenerating, zipGeneratingSince';
 				await ddb.send(new UpdateCommand({
 					TableName: ordersTable,
-					Key: { galleryId, orderId },
+					Key: { galleryId: errorGalleryId, orderId: errorOrderId },
 					UpdateExpression: updateExpr
 				}));
-				logger?.info(`Cleared ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after early failure`, { 
-					galleryId, 
-					orderId,
-					isFinal
+				logger?.info(`Cleared ${errorIsFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after early failure`, { 
+					galleryId: errorGalleryId, 
+					orderId: errorOrderId,
+					isFinal: errorIsFinal
 				});
 			} catch (clearErr: any) {
-				logger?.error(`Failed to clear ${isFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after early error`, {
+				logger?.error(`Failed to clear ${errorIsFinal ? 'finalZipGenerating' : 'zipGenerating'} flag after early error`, {
 					error: clearErr.message,
-					galleryId,
-					orderId,
-					isFinal
+					galleryId: errorGalleryId,
+					orderId: errorOrderId,
+					isFinal: errorIsFinal
 				}, clearErr);
 			}
 		}

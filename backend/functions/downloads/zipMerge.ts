@@ -135,6 +135,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		let zipError: Error | null = null;
 		let uploadQueueSize = 0;
 		const MAX_UPLOAD_QUEUE = 5; // Limit concurrent uploads to avoid memory pressure
+		let excessiveBufferWarningLogged = false;
+		let lastExcessiveBufferWarningCount = 0;
 
 		zipfile.outputStream.on('error', (err: Error) => {
 			logger?.error('yazl output stream error', {}, err);
@@ -149,8 +151,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			bufferTotalSize += chunk.length;
 			
 			// Safety check: prevent excessive buffer growth (shouldn't happen, but safeguard)
+			// Log only once when first exceeded, then periodically (every 500 chunks) to avoid log spam
 			if (bufferChunks.length > 1000) {
-				logger?.warn('Excessive buffer chunks', { count: bufferChunks.length, bufferTotalSize });
+				if (!excessiveBufferWarningLogged) {
+					logger?.warn('Excessive buffer chunks detected', { 
+						count: bufferChunks.length, 
+						bufferTotalSize,
+						note: 'This may be normal for large files. Will log periodically if condition persists.'
+					});
+					excessiveBufferWarningLogged = true;
+					lastExcessiveBufferWarningCount = bufferChunks.length;
+				} else if (bufferChunks.length - lastExcessiveBufferWarningCount >= 500) {
+					// Log periodically every 500 chunks to monitor if condition persists
+					logger?.warn('Excessive buffer chunks (periodic check)', { 
+						count: bufferChunks.length, 
+						bufferTotalSize 
+					});
+					lastExcessiveBufferWarningCount = bufferChunks.length;
+				}
 			}
 			
 			// Upload parts when we have enough data, but limit concurrent uploads
