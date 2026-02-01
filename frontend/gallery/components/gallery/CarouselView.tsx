@@ -84,7 +84,9 @@ export function CarouselView({
           const imageUrl = image.previewUrl || image.bigThumbUrl || image.thumbnailUrl || image.url;
           // Best available; original never exposed in gallery app
           const fullImageUrl = image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
-          const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
+          // Carousel bottom thumbnails: thumb (CloudFront) → bigthumb (CloudFront) → preview (CloudFront)
+          // S3 presigned URLs fetched on-demand per image if CloudFront fails (handled by LightGalleryWrapper error handler)
+          const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.previewUrl || image.url;
 
           return (
             <div

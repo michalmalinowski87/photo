@@ -312,6 +312,72 @@ export function LightGalleryWrapper({
         imagesLengthRef.current = imagesRef.current.length;
         isGalleryReadyRef.current = true;
         
+        // Monitor thumbnail loading failures in lightGallery and fetch presigned URLs on-demand
+        const monitorThumbnailErrors = async () => {
+          const thumbnails = document.querySelectorAll('.lg-thumb-item img');
+          
+          // Import API utilities for fetching presigned URLs
+          const { apiFetch } = await import('@/lib/api');
+          const { getPublicApiUrl } = await import('@/lib/public-env');
+          const { getToken } = await import('@/lib/token');
+          
+          thumbnails.forEach(async (thumb, idx) => {
+            const img = thumb as HTMLImageElement;
+            const imageData = imagesRef.current[idx];
+            
+            // Check if thumbnail failed to load - try presigned URLs on-demand: thumb → bigthumb → preview
+            const handleThumbnailError = async () => {
+              if (!imageData?.key || !galleryId) return;
+              
+              try {
+                const API_URL = getPublicApiUrl();
+                const token = getToken(galleryId);
+                if (!token) return;
+                
+                // Try thumb → bigthumb → preview presigned URLs (on-demand fallback)
+                const sizesToTry = ['thumb', 'bigthumb', 'preview'];
+                for (const size of sizesToTry) {
+                  try {
+                    const url = `${API_URL}/galleries/${galleryId}/images/${encodeURIComponent(imageData.key)}/presigned-url?size=${size}`;
+                    const res = await apiFetch(url, {
+                      headers: { Authorization: `Bearer ${token}` },
+                    });
+                    
+                    const presignedUrl = res.data?.thumbUrl || res.data?.bigThumbUrl || res.data?.previewUrl || res.data?.url;
+                    if (presignedUrl && img.src !== presignedUrl) {
+                      img.src = presignedUrl;
+                      return; // Success, stop trying
+                    }
+                  } catch (sizeError) {
+                    // Try next size
+                    continue;
+                  }
+                }
+              } catch (error) {
+                // All fallbacks failed
+              }
+            };
+            
+            if (img.complete && img.naturalWidth === 0) {
+              await handleThumbnailError();
+            }
+            
+            // Add error handler for future failures
+            const errorHandler = async () => {
+              await handleThumbnailError();
+            };
+            img.addEventListener('error', errorHandler, { once: true });
+          });
+        };
+        
+        // Monitor after gallery opens
+        if (containerRef.current) {
+          containerRef.current.addEventListener('lgAfterOpen', () => {
+            setTimeout(monitorThumbnailErrors, 500);
+            setTimeout(monitorThumbnailErrors, 2000); // Check again after 2s
+          });
+        }
+        
         // Mark container as ready so anchor clicks can proceed
         if (containerRef.current) {
           containerRef.current.setAttribute('data-lg-ready', 'true');
@@ -539,7 +605,9 @@ export function LightGalleryWrapper({
             const previewUrl = image.previewUrl || image.url;
             // Best available: original never exposed in gallery app, so use preview
             const fullImageUrl = image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
-            const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
+            // Carousel bottom thumbnails: thumb (CloudFront) → bigthumb (CloudFront) → preview (CloudFront)
+            // S3 presigned URLs fetched on-demand per image if CloudFront fails
+            const carouselThumbUrl = image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.previewUrl || image.url;
             
             return {
               src: fullImageUrl,

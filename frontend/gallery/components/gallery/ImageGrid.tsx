@@ -107,7 +107,10 @@ export function ImageGrid({
           // Best available for lightbox/download; original never exposed in gallery app
           const fullImageUrl = image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
           // Thumbnails for carousel thumbnails strip (bottom of lightGallery)
-          const carouselThumbUrl = image.thumbnailUrl || image.thumbUrl || image.bigThumbUrl || image.url;
+          // thumb (CloudFront) → bigthumb (CloudFront) → preview (CloudFront)
+          // S3 presigned URLs fetched on-demand per image if CloudFront fails
+          const carouselThumbUrl = image.thumbnailUrl || image.thumbUrl || image.bigThumbUrl || image.previewUrl || image.url;
+          
           // Ensure unique key by combining image.key with index (fallback to URL if key is missing)
           const uniqueKey = image.key ? `${image.key}-${index}` : image.previewUrl || image.url || `image-${index}`;
           // Prioritize first 3 images for LCP (increases chance that LCP image has priority)

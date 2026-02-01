@@ -405,19 +405,22 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					? new Date(imageRecord.lastModified).toISOString()
 					: undefined;
 
+				// Only include URLs in response if they exist (don't send null values)
 				const imageItem: Record<string, unknown> = {
 					key: filename, // Original filename (PNG/JPEG)
-					previewUrl,    // CloudFront WebP preview URL (1400px) from previews folder
-					previewUrlFallback, // S3 presigned URL fallback for preview
-					bigThumbUrl,   // CloudFront WebP big thumb URL (600px) from bigthumbs folder
-					bigThumbUrlFallback, // S3 presigned URL fallback for big thumb
-					thumbUrl,      // CloudFront WebP thumb URL (600px) from thumbs folder
-					thumbUrlFallback, // S3 presigned URL fallback for thumb
 					size,
 					lastModified
 				};
+				
+				// Only include URLs if they're not null/undefined
+				if (previewUrl) imageItem.previewUrl = previewUrl;
+				if (previewUrlFallback) imageItem.previewUrlFallback = previewUrlFallback;
+				if (bigThumbUrl) imageItem.bigThumbUrl = bigThumbUrl;
+				if (bigThumbUrlFallback) imageItem.bigThumbUrlFallback = bigThumbUrlFallback;
+				if (thumbUrl) imageItem.thumbUrl = thumbUrl;
+				if (thumbUrlFallback) imageItem.thumbUrlFallback = thumbUrlFallback;
 				// Original URL only for owners. NEVER expose to gallery app (client access).
-				if (!access.isClient) {
+				if (!access.isClient && originalUrl) {
 					imageItem.url = originalUrl; // S3 presigned URL for original (ultimate fallback)
 				}
 				return imageItem;

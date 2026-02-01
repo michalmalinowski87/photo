@@ -348,8 +348,10 @@ export function VirtuosoGridComponent({
           // Best available; original never exposed in gallery app
           const fullImageUrl =
             image.url ?? image.previewUrl ?? image.bigThumbUrl ?? image.thumbnailUrl;
+          // Carousel bottom thumbnails: thumb (CloudFront) → bigthumb (CloudFront) → preview (CloudFront)
+          // S3 presigned URLs fetched on-demand per image if CloudFront fails
           const carouselThumbUrl =
-            image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.url;
+            image.thumbnailUrl || (image as any).thumbUrl || image.bigThumbUrl || image.previewUrl || image.url;
 
           const marbleMaxColumns = containerWidth < 640 ? 2 : containerWidth < 1024 ? 3 : 4;
           const isSingleRowMarble = layout === "marble" && images.length <= marbleMaxColumns;
