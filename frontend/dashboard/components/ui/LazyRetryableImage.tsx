@@ -69,6 +69,7 @@ export const LazyRetryableImage = ({
     urls: string;
     lastModified: string | number | undefined;
   } | null>(null);
+  const previousPreferredSizeRef = useRef<ImageSize | undefined>(preferredSize);
   // Track if we've already handled the load to prevent race conditions
   const loadHandledRef = useRef<boolean>(false);
   // Track current loading state in a ref to avoid stale closures
@@ -160,13 +161,16 @@ export const LazyRetryableImage = ({
       previous.urls === current.urls &&
       lastModifiedMatch;
 
+    // Check if preferred size changed
+    const preferredSizeChanged = previousPreferredSizeRef.current !== preferredSize;
+
     // Only reset if:
     // 1. First time (no previous data)
     // 2. Different image (identifier changed)
     // 3. Image data actually changed (URLs or lastModified changed significantly)
     // 4. Preferred size changed
-    if (isSameImage && previousImageDataRef.current) {
-      // Same image with same data - preserve state, don't reset
+    if (isSameImage && previousImageDataRef.current && !preferredSizeChanged) {
+      // Same image with same data and same preferred size - preserve state, don't reset
       // Only set currentSrc if it's empty (shouldn't happen with useState initializer, but safety check)
       if (!currentSrc) {
         const freshInitialSrc = getInitialImageUrl(imageData, preferredSize);
@@ -177,6 +181,24 @@ export const LazyRetryableImage = ({
       // Update the ref to track current state
       previousImageDataRef.current = current;
       // Don't reset anything - preserve all state including loading/error states
+      return;
+    }
+
+    // Preferred size changed - need to update URL even if image is the same
+    if (isSameImage && preferredSizeChanged) {
+      const freshInitialSrc = getInitialImageUrl(imageData, preferredSize);
+      if (freshInitialSrc && freshInitialSrc !== currentSrc) {
+        setCurrentSrc(freshInitialSrc);
+        fallbackAttemptsRef.current.clear();
+        attemptedSizesRef.current.clear();
+        attemptedSizesRef.current.add(preferredSize);
+        setIsLoading(true);
+        setHasError(false);
+        loadHandledRef.current = false;
+        isLoadingRef.current = true;
+      }
+      previousImageDataRef.current = current;
+      previousPreferredSizeRef.current = preferredSize;
       return;
     }
 
@@ -206,6 +228,7 @@ export const LazyRetryableImage = ({
 
     hasInitializedRef.current = true;
     previousImageDataRef.current = current;
+    previousPreferredSizeRef.current = preferredSize;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageDataSignature, preferredSize]);
 

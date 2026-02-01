@@ -19,6 +19,7 @@ import { type TypedUppyFile } from "../../lib/uppy-config";
 import Button from "../ui/button/Button";
 import { Modal } from "../ui/modal";
 import { Tooltip } from "../ui/tooltip/Tooltip";
+import { ThreeDotsIndicator } from "../ui/loading/Loading";
 
 import { UploadCollisionModal } from "./UploadCollisionModal";
 import { UploadCompletionOverlay } from "./UploadCompletionOverlay";
@@ -963,12 +964,9 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
           {isLoadingKeys && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 rounded-lg">
               <div className="flex flex-col items-center gap-3">
-                <div className="w-10 h-10 border-4 border-brand-500 dark:border-brand-400 border-t-transparent rounded-full animate-spin" />
+                <ThreeDotsIndicator />
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Przygotowywanie listy zdjęć…
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Sprawdzanie istniejących plików (wykrywanie duplikatów)
+                  Ładowanie modułu
                 </p>
               </div>
             </div>
