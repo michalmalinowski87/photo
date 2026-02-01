@@ -22,7 +22,8 @@
     "build": "echo \"Use workspace builds\"",
     "lint": "echo \"Lint in workspaces\"",
     "test": "echo \"Tests run in workspaces\"",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "analyze-gsi": "node scripts/analyze-gsi-usage.mjs"
   },
   "resolutions": {
     "react": "^19.2.1",

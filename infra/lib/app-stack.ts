@@ -270,13 +270,8 @@ export class AppStack extends Stack {
 			partitionKey: { name: 'ownerId', type: AttributeType.STRING },
 			sortKey: { name: 'createdAt', type: AttributeType.STRING }
 		});
-		// GSI for finding DRAFT galleries older than X days (for expiry cleanup)
-		galleries.addGlobalSecondaryIndex({
-			indexName: 'state-createdAt-index',
-			partitionKey: { name: 'state', type: AttributeType.STRING },
-			sortKey: { name: 'createdAt', type: AttributeType.STRING }
-		});
-		
+		// Removed state-createdAt-index: expiry uses Scan with FilterExpression to reduce GSI cost
+
 		// Note: TTL was previously enabled for gallery expiration, but is no longer used
 		// Gallery expiration is now handled by EventBridge Scheduler for precise timing
 
@@ -329,12 +324,8 @@ export class AppStack extends Stack {
 		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 		sortKey: { name: 'status', type: AttributeType.STRING }
 	});
-	// GSI for finding expired wallet top-ups (status + createdAt, filter by type)
-	transactions.addGlobalSecondaryIndex({
-		indexName: 'status-createdAt-index',
-		partitionKey: { name: 'status', type: AttributeType.STRING },
-		sortKey: { name: 'createdAt', type: AttributeType.STRING }
-	});
+	// Removed status-createdAt-index: expiry uses Scan with FilterExpression to reduce GSI cost
+
 	// GSI for filtering transactions by status and type for a user
 	// Uses composite sort key: "STATUS#TYPE" (e.g., "UNPAID#WALLET_TOPUP")
 	// NOTE: This requires adding statusType field to transactions (composite: "STATUS#TYPE")
@@ -2157,6 +2148,34 @@ export class AppStack extends Stack {
 		new Rule(this, 'TransactionExpirySchedule', {
 			schedule: Schedule.rate(Duration.minutes(15)),
 			targets: [new LambdaFunction(transactionExpiryFn)]
+		});
+
+		// CloudWatch alarm for transaction expiry Lambda errors (post-GSI removal monitoring)
+		new Alarm(this, 'TransactionExpiryErrorsAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-TransactionExpiry-Errors`,
+			alarmDescription: 'Alert when transaction expiry check Lambda reports errors (monitors Scan-based expiry post-GSI removal)',
+			metric: transactionExpiryFn.metricErrors({
+				statistic: Statistic.SUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 1,
+			evaluationPeriods: 1,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			treatMissingData: TreatMissingData.NOT_BREACHING
+		});
+
+		// CloudWatch alarm for transaction expiry duration > 4 min (timeout is 5 min)
+		new Alarm(this, 'TransactionExpiryDurationAlarm', {
+			alarmName: `PhotoCloud-${props.stage}-TransactionExpiry-Duration`,
+			alarmDescription: 'Alert when transaction expiry check Lambda duration exceeds 4 minutes (possible Scan performance issue)',
+			metric: transactionExpiryFn.metricDuration({
+				statistic: Statistic.MAXIMUM,
+				period: Duration.minutes(5)
+			}),
+			threshold: 240000, // 4 minutes in ms
+			evaluationPeriods: 2,
+			comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+			treatMissingData: TreatMissingData.NOT_BREACHING
 		});
 
 		// ZIP cleanup: No longer needed

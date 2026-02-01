@@ -1,6 +1,6 @@
 import { lambdaLogger } from '../../../packages/logger/src';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { listTransactionsByUser, updateTransactionStatus } from '../../lib/src/transactions';
 import { cancelExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -41,14 +41,13 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// Query galleries with DRAFT state older than 3 days
 		// Then check if they have unpaid transactions
+		// Uses Scan with FilterExpression (no GSI state-createdAt-index) to reduce cost
 		if (galleriesTable) {
-			// Use GSI to efficiently query DRAFT galleries older than 3 days
 			let lastEvaluatedKey: any = undefined;
 			do {
-				const queryResult = await ddb.send(new QueryCommand({
+				const scanResult = await ddb.send(new ScanCommand({
 					TableName: galleriesTable,
-					IndexName: 'state-createdAt-index',
-					KeyConditionExpression: '#state = :s AND createdAt < :cutoff',
+					FilterExpression: '#state = :s AND createdAt < :cutoff',
 					ExpressionAttributeValues: {
 						':s': 'DRAFT',
 						':cutoff': cutoffDateISO
@@ -60,7 +59,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					Limit: 100
 				}));
 
-				const draftGalleries = queryResult.Items || [];
+				const draftGalleries = scanResult.Items || [];
 				
 				for (const gallery of draftGalleries) {
 					const galleryId = gallery.galleryId;
@@ -68,12 +67,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					
 					// Check if gallery has unpaid transaction
 					try {
-						const unpaidTransactions = await listTransactionsByUser(ownerId, {
+						const unpaidResult = await listTransactionsByUser(ownerId, {
 							type: 'GALLERY_PLAN',
 							status: 'UNPAID'
 						});
 						
-						const unpaidTx = unpaidTransactions.find((tx: any) => 
+						const unpaidTx = unpaidResult.transactions.find((tx: any) => 
 							tx.galleryId === galleryId && 
 							new Date(tx.createdAt) < cutoffDate
 						);
@@ -146,22 +145,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}
 				}
 				
-				lastEvaluatedKey = queryResult.LastEvaluatedKey;
+				lastEvaluatedKey = scanResult.LastEvaluatedKey;
 			} while (lastEvaluatedKey);
 		}
 
 		// Check for expired wallet top-up transactions (15 minutes)
+		// Uses Scan with FilterExpression (no GSI status-createdAt-index) to reduce cost
 		if (transactionsTable) {
 			try {
-				// Use GSI to efficiently query UNPAID transactions older than 15 minutes
-				// Then filter by type in memory (or use FilterExpression)
 				let lastEvaluatedKey: any = undefined;
 				do {
-					const queryParams: any = {
+					const scanParams: any = {
 						TableName: transactionsTable,
-						IndexName: 'status-createdAt-index',
-						KeyConditionExpression: '#status = :status AND createdAt < :cutoff',
-						FilterExpression: '#type = :type',
+						FilterExpression: '#status = :status AND createdAt < :cutoff AND #type = :type',
 						ExpressionAttributeNames: {
 							'#status': 'status',
 							'#type': 'type'
@@ -170,14 +166,15 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 							':status': 'UNPAID',
 							':cutoff': walletTopupCutoffDateISO,
 							':type': 'WALLET_TOPUP'
-						}
+						},
+						Limit: 100
 					};
 					if (lastEvaluatedKey) {
-						queryParams.ExclusiveStartKey = lastEvaluatedKey;
+						scanParams.ExclusiveStartKey = lastEvaluatedKey;
 					}
-					
-					const queryResult = await ddb.send(new QueryCommand(queryParams));
-					const unpaidTopups = queryResult.Items || [];
+
+					const scanResult = await ddb.send(new ScanCommand(scanParams));
+					const unpaidTopups = scanResult.Items || [];
 					
 					for (const tx of unpaidTopups) {
 						// All transactions in result are already older than cutoff, so process them all
@@ -193,7 +190,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						});
 					}
 					
-					lastEvaluatedKey = queryResult.LastEvaluatedKey;
+					lastEvaluatedKey = scanResult.LastEvaluatedKey;
 				} while (lastEvaluatedKey);
 			} catch (topupErr: any) {
 				logger?.error('Failed to check wallet top-up transactions expiry', {
