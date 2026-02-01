@@ -468,9 +468,7 @@ export function DashboardVirtuosoGrid({
     return (
       <div className="flex flex-col items-center justify-center gap-3 h-64">
         <ThreeDotsIndicator />
-        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Ładowanie zdjęć...
-        </p>
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Ładowanie zdjęć...</p>
       </div>
     );
   }
@@ -527,9 +525,7 @@ export function DashboardVirtuosoGrid({
       {isFetchingNextPage && (
         <div className="flex flex-col items-center justify-center gap-3 py-10">
           <ThreeDotsIndicator />
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-            Ładowanie zdjęć...
-          </p>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Ładowanie zdjęć...</p>
         </div>
       )}
     </div>

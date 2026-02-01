@@ -3,12 +3,7 @@ import imageCompression from "browser-image-compression";
 
 import api from "./api-service";
 import { getWatermarkConfig, type WatermarkConfig } from "./watermark-resolver";
-import {
-  applyDefaultWatermark,
-  applyDefaultWatermarkFullCover,
-  applyWatermark,
-  applyFullCoverWatermark,
-} from "./watermark-utils";
+import { applyWatermark, applyFullCoverWatermark } from "./watermark-utils";
 
 /**
  * Custom Uppy plugin to upload three-tier optimized images to S3
@@ -98,10 +93,9 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
    * - Small originals (<2MB): Maintain quality (already small files)
    *
    * @param fileSizeMB - Original file size in MB
-   * @param type - Image type: 'preview' or 'bigthumb'
-   * @returns Quality value between 0.80-0.92
+   * @returns Quality value between 0.85-0.92
    */
-  private calculateAdaptiveQuality(fileSizeMB: number, type: "preview"): number {
+  private calculateAdaptiveQuality(fileSizeMB: number): number {
     // Preview quality ranges: 0.85-0.92
     // Target: 0.8-1.2MB per preview
     if (fileSizeMB > 20) {
@@ -167,32 +161,23 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
         return;
       }
 
-      // Apply watermarks if configured.
-      // Preview: always watermarked (tiled/default). Thumb/bigThumb: only when watermarkThumbnails is true (one full-cover watermark).
+      // Apply watermarks only if explicitly configured.
+      // If watermarkConfig is null, no watermark is applied (respecting user's choice to not use watermarks).
+      // Preview: watermarked when configured. Thumb/bigThumb: only when watermarkThumbnails is true (one full-cover watermark).
       let finalPreview = preview;
       let finalBigThumb = bigThumb;
       let finalThumbnail = thumbnailBlob;
 
-      if (watermarkConfig) {
+      if (watermarkConfig?.url) {
         const watermarkThumbnails = watermarkConfig.watermarkThumbnails ?? false;
         try {
-          if (watermarkConfig.isDefault) {
-            finalPreview = await applyDefaultWatermark(preview);
-            if (watermarkThumbnails) {
-              [finalBigThumb, finalThumbnail] = await Promise.all([
-                applyDefaultWatermarkFullCover(bigThumb),
-                applyDefaultWatermarkFullCover(thumbnailBlob),
-              ]);
-            }
-          } else if (watermarkConfig.url) {
-            const opacity = watermarkConfig.opacity ?? 0.7;
-            finalPreview = await applyWatermark(preview, watermarkConfig.url, opacity);
-            if (watermarkThumbnails) {
-              [finalBigThumb, finalThumbnail] = await Promise.all([
-                applyFullCoverWatermark(bigThumb, watermarkConfig.url, opacity),
-                applyFullCoverWatermark(thumbnailBlob, watermarkConfig.url, opacity),
-              ]);
-            }
+          const opacity = watermarkConfig.opacity ?? 0.7;
+          finalPreview = await applyWatermark(preview, watermarkConfig.url, opacity);
+          if (watermarkThumbnails) {
+            [finalBigThumb, finalThumbnail] = await Promise.all([
+              applyFullCoverWatermark(bigThumb, watermarkConfig.url, opacity),
+              applyFullCoverWatermark(thumbnailBlob, watermarkConfig.url, opacity),
+            ]);
           }
         } catch (error) {
           console.error("Failed to apply watermark:", error);
@@ -365,7 +350,7 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
     try {
       // Calculate adaptive quality based on original file size
       const fileSizeMB = fileWithMeta.data.size / (1024 * 1024);
-      const quality = this.calculateAdaptiveQuality(fileSizeMB, "preview");
+      const quality = this.calculateAdaptiveQuality(fileSizeMB);
 
       // Use browser-image-compression to generate 2800px preview (2x quality improvement)
       // Optimized for full-screen quality viewing:

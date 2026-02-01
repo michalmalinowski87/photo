@@ -3,7 +3,7 @@
  * Determines which watermark to use based on fallback chain:
  * 1. Gallery-specific watermark
  * 2. User default watermark
- * 3. System default watermark (generated "PREVIEW" SVG)
+ * Returns null if no watermark is configured (no system default watermark is provided)
  */
 
 import type { Gallery } from "../types";
@@ -32,7 +32,10 @@ export interface UserWatermarkConfig {
 
 /**
  * Get watermark configuration with fallback chain.
- * Returns null when gallery explicitly chose "No Watermark" (pattern "none") — we honour that and do not use global.
+ * Returns null when:
+ * - Gallery explicitly chose "No Watermark" (pattern "none") — we honour that and do not use global
+ * - No watermark is configured at all (no gallery watermark, no user default watermark)
+ * We do not provide any system-generated default watermark.
  */
 export function getWatermarkConfig(
   gallery: Gallery | null | undefined,
@@ -76,10 +79,6 @@ export function getWatermarkConfig(
     };
   }
 
-  // Priority 3: System default watermark (generated "PREVIEW" SVG)
-  return {
-    opacity: 0.3, // Not used for default watermark (uses multiply blend mode)
-    isDefault: true,
-    watermarkThumbnails,
-  };
+  // No watermark configured - return null (no system default watermark)
+  return null;
 }

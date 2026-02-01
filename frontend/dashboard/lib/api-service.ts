@@ -1663,7 +1663,6 @@ class ApiService {
       return await this._request("/dashboard/stats");
     },
 
-
     /**
      * Get Lambda memory metrics
      */

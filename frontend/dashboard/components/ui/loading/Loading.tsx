@@ -3,7 +3,11 @@ import { createPortal } from "react-dom";
 
 /** Themed three-dots loading indicator (used in FullPageLoading, ContentAreaLoadingOverlay, etc.) */
 export const ThreeDotsIndicator = ({ className = "" }: { className?: string }) => (
-  <div className={`flex items-center justify-center gap-1.5 ${className}`} role="status" aria-label="Ładowanie">
+  <div
+    className={`flex items-center justify-center gap-1.5 ${className}`}
+    role="status"
+    aria-label="Ładowanie"
+  >
     <div
       className="w-2 h-2 rounded-full bg-photographer-accent dark:bg-photographer-accent opacity-80 animate-pulse"
       style={{ animationDelay: "0ms" }}

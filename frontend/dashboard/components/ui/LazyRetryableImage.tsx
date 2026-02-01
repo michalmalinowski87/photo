@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 
+import api from "../../lib/api-service";
 import {
   ImageFallbackUrls,
   ImageSize,
@@ -8,7 +9,6 @@ import {
   isCloudFrontUrl,
 } from "../../lib/image-fallback";
 import { imageFallbackThrottler } from "../../lib/image-fallback-throttler";
-import api from "../../lib/api-service";
 
 interface LazyRetryableImageProps {
   imageData: ImageFallbackUrls & {
