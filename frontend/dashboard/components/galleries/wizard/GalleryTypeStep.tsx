@@ -91,7 +91,7 @@ export const GalleryTypeStep = ({
                     : "text-gray-900 dark:text-white"
                 }`}
               >
-                Bez wyboru
+                Bez wyboru klienta
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 Klient otrzyma wszystkie zdjęcia bez możliwości wyboru

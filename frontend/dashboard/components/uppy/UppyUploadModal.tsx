@@ -17,9 +17,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useUppyUpload, type UseUppyUploadConfig } from "../../hooks/useUppyUpload";
 import { type TypedUppyFile } from "../../lib/uppy-config";
 import Button from "../ui/button/Button";
+import { ThreeDotsIndicator } from "../ui/loading/Loading";
 import { Modal } from "../ui/modal";
 import { Tooltip } from "../ui/tooltip/Tooltip";
-import { ThreeDotsIndicator } from "../ui/loading/Loading";
 
 import { UploadCollisionModal } from "./UploadCollisionModal";
 import { UploadCompletionOverlay } from "./UploadCompletionOverlay";

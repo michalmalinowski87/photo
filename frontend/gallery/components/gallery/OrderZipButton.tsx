@@ -19,12 +19,22 @@ interface OrderZipButtonProps {
   zipStatus?: ZipStatus;
   onDownloadZip: () => void;
   disabled?: boolean;
+  className?: string;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+  buttonRef?: (el: HTMLButtonElement | null) => void;
+  isHovered?: boolean;
 }
 
 export function OrderZipButton({
   zipStatus,
   onDownloadZip,
   disabled = false,
+  className = "",
+  onMouseEnter,
+  onMouseLeave,
+  buttonRef,
+  isHovered = false,
 }: OrderZipButtonProps) {
   const hasError = zipStatus?.status === "error";
   const zipCtaText = hasError
@@ -42,8 +52,23 @@ export function OrderZipButton({
     ? "Generowanie ZIP"
     : "Przygotowywanie ZIP";
 
+  // Determine color based on state: darker when ready, grey when generating/preparing
+  const getColor = () => {
+    if (hasError) return "#DC2626"; // Red color for error state
+    if (zipStatus?.ready) return "#666666"; // Darker text when ready (POBIERZ ZIP)
+    if (isHovered) return "#666666"; // Darker on hover when generating/preparing
+    return "#AAAAAA"; // Grey-ish when generating/preparing
+  };
+
+  // Determine font weight: bold when ready/error/hovered, medium otherwise
+  const getFontWeight = () => {
+    if (hasError || zipStatus?.ready || isHovered) return "700";
+    return "500";
+  };
+
   return (
     <button
+      ref={buttonRef}
       onClick={() => {
         if (!hasError && !disabled) {
           hapticFeedback('medium');
@@ -51,14 +76,14 @@ export function OrderZipButton({
         }
       }}
       disabled={hasError || disabled}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className={`relative h-[44px] py-2 px-4 uppercase text-sm transition-all touch-manipulation min-w-[44px] flex items-center justify-center whitespace-nowrap gap-2 ${
         hasError || disabled ? "cursor-not-allowed opacity-50" : ""
-      }`}
+      } ${className}`}
       style={{
-        color: hasError
-          ? "#DC2626" // Red color for error state
-          : "#666666",
-        fontWeight: "700",
+        color: getColor(),
+        fontWeight: getFontWeight(),
         letterSpacing: "0.05em",
       }}
       aria-label={zipCtaAriaLabel}

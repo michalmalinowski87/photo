@@ -288,20 +288,42 @@ const CreateGalleryWizard = ({
           isValid = false;
         }
         break;
-      case 3:
-        // Check if package is selected OR manual form data exists
-        const hasManualPackageData =
-          (data.packageName?.trim() ?? "") !== "" ||
-          data.includedCount > 0 ||
-          data.packagePriceCents > 0;
+      case 3: {
+        const isNonSelectionGallery = data.selectionEnabled === false;
+        // For non-selection galleries: only packagePriceCents matters
+        // For selection galleries: package selected OR manual form data
+        const hasManualPackageData = isNonSelectionGallery
+          ? data.packagePriceCents > 0
+          : (data.packageName?.trim() ?? "") !== "" ||
+            data.includedCount > 0 ||
+            data.packagePriceCents > 0;
 
         if (!data.selectedPackageId && !hasManualPackageData) {
-          errors.selectedPackageId = "Wybierz pakiet lub wprowadź dane pakietu ręcznie";
+          errors.selectedPackageId = isNonSelectionGallery
+            ? "Wprowadź cenę usługi"
+            : "Wybierz pakiet lub wprowadź dane pakietu ręcznie";
           isValid = false;
         }
 
         // If package is selected, no need to validate form fields
         if (data.selectedPackageId) {
+          break;
+        }
+
+        // Non-selection galleries: includedCount and extraPriceCents must be 0
+        if (isNonSelectionGallery) {
+          if (
+            data.packagePriceCents === undefined ||
+            data.packagePriceCents === null ||
+            data.packagePriceCents <= 0
+          ) {
+            errors.packagePriceCents = "Cena usługi jest wymagana";
+            isValid = false;
+          }
+          if (data.initialPaymentAmountCents < 0) {
+            errors.initialPaymentAmountCents = "Kwota wpłacona nie może być ujemna";
+            isValid = false;
+          }
           break;
         }
 
@@ -347,6 +369,7 @@ const CreateGalleryWizard = ({
           isValid = false;
         }
         break;
+      }
       case 4:
         // Password is always required for wizard continuation (gallery access)
         // but NOT required for saving client (passwords aren't saved with client data)
@@ -614,6 +637,7 @@ const CreateGalleryWizard = ({
       case 3:
         return (
           <PackageStep
+            selectionEnabled={data.selectionEnabled ?? false}
             existingPackages={existingPackages}
             selectedPackageId={data.selectedPackageId}
             packageName={data.packageName}

@@ -19,6 +19,7 @@ interface Package {
 }
 
 interface PackageStepProps {
+  selectionEnabled?: boolean;
   existingPackages: Package[];
   selectedPackageId?: string;
   packageName?: string;
@@ -66,6 +67,7 @@ interface PackageStepProps {
 }
 
 export const PackageStep = ({
+  selectionEnabled = true,
   existingPackages,
   selectedPackageId,
   packageName,
@@ -90,6 +92,20 @@ export const PackageStep = ({
   const [isFormMode, setIsFormMode] = useState(false);
 
   const formatPriceInput = formatCurrencyInput;
+  const isNonSelectionGallery = selectionEnabled === false;
+
+  // Auto-set includedCount and extraPriceCents to 0 for non-selection galleries
+  useEffect(() => {
+    if (isNonSelectionGallery) {
+      onDataChange({
+        includedCount: 0,
+        extraPriceCents: 0,
+        photoBookCount: 0,
+        photoPrintCount: 0,
+      });
+      onExtraPriceInputChange(null);
+    }
+  }, [isNonSelectionGallery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check if current form values match any existing package exactly (excluding name if empty)
   const isDuplicatePackage = useMemo(() => {
@@ -166,6 +182,97 @@ export const PackageStep = ({
     packagePriceCents,
     isFormMode,
   ]);
+
+  // Non-selection gallery: simplified payment-focused UI (early return after all hooks)
+  if (isNonSelectionGallery) {
+    const packagePriceCentsForStatus = packagePriceCents ?? 0;
+    const paymentStatus =
+      packagePriceCentsForStatus === 0
+        ? "UNPAID"
+        : initialPaymentAmountCents === 0
+          ? "UNPAID"
+          : initialPaymentAmountCents >= packagePriceCentsForStatus
+            ? "PAID"
+            : "PARTIALLY_PAID";
+
+    return (
+      <div className="w-full mt-[150px]">
+        <div className="mb-8 md:mb-12">
+          <div className="text-2xl md:text-3xl font-medium text-photographer-heading dark:text-white mb-2">
+            Czy usługa jest już opłacona
+          </div>
+          <p className="text-base text-photographer-mutedText dark:text-gray-400 italic">
+            Wpisz kwotę jaką zapłacił klient za usługę lub pozostaw puste
+          </p>
+        </div>
+        <div className="space-y-6">
+            <div>
+              <TypeformInput
+                type="text"
+                label="Cena usługi (PLN) *"
+                placeholder="0.00"
+                value={packagePriceInput ?? centsToPlnString(packagePriceCents)}
+                onChange={(e) => {
+                  const formatted = formatPriceInput(e.target.value);
+                  onPackagePriceInputChange(formatted);
+                  onDataChange({ packagePriceCents: plnToCents(formatted) });
+                }}
+                onBlur={() => {
+                  if (!packagePriceInput || packagePriceInput === "") {
+                    onPackagePriceInputChange(null);
+                  }
+                }}
+                error={!!fieldErrors.packagePriceCents}
+                errorMessage={fieldErrors.packagePriceCents}
+              />
+            </div>
+            <div>
+              <TypeformInput
+                type="text"
+                label="Kwota wpłacona przez klienta (PLN)"
+                placeholder="0.00"
+                value={paymentAmountInput ?? centsToPlnString(initialPaymentAmountCents)}
+                onChange={(e) => {
+                  const formatted = formatPriceInput(e.target.value);
+                  onPaymentAmountInputChange(formatted);
+                  onDataChange({
+                    initialPaymentAmountCents: plnToCents(formatted),
+                  });
+                }}
+                onBlur={() => {
+                  if (!paymentAmountInput || paymentAmountInput === "") {
+                    onPaymentAmountInputChange(null);
+                  }
+                }}
+                error={!!fieldErrors.initialPaymentAmountCents}
+                errorMessage={fieldErrors.initialPaymentAmountCents}
+              />
+              <div className="flex items-center gap-3 mt-3">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Status płatności:
+                </span>
+                <Badge
+                  color={
+                    paymentStatus === "PAID"
+                      ? "success"
+                      : paymentStatus === "PARTIALLY_PAID"
+                        ? "warning"
+                        : "error"
+                  }
+                  variant="light"
+                >
+                  {paymentStatus === "PAID"
+                    ? "Opłacone"
+                    : paymentStatus === "PARTIALLY_PAID"
+                      ? "Częściowo opłacone"
+                      : "Nieopłacone"}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+    );
+  }
 
   // Selector mode - step2-style layout
   if (!isFormMode) {
