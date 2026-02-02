@@ -5,7 +5,7 @@ import { CognitoIdentityProviderClient, SignUpCommand, ResendConfirmationCodeCom
 import { getRequiredConfigValue } from '../../../lib/src/ssm-config';
 import { getCompanyConfig } from '../../../lib/src/company-config';
 import { getSenderEmail } from '../../../lib/src/email-config';
-import { createWelcomeEmail } from '../../../lib/src/email';
+import { createWelcomeEmail, createReferralProgramInfoEmail } from '../../../lib/src/email';
 import { sendRawEmailWithAttachments } from '../../../lib/src/raw-email';
 
 const router = Router();
@@ -840,9 +840,28 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 			});
 			logger?.info('Welcome email sent', { email: normalizedEmail });
 		}
-	} catch (err: any) {
-		logger?.warn('Welcome email failed', { email: normalizedEmail, errorName: err?.name, errorMessage: err?.message });
-	}
+		} catch (err: any) {
+			logger?.warn('Welcome email failed', { email: normalizedEmail, errorName: err?.name, errorMessage: err?.message });
+		}
+
+		// 2.7) Second email: referral program info (no code – user not eligible yet). Polish.
+		try {
+			const senderForRef = await getSenderEmail();
+			const dashboardUrlForRef = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+			const templateRef = createReferralProgramInfoEmail({ dashboardUrl: dashboardUrlForRef });
+			if (senderForRef) {
+				await sendRawEmailWithAttachments({
+					to: normalizedEmail,
+					from: senderForRef,
+					subject: templateRef.subject,
+					html: templateRef.html || templateRef.text,
+					attachments: []
+				});
+				logger?.info('Referral program info email sent', { email: normalizedEmail });
+			}
+		} catch (err: any) {
+			logger?.warn('Referral program info email failed', { email: normalizedEmail, errorName: err?.name, errorMessage: err?.message });
+		}
 
 	// 3) Best-effort claim subdomain (optional)
 	const subdomain = normalizeSubdomain(rawSubdomain);

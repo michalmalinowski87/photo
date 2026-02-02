@@ -841,6 +841,7 @@ export function createWelcomeEmail(params: {
 	const content = `
 		${createHeading("Witaj w PhotoCloud!", 2)}
 		${createParagraph("Twoje konto zostało pomyślnie utworzone. Cieszymy się, że jesteś z nami!")}
+		${createParagraph("W podziękowaniu zostawiliśmy w Twoim portfelu mały prezent powitalny — wystarczy na pierwszą galerię. To nasz sposób, by powiedzieć: Dziękujemy za Twój czas!")}
 
 		${createHeading("Pierwsze kroki", 2)}
 		${createParagraphHtml(`
@@ -855,7 +856,7 @@ export function createWelcomeEmail(params: {
 		${createHeading("Dokumenty i ochrona danych", 2)}
 		<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; border-radius: 12px; padding: 20px; margin: 20px 0;">
 			<p style="margin: 0 0 12px 0; font-size: 15px; color: ${COLORS.text.body}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-				Administratorem danych jest <strong>${escapeHtml(companyName)}</strong>. Szczegóły znajdziesz w dokumentach poniżej.
+				Administratorem danych jest <strong>PhotoCloud</strong>. Szczegóły znajdziesz w dokumentach poniżej.
 			</p>
 			<p style="margin: 0; font-size: 14px; line-height: 1.8; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
 				<a href="${escapeHtml(termsUrl)}" style="color: ${COLORS.brand.accent}; text-decoration: none; font-weight: 600;">Regulamin</a><br>
@@ -869,14 +870,152 @@ export function createWelcomeEmail(params: {
 		text:
 			`Witaj w PhotoCloud!\n\n` +
 			`Twoje konto zostało pomyślnie utworzone.\n\n` +
+			`W podziękowaniu zostawiliśmy w Twoim portfelu mały prezent powitalny — wystarczy na pierwszą galerię. To nasz sposób, by powiedzieć: Dziękujemy za Twój czas!\n\n` +
 			`Pierwsze kroki:\n` +
 			`1) Zaloguj się do panelu\n` +
 			`2) Utwórz pierwszą galerię\n` +
 			`3) Wyślij klientowi link\n\n` +
 			`Panel: ${dashboardUrl}/login\n\n` +
-			`Administratorem danych jest ${companyName}.\n` +
+			`Administratorem danych jest PhotoCloud.\n` +
 			`Regulamin: ${termsUrl}\n` +
 			`Polityka Prywatności/RODO: ${privacyUrl}\n`,
+		html: createEmailWrapper(content),
+	};
+}
+
+/** Second email: referral program info (no code – user not eligible yet). Polish. */
+export function createReferralProgramInfoEmail(params: { dashboardUrl: string }): EmailTemplate {
+	const dashboardUrl = params.dashboardUrl.replace(/\/+$/, '');
+	const content = `
+		${createHeading('Zaproszenia i nagrody', 2)}
+		${createParagraph('W programie „Zaproszenia i nagrody” zapraszasz znajomych do PhotoCloud. Gdy zaproszona osoba opłaci pierwszą galerię (z Twoim kodem), otrzymasz kod rabatowy na kolejne galerie. Swój unikalny link i kod dostaniesz w panelu po opłaceniu przez Ciebie pierwszej galerii (nie tylko z bonusu powitalnego).')}
+		${createHeading('Tabela nagród', 2)}
+		<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-collapse: collapse; margin: 16px 0; font-size: 15px; color: ${COLORS.text.body}; font-family: Outfit, Inter, sans-serif;">
+			<thead>
+				<tr style="border-bottom: 2px solid ${COLORS.surface.border};">
+					<th style="text-align: left; padding: 10px 12px 8px 0;">Liczba opłaconych zaproszeń*</th>
+					<th style="text-align: left; padding: 10px 12px 8px 0;">Nagroda dla Ciebie</th>
+					<th style="text-align: left; padding: 10px 12px 8px 0;">Nagrody dla osoby poleconej</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr style="border-bottom: 1px solid ${COLORS.surface.border};">
+					<td style="padding: 10px 12px 10px 0;">1</td>
+					<td style="padding: 10px 12px 10px 0;">Kod rabatowy 10%</td>
+					<td style="padding: 10px 12px 10px 0;">10% zniżki na pierwszą galerię</td>
+				</tr>
+				<tr style="border-bottom: 1px solid ${COLORS.surface.border};">
+					<td style="padding: 10px 12px 10px 0;">3</td>
+					<td style="padding: 10px 12px 10px 0;">Darmowa galeria 1 GB</td>
+					<td style="padding: 10px 12px 10px 0;">10% zniżki na pierwszą galerię</td>
+				</tr>
+				<tr>
+					<td style="padding: 10px 12px 10px 0;">10 lub więcej</td>
+					<td style="padding: 10px 12px 10px 0;">Doładowanie portfela za 20 PLN** + odznaka Top Inviter</td>
+					<td style="padding: 10px 12px 10px 0;">15% zniżki na pierwszą galerię</td>
+				</tr>
+			</tbody>
+		</table>
+		<p style="margin: 0 0 16px 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6;">* Liczba osób, które zaprosiłeś i które opłaciły swoją pierwszą galerię (płatność realna, nie tylko z bonusu powitalnego).<br/>** 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie.</p>
+		${createParagraph('Swój link i kod zobaczysz w panelu po opłaceniu pierwszej galerii.')}
+		<div style="margin: 20px 0 0 0; padding: 12px 16px; background-color: ${COLORS.surface.elevated}; border-radius: 8px; font-size: 12px; color: ${COLORS.text.muted}; line-height: 1.6;">
+			<strong style="color: ${COLORS.text.body};">Ograniczenia:</strong>
+			<ul style="margin: 8px 0 0 0; padding-left: 20px;">
+				<li style="margin-bottom: 4px;">Kody są ważne na plany 1 GB i 3 GB (1 lub 3 miesiące), nie na plany 12-miesięczne ani 10 GB.</li>
+				<li style="margin-bottom: 4px;">Kody są ważne przez 6 miesięcy.</li>
+				<li style="margin-bottom: 4px;">Kody są jednorazowe.</li>
+				<li style="margin-bottom: 4px;">Nie można łączyć z innymi promocjami.</li>
+			</ul>
+		</div>
+		${createButton('Przejdź do panelu', dashboardUrl, 'primary')}
+	`;
+	return {
+		subject: 'Zaproszenia i nagrody — zdobądź kody rabatowe',
+		text:
+			'Zaproszenia i nagrody\n\n' +
+			'W programie zapraszasz znajomych; gdy opłacą pierwszą galerię (z Twoim kodem), Ty dostajesz kod rabatowy. Swój link otrzymasz w panelu po opłaceniu pierwszej galerii.\n\n' +
+			'Tabela nagród (* = liczba zaproszonych osób, które opłaciły pierwszą galerię):\n' +
+			'1 – Kod rabatowy 10% (osoba polecona: 10% zniżki)\n3 – Darmowa galeria 1 GB (osoba polecona: 10% zniżki)\n10+ – Doładowanie portfela za 20 PLN** + odznaka Top Inviter (osoba polecona: 15% zniżki)\n** 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie.\n\n' +
+			'Ograniczenia:\n• Kody są ważne na plany 1 GB i 3 GB (1 lub 3 miesiące), nie na plany 12-miesięczne ani 10 GB\n• Kody są ważne przez 6 miesięcy\n• Kody są jednorazowe\n• Nie można łączyć z innymi promocjami\n\n' +
+			`Panel: ${dashboardUrl}\n`,
+		html: createEmailWrapper(content),
+	};
+}
+
+/** Eligibility email: user just became eligible – send their referral code and link. Polish. */
+export function createEligibilityEmail(params: {
+	referralCode: string;
+	referralLink: string;
+	dashboardUrl: string;
+}): EmailTemplate {
+	const { referralCode, referralLink, dashboardUrl } = params;
+	const content = `
+		${createHeading('Twój link zaproszenia jest gotowy', 2)}
+		${createParagraph('Opłaciłeś pierwszą galerię – możesz teraz zapraszać znajomych i zdobywać kody rabatowe.')}
+		<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; border-radius: 12px; padding: 20px; margin: 20px 0;">
+			<p style="margin: 0 0 8px 0; font-size: 14px; color: ${COLORS.text.muted}; font-family: Outfit, Inter, sans-serif;">Twój kod:</p>
+			<p style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: ${COLORS.text.heading}; font-family: monospace;">${escapeHtml(referralCode)}</p>
+			<p style="margin: 0; font-size: 14px; color: ${COLORS.text.muted}; word-break: break-all;">${escapeHtml(referralLink)}</p>
+		</div>
+		${createParagraph('Udostępnij link znajomym. Gdy opłacą pierwszą galerię (z kodem), otrzymasz kod rabatowy.')}
+		${createButton('Otwórz panel', dashboardUrl.replace(/\/+$/, ''), 'primary')}
+	`;
+	return {
+		subject: 'Twój link zaproszenia — PhotoCloud',
+		text: `Twój link zaproszenia jest gotowy.\n\nKod: ${referralCode}\nLink: ${referralLink}\n\nPanel: ${dashboardUrl}\n`,
+		html: createEmailWrapper(content),
+	};
+}
+
+/** Referrer reward email: e.g. "Otrzymałeś kod rabatowy 10%". Polish. */
+export function createReferrerRewardEmail(params: {
+	rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln';
+	dashboardUrl: string;
+}): EmailTemplate {
+	const dashboardUrl = params.dashboardUrl.replace(/\/+$/, '');
+	const isWallet = params.rewardType === 'wallet_20pln';
+	const label =
+		params.rewardType === '10_percent'
+			? '10%'
+			: params.rewardType === '15_percent'
+				? '15%'
+				: params.rewardType === 'wallet_20pln'
+					? 'Doładowanie portfela za 20 PLN'
+					: 'darmowa galeria 1 GB';
+	const content = isWallet
+		? `
+		${createHeading('Świetna robota!', 2)}
+		${createParagraph('Ktoś opłacił galerię dzięki Twojemu linkowi. Otrzymałeś doładowanie portfela za 20 PLN* (nagroda za 10. zaproszenie).')}
+		<p style="margin: 0 0 16px 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6;">* 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie.</p>
+		${createParagraph('Sprawdź saldo w panelu w sekcji „Portfel”.')}
+		${createButton('Otwórz panel', dashboardUrl, 'primary')}
+	`
+		: params.rewardType === 'free_small'
+			? `
+		${createHeading('Świetna robota!', 2)}
+		${createParagraph('Ktoś opłacił galerię dzięki Twojemu linkowi. Otrzymałeś nagrodę: darmowa galeria 1 GB.')}
+		${createParagraph('Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.')}
+		${createButton('Otwórz panel', dashboardUrl, 'primary')}
+	`
+			: `
+		${createHeading('Świetna robota!', 2)}
+		${createParagraph(`Ktoś opłacił galerię dzięki Twojemu linkowi. Otrzymałeś kod rabatowy ${label}.`)}
+		${createParagraph('Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.')}
+		${createButton('Otwórz panel', dashboardUrl, 'primary')}
+	`;
+	const subject = isWallet
+		? 'Otrzymałeś doładowanie portfela za 20 PLN — PhotoCloud'
+		: params.rewardType === 'free_small'
+			? 'Otrzymałeś nagrodę: darmowa galeria 1 GB — PhotoCloud'
+			: `Otrzymałeś kod rabatowy ${label} — PhotoCloud`;
+	const textBody = isWallet
+		? `Świetna robota! Otrzymałeś doładowanie portfela za 20 PLN* (nagroda za 10. zaproszenie). * 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie. Sprawdź saldo w panelu.\n\n${dashboardUrl}\n`
+		: params.rewardType === 'free_small'
+			? `Świetna robota! Otrzymałeś nagrodę: darmowa galeria 1 GB. Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.\n\n${dashboardUrl}\n`
+			: `Świetna robota! Otrzymałeś kod rabatowy ${label}. Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.\n\n${dashboardUrl}\n`;
+	return {
+		subject,
+		text: textBody,
 		html: createEmailWrapper(content),
 	};
 }

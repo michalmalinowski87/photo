@@ -58,6 +58,15 @@ export default function SignUp() {
     if (errorParam) {
       setError(decodeURIComponent(typeof errorParam === "string" ? errorParam : errorParam[0]));
     }
+    // Preserve referral code for post-signup (Publish wizard will pre-fill)
+    const refParam = router.query.ref;
+    if (refParam && typeof refParam === "string" && refParam.trim()) {
+      try {
+        sessionStorage.setItem("referral_ref", refParam.trim().toUpperCase());
+      } catch {
+        // ignore
+      }
+    }
   }, [router]);
 
   // Calculate validator position when password changes or on scroll/resize

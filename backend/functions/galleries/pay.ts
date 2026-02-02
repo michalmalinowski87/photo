@@ -8,6 +8,18 @@ import { recalculateStorageInternal } from './recalculateBytesUsed';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 import { getStripeSecretKey, createStripeCheckoutSession } from '../../lib/src/stripe-config';
 import { getRequiredConfigValue } from '../../lib/src/ssm-config';
+import {
+	isPlanEligibleForReferralDiscount,
+	validateEarnedCodeForCheckout,
+	validateReferralCodeForCheckout,
+	markEarnedCodeUsed,
+	grantReferrerRewardForPurchase,
+	getContactEmailForUser
+} from '../../lib/src/referral';
+import { createReferrerRewardEmail } from '../../lib/src/email';
+import { sendRawEmailWithAttachments } from '../../lib/src/raw-email';
+import { getSenderEmail } from '../../lib/src/email-config';
+import { creditWallet as creditWalletLib } from '../../lib/src/wallet';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
 
@@ -145,7 +157,6 @@ async function debitWallet(userId: string, amountCents: number, walletsTable: st
 			throw err;
 		}
 	} catch (error) {
-		const logger = (context as any).logger;
 		logger?.error('Wallet debit failed', {}, error);
 		return false;
 	}
@@ -483,8 +494,37 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				})
 			};
 		}
-		const totalAmountCents = isUpgradeDryRun ? priceDifferenceCentsDryRun : galleryPriceCents;
-		
+		let totalAmountCents = isUpgradeDryRun ? priceDifferenceCentsDryRun : galleryPriceCents;
+		let discountCentsDryRun = 0;
+		const planKeyDryRun = (plan as string) || '';
+		const earnedDiscountCodeId = body?.earnedDiscountCodeId ? String(body.earnedDiscountCodeId).trim() : undefined;
+		const referralCode = body?.referralCode ? String(body.referralCode).trim() : undefined;
+
+		if (planKeyDryRun && !isUpgradeDryRun && isPlanEligibleForReferralDiscount(planKeyDryRun)) {
+			if (earnedDiscountCodeId) {
+				const earned = await validateEarnedCodeForCheckout(ownerId, earnedDiscountCodeId, planKeyDryRun, galleryPriceCents ?? 0);
+				if (!earned.valid) {
+					return {
+						statusCode: 400,
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ error: 'Invalid discount code', message: earned.errorMessage })
+					};
+				}
+				discountCentsDryRun = earned.discountCents ?? 0;
+			} else if (referralCode) {
+				const ref = await validateReferralCodeForCheckout(ownerId, referralCode, planKeyDryRun, galleryPriceCents ?? 0);
+				if (!ref.valid) {
+					return {
+						statusCode: 400,
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ error: 'Invalid referral code', message: ref.errorMessage })
+					};
+				}
+				discountCentsDryRun = ref.discountCents ?? 0;
+			}
+		}
+		totalAmountCents = Math.max(0, totalAmountCents - discountCentsDryRun);
+
 		// Calculate wallet vs stripe amounts based on current wallet balance (read-only)
 		// Use full wallet if sufficient, otherwise full Stripe (no partial payments)
 		if (walletsTable && ledgerTable) {
@@ -529,7 +569,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				stripeAmountCents,
 				paymentMethod,
 				stripeFeeCents,
-				dryRun: true
+				dryRun: true,
+				...(discountCentsDryRun > 0 && { discountCents: discountCentsDryRun })
 			})
 		};
 	}
@@ -918,7 +959,41 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	}
 	
 	let totalAmountCents = isUpgrade ? priceDifferenceCents : galleryPriceCents;
-	
+	const planKeyPay = (plan as string) || '';
+	const earnedDiscountCodeIdBody = body?.earnedDiscountCodeId ? String(body.earnedDiscountCodeId).trim() : undefined;
+	const referralCodeBody = body?.referralCode ? String(body.referralCode).trim() : undefined;
+
+	type ReferralMeta = { earnedDiscountCodeId: string; discountCents: number; discountType: string } | { referredByUserId: string; referralDiscountCents: number; referredDiscountType: string } | null;
+	let referralMetadata: ReferralMeta = null;
+	// Apply discount only when creating a new transaction (no existing UNPAID); existing transaction keeps its amount and metadata
+	if (!existingTransaction && planKeyPay && !isUpgrade && isPlanEligibleForReferralDiscount(planKeyPay)) {
+		if (earnedDiscountCodeIdBody) {
+			const earned = await validateEarnedCodeForCheckout(ownerId, earnedDiscountCodeIdBody, planKeyPay, galleryPriceCents);
+			if (!earned.valid) {
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ error: 'Invalid discount code', message: earned.errorMessage })
+				};
+			}
+			const discountCents = earned.discountCents ?? 0;
+			totalAmountCents = Math.max(0, totalAmountCents - discountCents);
+			referralMetadata = { earnedDiscountCodeId: earnedDiscountCodeIdBody, discountCents, discountType: earned.type ?? '10_percent' };
+		} else if (referralCodeBody) {
+			const ref = await validateReferralCodeForCheckout(ownerId, referralCodeBody, planKeyPay, galleryPriceCents);
+			if (!ref.valid) {
+				return {
+					statusCode: 400,
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ error: 'Invalid referral code', message: ref.errorMessage })
+				};
+			}
+			const discountCents = ref.discountCents ?? 0;
+			totalAmountCents = Math.max(0, totalAmountCents - discountCents);
+			referralMetadata = ref.referrerUserId ? { referredByUserId: ref.referrerUserId, referralDiscountCents: discountCents, referredDiscountType: ref.isTopInviter ? '15_percent' : '10_percent' } : null;
+		}
+	}
+
 	// Calculate wallet vs stripe amounts
 	let walletAmountCents = 0;
 	let stripeAmountCents = totalAmountCents;
@@ -987,7 +1062,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					originalSelectionEnabled: gallery.selectionEnabled !== false
 				};
 			}
-			
+			if (referralMetadata) {
+				transactionMetadata = { ...transactionMetadata, ...referralMetadata };
+			}
+
 			// Create transaction with UNPAID status
 			const newTransactionId = await createTransaction(
 				ownerId,
@@ -1328,6 +1406,56 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					expiresAt,
 					scheduleName: newScheduleName
 				});
+
+				// Referral: mark earned code used and grant referrer reward (same as webhook path)
+				const txnMeta = existingTransaction?.metadata || {};
+				if (txnMeta.earnedDiscountCodeId) {
+					try {
+						await markEarnedCodeUsed(ownerId, txnMeta.earnedDiscountCodeId, galleryId);
+						logger.info('Marked earned discount code as used (wallet path)', { galleryId, codeId: txnMeta.earnedDiscountCodeId });
+					} catch (refErr: any) {
+						logger.warn('Failed to mark earned code used (wallet path)', { galleryId, error: refErr?.message });
+					}
+				}
+				let referrerRewardGranted: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
+				if (txnMeta.referredByUserId) {
+					try {
+						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(txnMeta.referredByUserId, galleryId);
+						if (granted) {
+							logger.info('Granted referrer reward (wallet path)', { galleryId, referrerUserId: txnMeta.referredByUserId });
+							if (rewardType) referrerRewardGranted = { rewardType };
+							if (walletCreditCents && walletsTable && ledgerTable) {
+								const refId = `referral_bonus_${txnMeta.referredByUserId}_${galleryId}`;
+								try {
+									const newBalance = await creditWalletLib(txnMeta.referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable);
+									if (newBalance != null) {
+										logger.info('Referrer 10+ wallet credit applied (wallet path)', { referrerUserId: txnMeta.referredByUserId, amountCents: walletCreditCents, newBalance });
+									}
+								} catch (walletErr: any) {
+									logger.warn('Failed to credit referrer wallet (wallet path)', { referrerUserId: txnMeta.referredByUserId, error: walletErr?.message });
+								}
+							}
+						}
+					} catch (refErr: any) {
+						logger.warn('Failed to grant referrer reward (wallet path)', { galleryId, error: refErr?.message });
+					}
+				}
+				// Eligibility email is sent only after first Stripe payment (see webhook); wallet-only path does not trigger it.
+				// Referrer reward email
+				if (referrerRewardGranted && txnMeta.referredByUserId) {
+					try {
+						const toEmail = await getContactEmailForUser(txnMeta.referredByUserId);
+						const sender = await getSenderEmail();
+						if (toEmail && sender) {
+							const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+							const template = createReferrerRewardEmail({ rewardType: referrerRewardGranted.rewardType, dashboardUrl });
+							await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+							logger.info('Referrer reward email sent (wallet path)', { referrerUserId: txnMeta.referredByUserId });
+						}
+					} catch (refEmailErr: any) {
+						logger.warn('Referrer reward email failed (wallet path)', { error: refEmailErr?.message });
+					}
+				}
 				
 				return {
 					statusCode: 200,
@@ -1488,6 +1616,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		
 		// For upgrades, store plan info in session metadata (don't update gallery until payment succeeds)
 		// This prevents free upgrades if user closes browser without completing payment
+		const existingMeta = existingTransaction?.metadata || {};
 		const session = await createStripeCheckoutSession(stripe, {
 			lineItems,
 			successUrl,
@@ -1504,7 +1633,9 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					plan: newPlanKey,
 					previousPlan: currentPlanKey,
 					newPriceCents: galleryPriceCents.toString()
-				} : {})
+				} : {}),
+				...(existingMeta.earnedDiscountCodeId && { earnedDiscountCodeId: existingMeta.earnedDiscountCodeId }),
+				...(existingMeta.referredByUserId && { referredByUserId: existingMeta.referredByUserId })
 			},
 			mode: 'payment'
 		});

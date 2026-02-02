@@ -1,6 +1,7 @@
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 
+import DiscountCodesSettings from "../../components/settings/DiscountCodesSettings";
 import { GallerySettingsTab } from "../../components/settings/GallerySettingsTab";
 import SettingsAccount from "../../components/settings/SettingsAccount";
 import SettingsSecurity from "../../components/settings/SettingsSecurity";
@@ -30,6 +31,8 @@ export default function SettingsTab() {
       return <SettingsSecurity />;
     case "gallery":
       return <GallerySettingsTab />;
+    case "discount-codes":
+      return <DiscountCodesSettings />;
     default:
       return <SettingsAccount />;
   }

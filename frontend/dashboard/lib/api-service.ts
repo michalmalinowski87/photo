@@ -709,6 +709,8 @@ class ApiService {
         plan?: string;
         priceCents?: number;
         redirectUrl?: string;
+        referralCode?: string;
+        earnedDiscountCodeId?: string;
       } = {}
     ): Promise<{
       checkoutUrl?: string;
@@ -719,6 +721,7 @@ class ApiService {
       paymentMethod?: "WALLET" | "STRIPE";
       stripeFeeCents?: number;
       dryRun?: boolean;
+      discountCents?: number;
     }> => {
       if (!galleryId) {
         throw new Error("Gallery ID is required");
@@ -2230,6 +2233,27 @@ class ApiService {
       };
     }> => {
       return await this._request("/auth/business-info");
+    },
+
+    /**
+     * Get referral / discount codes (referralCode, referralLink, earnedDiscountCodes, referralCount, topInviterBadge, referralHistory)
+     */
+    getReferral: async (): Promise<{
+      referralCode: string | null;
+      referralLink: string | null;
+      earnedDiscountCodes: Array<{
+        codeId: string;
+        type: string;
+        expiresAt: string;
+        used: boolean;
+        usedOnGalleryId?: string;
+        status: "Active" | "Used" | "Expired";
+      }>;
+      referralCount: number;
+      topInviterBadge: boolean;
+      referralHistory: Array<{ date: string; rewardType: string }>;
+    }> => {
+      return await this._request("/auth/referral");
     },
 
     /**

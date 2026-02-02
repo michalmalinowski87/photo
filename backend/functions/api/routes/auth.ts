@@ -6,6 +6,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoIdentityProviderClient, AdminInitiateAuthCommand, AdminSetUserPasswordCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import { getUserReferralFields, ensureUserReferralCode, isReferrerEligible, type EarnedDiscountCode } from '../../../lib/src/referral';
+import { getRequiredConfigValue } from '../../../lib/src/ssm-config';
 // User deletion endpoints moved to separate Lambda (userDeletion.ts)
 
 // Dev endpoints (only available in dev/staging) - loaded conditionally to avoid bundling issues
@@ -134,6 +136,78 @@ router.get('/business-info', async (req: Request, res: Response) => {
 			userId
 		});
 		return res.status(500).json({ error: 'Failed to get business information', message: error.message });
+	}
+});
+
+/** GET /auth/referral – referral code, link, earned discount codes, stats, history (no PII). */
+router.get('/referral', async (req: Request, res: Response) => {
+	const logger = (req as any).logger;
+	const envProc = (globalThis as any).process;
+	const usersTable = envProc?.env?.USERS_TABLE as string;
+	const stage = envProc?.env?.STAGE || 'dev';
+
+	if (!usersTable) {
+		return res.status(500).json({ error: 'Missing USERS_TABLE configuration' });
+	}
+
+	const event = reqToEvent(req);
+	const userId = getUserIdFromEvent(event);
+	if (!userId) {
+		return res.status(401).json({ error: 'Unauthorized' });
+	}
+
+	try {
+		const userGet = await ddb.send(new GetCommand({
+			TableName: usersTable,
+			Key: { userId },
+			ProjectionExpression: 'referralCode, earnedDiscountCodes, referralSuccessCount, topInviterBadge, referralHistory'
+		}));
+		let referralCode = (userGet.Item as { referralCode?: string } | undefined)?.referralCode;
+		let earnedDiscountCodes = ((userGet.Item as { earnedDiscountCodes?: EarnedDiscountCode[] } | undefined)?.earnedDiscountCodes) || [];
+		const referralSuccessCount = (userGet.Item as { referralSuccessCount?: number } | undefined)?.referralSuccessCount ?? 0;
+		const topInviterBadge = (userGet.Item as { topInviterBadge?: boolean } | undefined)?.topInviterBadge === true;
+		let referralHistory = ((userGet.Item as { referralHistory?: { date: string; rewardType: string }[] } | undefined)?.referralHistory) || [];
+
+		if (!referralCode) {
+			const eligible = await isReferrerEligible(userId);
+			if (eligible) {
+				const result = await ensureUserReferralCode(userId);
+				referralCode = result.code;
+			}
+		}
+
+		let dashboardUrl: string;
+		try {
+			dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+		} catch {
+			dashboardUrl = '';
+		}
+		const referralLink = referralCode ? `${dashboardUrl.replace(/\/$/, '')}/invite/${referralCode}` : null;
+
+		const now = new Date();
+		const earnedWithStatus = earnedDiscountCodes.map((c: EarnedDiscountCode) => ({
+			codeId: c.codeId,
+			type: c.type,
+			expiresAt: c.expiresAt,
+			used: c.used,
+			usedOnGalleryId: c.usedOnGalleryId,
+			status: c.used ? 'Used' as const : (new Date(c.expiresAt) <= now ? 'Expired' as const : 'Active' as const)
+		}));
+
+		return res.json({
+			referralCode: referralCode || null,
+			referralLink,
+			earnedDiscountCodes: earnedWithStatus,
+			referralCount: referralSuccessCount,
+			topInviterBadge,
+			referralHistory
+		});
+	} catch (error: any) {
+		logger?.error('Get referral failed', {
+			error: { name: error.name, message: error.message },
+			userId
+		});
+		return res.status(500).json({ error: 'Failed to get referral data', message: error.message });
 	}
 });
 

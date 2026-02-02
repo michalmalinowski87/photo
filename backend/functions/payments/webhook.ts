@@ -7,6 +7,18 @@ import { getTransaction, updateTransactionStatus } from '../../lib/src/transacti
 import { PRICING_PLANS } from '../../lib/src/pricing';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import {
+	markEarnedCodeUsed,
+	grantReferrerRewardForPurchase,
+	ensureUserReferralCode,
+	getContactEmailForUser,
+	countStripePaidTransactions
+} from '../../lib/src/referral';
+import { createEligibilityEmail, createReferrerRewardEmail } from '../../lib/src/email';
+import { sendRawEmailWithAttachments } from '../../lib/src/raw-email';
+import { getSenderEmail } from '../../lib/src/email-config';
+import { getRequiredConfigValue } from '../../lib/src/ssm-config';
+import { creditWallet as creditWalletLib } from '../../lib/src/wallet';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -131,6 +143,27 @@ async function processCheckoutSession(
 					amountCents,
 					sessionId: session.id,
 				});
+				// Eligibility: only after first successful Stripe payment (e.g. first top-up)
+				try {
+					const stripePaidCount = await countStripePaidTransactions(userId);
+					if (stripePaidCount === 1) {
+						const { code, wasNew } = await ensureUserReferralCode(userId);
+						if (wasNew) {
+							const stage = envProc?.env?.STAGE || 'dev';
+							const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+							const referralLink = `${dashboardUrl.replace(/\/+$/, '')}/invite/${code}`;
+							const toEmail = await getContactEmailForUser(userId);
+							const sender = await getSenderEmail();
+							if (toEmail && sender) {
+								const template = createEligibilityEmail({ referralCode: code, referralLink, dashboardUrl });
+								await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+								logger.info('Eligibility email sent (webhook wallet top-up, first Stripe payment)', { userId });
+							}
+						}
+					}
+				} catch (eligErr: any) {
+					logger.warn('Eligibility email failed (webhook wallet top-up)', { userId, error: eligErr?.message });
+				}
 			} catch (txnErr: any) {
 				logger.error('Failed to update wallet top-up transaction', {
 					error: {
@@ -274,6 +307,75 @@ async function processCheckoutSession(
 						logger.error('Failed to create order', { error: orderErr.message, galleryId });
 					}
 				}
+				// Referral: mark earned code used and grant referrer reward (idempotent)
+				if (session.metadata?.earnedDiscountCodeId) {
+					try {
+						await markEarnedCodeUsed(userId, session.metadata.earnedDiscountCodeId, galleryId);
+						logger.info('Marked earned discount code as used (webhook)', { galleryId, codeId: session.metadata.earnedDiscountCodeId });
+					} catch (refErr: any) {
+						logger.warn('Failed to mark earned code used (webhook)', { galleryId, error: refErr?.message });
+					}
+				}
+				let referrerRewardGranted: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
+				if (session.metadata?.referredByUserId) {
+					try {
+						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(session.metadata.referredByUserId, galleryId);
+						if (granted) {
+							logger.info('Granted referrer reward (webhook)', { galleryId, referrerUserId: session.metadata.referredByUserId });
+							if (rewardType) referrerRewardGranted = { rewardType };
+							if (walletCreditCents && walletsTable && ledgerTable) {
+								const refId = `referral_bonus_${session.metadata.referredByUserId}_${galleryId}`;
+								try {
+									const newBalance = await creditWalletLib(session.metadata.referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable);
+									if (newBalance != null) {
+										logger.info('Referrer 10+ wallet credit applied (webhook)', { referrerUserId: session.metadata.referredByUserId, amountCents: walletCreditCents, newBalance });
+									}
+								} catch (walletErr: any) {
+									logger.warn('Failed to credit referrer wallet (webhook)', { referrerUserId: session.metadata.referredByUserId, error: walletErr?.message });
+								}
+							}
+						}
+					} catch (refErr: any) {
+						logger.warn('Failed to grant referrer reward (webhook)', { galleryId, error: refErr?.message });
+					}
+				}
+				// Eligibility: only after first successful Stripe payment (excludes welcome-credit-only; includes top-up)
+				try {
+					const stripePaidCount = await countStripePaidTransactions(userId);
+					if (stripePaidCount === 1) {
+						const { code, wasNew } = await ensureUserReferralCode(userId);
+						if (wasNew) {
+							const stage = envProc?.env?.STAGE || 'dev';
+							const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+							const referralLink = `${dashboardUrl.replace(/\/+$/, '')}/invite/${code}`;
+							const toEmail = await getContactEmailForUser(userId);
+							const sender = await getSenderEmail();
+							if (toEmail && sender) {
+								const template = createEligibilityEmail({ referralCode: code, referralLink, dashboardUrl });
+								await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+								logger.info('Eligibility email sent (webhook, first Stripe payment)', { userId });
+							}
+						}
+					}
+				} catch (eligErr: any) {
+					logger.warn('Eligibility email failed (webhook)', { userId, error: eligErr?.message });
+				}
+				// Referrer reward email
+				if (referrerRewardGranted && session.metadata?.referredByUserId) {
+					try {
+						const toEmail = await getContactEmailForUser(session.metadata.referredByUserId);
+						const sender = await getSenderEmail();
+						if (toEmail && sender) {
+							const stage = envProc?.env?.STAGE || 'dev';
+							const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+							const template = createReferrerRewardEmail({ rewardType: referrerRewardGranted.rewardType, dashboardUrl });
+							await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+							logger.info('Referrer reward email sent (webhook)', { referrerUserId: session.metadata.referredByUserId });
+						}
+					} catch (refEmailErr: any) {
+						logger.warn('Referrer reward email failed (webhook)', { error: refEmailErr?.message });
+					}
+				}
 			}
 		}
 	} else if (type === 'gallery_plan_upgrade' && userId && galleryId) {
@@ -407,6 +509,75 @@ async function processCheckoutSession(
 						}));
 						
 						logger.info('Gallery plan upgraded', { galleryId, userId, newPlan: newPlanKey, paymentId, expiresAt });
+
+						// Referral: mark earned code used and grant referrer reward (upgrade path; idempotent)
+						if (session.metadata?.earnedDiscountCodeId) {
+							try {
+								await markEarnedCodeUsed(userId, session.metadata.earnedDiscountCodeId, galleryId);
+								logger.info('Marked earned discount code as used (webhook upgrade)', { galleryId, codeId: session.metadata.earnedDiscountCodeId });
+							} catch (refErr: any) {
+								logger.warn('Failed to mark earned code used (webhook upgrade)', { galleryId, error: refErr?.message });
+							}
+						}
+						let referrerRewardGrantedUpgrade: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
+						if (session.metadata?.referredByUserId) {
+							try {
+								const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(session.metadata.referredByUserId, galleryId);
+								if (granted) {
+									logger.info('Granted referrer reward (webhook upgrade)', { galleryId, referrerUserId: session.metadata.referredByUserId });
+									if (rewardType) referrerRewardGrantedUpgrade = { rewardType };
+									if (walletCreditCents && walletsTable && ledgerTable) {
+										const refId = `referral_bonus_${session.metadata.referredByUserId}_${galleryId}`;
+										try {
+											const newBalance = await creditWalletLib(session.metadata.referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable);
+											if (newBalance != null) {
+												logger.info('Referrer 10+ wallet credit applied (webhook upgrade)', { referrerUserId: session.metadata.referredByUserId, amountCents: walletCreditCents, newBalance });
+											}
+										} catch (walletErr: any) {
+											logger.warn('Failed to credit referrer wallet (webhook upgrade)', { referrerUserId: session.metadata.referredByUserId, error: walletErr?.message });
+										}
+									}
+								}
+							} catch (refErr: any) {
+								logger.warn('Failed to grant referrer reward (webhook upgrade)', { galleryId, error: refErr?.message });
+							}
+						}
+						if (referrerRewardGrantedUpgrade && session.metadata?.referredByUserId) {
+							try {
+								const toEmail = await getContactEmailForUser(session.metadata.referredByUserId);
+								const sender = await getSenderEmail();
+								if (toEmail && sender) {
+									const stage = envProc?.env?.STAGE || 'dev';
+									const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+									const template = createReferrerRewardEmail({ rewardType: referrerRewardGrantedUpgrade.rewardType, dashboardUrl });
+									await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+									logger.info('Referrer reward email sent (webhook upgrade)', { referrerUserId: session.metadata.referredByUserId });
+								}
+							} catch (refEmailErr: any) {
+								logger.warn('Referrer reward email failed (webhook upgrade)', { error: refEmailErr?.message });
+							}
+						}
+						// Eligibility: only after first successful Stripe payment
+						try {
+							const stripePaidCount = await countStripePaidTransactions(userId);
+							if (stripePaidCount === 1) {
+								const { code, wasNew } = await ensureUserReferralCode(userId);
+								if (wasNew) {
+									const stage = envProc?.env?.STAGE || 'dev';
+									const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+									const referralLink = `${dashboardUrl.replace(/\/+$/, '')}/invite/${code}`;
+									const toEmail = await getContactEmailForUser(userId);
+									const sender = await getSenderEmail();
+									if (toEmail && sender) {
+										const template = createEligibilityEmail({ referralCode: code, referralLink, dashboardUrl });
+										await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+										logger.info('Eligibility email sent (webhook upgrade, first Stripe payment)', { userId });
+									}
+								}
+							}
+						} catch (eligErr: any) {
+							logger.warn('Eligibility email failed (webhook upgrade)', { userId, error: eligErr?.message });
+						}
 					}
 				}
 			}

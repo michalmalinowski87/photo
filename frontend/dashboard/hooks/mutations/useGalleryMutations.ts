@@ -578,6 +578,8 @@ export function usePayGallery() {
         plan?: string;
         priceCents?: number;
         redirectUrl?: string;
+        referralCode?: string;
+        earnedDiscountCodeId?: string;
       };
     }) => api.galleries.pay(params.galleryId, params.options ?? {}),
     onSuccess: (_, variables) => {

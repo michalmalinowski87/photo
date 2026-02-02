@@ -48,3 +48,30 @@ export function useDeletionStatus(
     ...options,
   });
 }
+
+export interface ReferralData {
+  referralCode: string | null;
+  referralLink: string | null;
+  earnedDiscountCodes: Array<{
+    codeId: string;
+    type: string;
+    expiresAt: string;
+    used: boolean;
+    usedOnGalleryId?: string;
+    status: "Active" | "Used" | "Expired";
+  }>;
+  referralCount: number;
+  topInviterBadge: boolean;
+  referralHistory: Array<{ date: string; rewardType: string }>;
+}
+
+export function useReferral(
+  options?: Omit<UseQueryOptions<ReferralData>, "queryKey" | "queryFn">
+) {
+  return useQuery<ReferralData>({
+    queryKey: queryKeys.auth.referral(),
+    queryFn: () => api.auth.getReferral(),
+    staleTime: 60 * 1000,
+    ...options,
+  });
+}

@@ -10,6 +10,7 @@ import {
   LogOut,
   AlertTriangle,
   FlaskConical,
+  Gift,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -71,6 +72,11 @@ const navItems: NavItem[] = [
       { name: "Bezpieczeństwo", path: "/settings/security" },
       { name: "Galeria", path: "/settings/gallery" },
     ],
+  },
+  {
+    name: "Zaproszenia i nagrody",
+    icon: <Gift size={20} />,
+    path: "/settings/discount-codes",
   },
   {
     name: "Strona główna",
@@ -380,7 +386,7 @@ const AppSidebar = () => {
           </span>
         </Link>
       </div>
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar flex-1 min-h-0">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>{renderMenuItems(navItems)}</div>
@@ -388,7 +394,7 @@ const AppSidebar = () => {
         </nav>
       </div>
       {(isExpanded || isMobileOpen) && (
-        <div className="mt-auto pb-6 space-y-2">
+        <div className="mt-auto pb-6 space-y-2 flex-shrink-0">
           <Link
             href="/dev"
             className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors active:scale-[0.98] ${

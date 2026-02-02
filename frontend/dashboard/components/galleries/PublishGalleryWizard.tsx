@@ -81,6 +81,7 @@ export const PublishGalleryWizard = ({
   const [showTopUpRedirect, setShowTopUpRedirect] = useState(false);
   const [topUpCheckoutUrl, setTopUpCheckoutUrl] = useState<string | undefined>(undefined);
   const [selectedDuration, setSelectedDuration] = useState<Duration>("1m");
+  const [discountCode, setDiscountCode] = useState("");
   const hasInitializedPlan = React.useRef(false);
 
   // Check if gallery has photos
@@ -140,6 +141,15 @@ export const PublishGalleryWizard = ({
     onClose,
   ]);
 
+  const discountCodeTrimmed = discountCode?.trim() ?? "";
+  const earnedDiscountCodeId =
+    discountCodeTrimmed.toUpperCase().startsWith("DISC-") ? discountCodeTrimmed : undefined;
+  const referralCode = earnedDiscountCodeId
+    ? undefined
+    : discountCodeTrimmed
+      ? discountCodeTrimmed.toUpperCase()
+      : undefined;
+
   const { handleSelectPlan, isProcessing, showRedirectOverlay, redirectInfo } = usePlanPayment({
     galleryId,
     onSuccess: handlePaymentSuccess,
@@ -147,7 +157,24 @@ export const PublishGalleryWizard = ({
     mode,
     selectedDuration,
     selectedPlanKey: selectedPlanKey ?? undefined,
+    referralCode,
+    earnedDiscountCodeId,
   });
+
+  // Pre-fill referral code from sessionStorage (set when user came from invite link → sign-up?ref=CODE)
+  useEffect(() => {
+    if (isOpen && !discountCode) {
+      try {
+        const ref = sessionStorage.getItem("referral_ref");
+        if (ref && typeof ref === "string") {
+          setDiscountCode(ref);
+          sessionStorage.removeItem("referral_ref");
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [isOpen]);
 
   // Restore state from initialState prop (set by store from URL params)
   // BUT: In limitExceeded mode, we want to use the suggested plan, not initialState
@@ -688,7 +715,7 @@ export const PublishGalleryWizard = ({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-400 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
+      <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-400 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex-shrink-0 flex-wrap">
         <Button
           variant="outline"
           onClick={onClose}
@@ -697,22 +724,40 @@ export const PublishGalleryWizard = ({
         >
           Anuluj
         </Button>
-        <Button
-          variant="primary"
-          onClick={handlePublish}
-          disabled={
-            isProcessing || pricingLoading || !selectedPlan || (mode === "publish" && !hasPhotos)
-          }
-          className="flex-1"
-        >
-          {isProcessing
-            ? "Przetwarzanie..."
-            : selectedPlan
-              ? mode === "limitExceeded"
-                ? `Zwiększ limit (${formatPrice(displayPriceCents)})`
-                : `Opublikuj (${formatPrice(selectedPlan.priceCents)})`
-              : "Wybierz plan"}
-        </Button>
+        <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+          <label
+            htmlFor="publish-gallery-discount-code"
+            className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+          >
+            Kod rabatowy
+          </label>
+          <input
+            id="publish-gallery-discount-code"
+            type="text"
+            placeholder="Kod rabatowy"
+            value={discountCode}
+            onChange={(e) => setDiscountCode(e.target.value)}
+            disabled={isProcessing || pricingLoading}
+            className="h-12 px-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 w-40 max-w-[180px]"
+            aria-label="Kod rabatowy"
+          />
+          <Button
+            variant="primary"
+            onClick={handlePublish}
+            disabled={
+              isProcessing || pricingLoading || !selectedPlan || (mode === "publish" && !hasPhotos)
+            }
+            className="flex-1 min-w-0 max-w-[280px]"
+          >
+            {isProcessing
+              ? "Przetwarzanie..."
+              : selectedPlan
+                ? mode === "limitExceeded"
+                  ? `Zwiększ limit (${formatPrice(displayPriceCents)})`
+                  : `Opublikuj (${formatPrice(selectedPlan.priceCents)})`
+                : "Wybierz plan"}
+          </Button>
+        </div>
       </div>
 
       {/* Processing Overlay - blocks wizard during payment processing */}

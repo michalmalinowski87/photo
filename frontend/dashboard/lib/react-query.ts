@@ -130,6 +130,7 @@ export const queryKeys = {
     all: ["auth"] as const,
     businessInfo: () => [...queryKeys.auth.all, "businessInfo"] as const,
     deletionStatus: () => [...queryKeys.auth.all, "deletionStatus"] as const,
+    referral: () => [...queryKeys.auth.all, "referral"] as const,
   },
   uploads: {
     all: ["uploads"] as const,

@@ -17,6 +17,8 @@ interface UsePlanPaymentOptions {
   mode?: "publish" | "limitExceeded";
   selectedDuration?: string;
   selectedPlanKey?: string;
+  referralCode?: string;
+  earnedDiscountCodeId?: string;
 }
 
 interface RedirectInfo {
@@ -32,6 +34,8 @@ export const usePlanPayment = ({
   mode = "publish",
   selectedDuration,
   selectedPlanKey,
+  referralCode,
+  earnedDiscountCodeId,
 }: UsePlanPaymentOptions) => {
   const { showToast } = useToast();
   const payGalleryMutation = usePayGallery();
@@ -81,6 +85,8 @@ export const usePlanPayment = ({
             dryRun: true,
             plan: selectedPlan.planKey,
             priceCents: selectedPlan.priceCents,
+            referralCode,
+            earnedDiscountCodeId,
           },
         });
 
@@ -113,6 +119,8 @@ export const usePlanPayment = ({
               plan: selectedPlan.planKey,
               priceCents: selectedPlan.priceCents,
               redirectUrl,
+              referralCode,
+              earnedDiscountCodeId,
             },
           });
 
@@ -152,6 +160,8 @@ export const usePlanPayment = ({
             plan: selectedPlan.planKey,
             priceCents: selectedPlan.priceCents,
             redirectUrl,
+            referralCode,
+            earnedDiscountCodeId,
           },
         });
 
@@ -187,6 +197,8 @@ export const usePlanPayment = ({
       mode,
       selectedDuration,
       selectedPlanKey,
+      referralCode,
+      earnedDiscountCodeId,
     ]
   );
 

@@ -25,13 +25,13 @@ export const WelcomePopup = ({
         <div className="text-center mb-5 md:mb-6">
           <div className="relative inline-flex items-center justify-center mb-4">
             {/* Animated background circle */}
-            <div className="absolute inset-0 rounded-full bg-brand-400/20 via-brand-500/20 to-brand-600/20 animate-pulse"></div>
-            <div className="relative inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 shadow-lg">
+            <div className="absolute inset-0 rounded-full bg-photographer-accent/20 animate-pulse"></div>
+            <div className="relative inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-photographer-accent to-photographer-accentHover shadow-lg">
               <Sparkles className="w-8 h-8 md:w-10 md:h-10 text-white" strokeWidth={2} />
             </div>
           </div>
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-2 bg-gradient-to-r from-brand-600 to-brand-500 bg-clip-text text-transparent">
-            Witamy w PhotoCloud! 🎉
+          <h2 className="text-2xl md:text-3xl font-bold mb-2 text-photographer-accentDark dark:text-photographer-accentLight">
+            Witamy w PhotoCloud!
           </h2>
           <p className="text-base md:text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
             Jesteśmy zachwyceni, że dołączyłeś do naszej społeczności fotografów!
@@ -42,14 +42,14 @@ export const WelcomePopup = ({
         </div>
 
         {/* Welcome Bonus Section - More Exciting */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-brand-50 via-brand-100/50 to-brand-50 dark:from-photographer-accent/20 dark:via-photographer-accent/15 dark:to-photographer-accent/20 rounded-xl md:rounded-2xl p-4 md:p-6 mb-5 md:mb-6 border-2 border-brand-200/50 dark:border-photographer-accent/30 shadow-lg">
+        <div className="relative overflow-hidden bg-gradient-to-br from-photographer-background via-photographer-elevated to-photographer-background dark:from-photographer-accent/20 dark:via-photographer-accent/15 dark:to-photographer-accent/20 rounded-xl md:rounded-2xl p-4 md:p-6 mb-5 md:mb-6 border-2 border-photographer-border dark:border-photographer-accent/30 shadow-lg">
           {/* Decorative elements */}
-          <div className="absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-brand-400/10 rounded-full -mr-12 -mt-12 md:-mr-16 md:-mt-16"></div>
-          <div className="absolute bottom-0 left-0 w-20 h-20 md:w-24 md:h-24 bg-brand-500/10 rounded-full -ml-10 -mb-10 md:-ml-12 md:-mb-12"></div>
+          <div className="absolute top-0 right-0 w-24 h-24 md:w-32 md:h-32 bg-photographer-accent/10 rounded-full -mr-12 -mt-12 md:-mr-16 md:-mt-16"></div>
+          <div className="absolute bottom-0 left-0 w-20 h-20 md:w-24 md:h-24 bg-photographer-accent/10 rounded-full -ml-10 -mb-10 md:-ml-12 md:-mb-12"></div>
 
           <div className="relative flex flex-col md:flex-row items-start gap-3 md:gap-4">
             <div className="flex-shrink-0">
-              <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-gradient-to-br from-photographer-accent to-photographer-accentHover flex items-center justify-center shadow-lg">
                 <CircleDollarSign className="w-6 h-6 md:w-7 md:h-7 text-white" strokeWidth={2.5} />
               </div>
             </div>
@@ -59,14 +59,14 @@ export const WelcomePopup = ({
               </h3>
               <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 mb-3 leading-relaxed">
                 W podziękowaniu za zaufanie, jakie nam okazujesz, przygotowaliśmy dla Ciebie{" "}
-                <span className="inline-flex items-center gap-1 font-bold text-xl md:text-2xl text-brand-600 dark:text-photographer-accent px-2 py-0.5 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-brand-200/50 dark:border-photographer-accent/30">
+                <span className="inline-flex items-center gap-1 font-bold text-xl md:text-2xl text-photographer-accentDark dark:text-photographer-accent px-2 py-0.5 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-photographer-border dark:border-photographer-accent/30">
                   {formatPrice(welcomeBonusCents)}
                 </span>{" "}
                 bonusu powitalnego!
               </p>
-              <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg md:rounded-xl p-3 md:p-4 border border-brand-200/50 dark:border-photographer-accent/30">
+              <div className="bg-white/60 dark:bg-gray-800/60 rounded-lg md:rounded-xl p-3 md:p-4 border border-photographer-border dark:border-photographer-accent/30">
                 <p className="text-xs md:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                  <span className="font-semibold text-brand-700 dark:text-photographer-accent">
+                  <span className="font-semibold text-photographer-accentDark dark:text-photographer-accent">
                     To wystarczy na plan 1GB - 3 miesiące!
                   </span>{" "}
                   Możesz od razu rozpocząć pracę i utworzyć swoją pierwszą galerię bez dodatkowych
@@ -89,7 +89,7 @@ export const WelcomePopup = ({
           </div>
           <div className="space-y-2 md:space-y-2.5">
             <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-photographer-background dark:hover:bg-gray-800/50 transition-colors">
-              <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
+              <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-photographer-accent to-photographer-accentHover flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
                 1
               </div>
               <div className="flex-1 min-w-0 pt-0">
@@ -104,12 +104,12 @@ export const WelcomePopup = ({
             </div>
 
             <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-photographer-background dark:hover:bg-gray-800/50 transition-colors">
-              <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
+              <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-photographer-accent to-photographer-accentHover flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
                 2
               </div>
               <div className="flex-1 min-w-0 pt-0">
                 <h4 className="font-semibold text-gray-900 dark:text-white mb-1 text-sm md:text-base">
-                  Prześlij zdjęcia
+                  Prześlij zdjęcia i opublikuj galerię
                 </h4>
                 <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
                   Po utworzeniu galerii, prześlij zdjęcia do przeglądu przez klienta lub od razu
@@ -119,7 +119,7 @@ export const WelcomePopup = ({
             </div>
 
             <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-photographer-background dark:hover:bg-gray-800/50 transition-colors">
-              <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
+              <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-photographer-accent to-photographer-accentHover flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
                 3
               </div>
               <div className="flex-1 min-w-0 pt-0">
@@ -134,7 +134,7 @@ export const WelcomePopup = ({
             </div>
 
             <div className="group flex items-start gap-2.5 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-photographer-background dark:hover:bg-gray-800/50 transition-colors">
-              <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
+              <div className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl bg-gradient-to-br from-photographer-accent to-photographer-accentHover flex items-center justify-center text-sm md:text-base font-bold text-white shadow-md">
                 4
               </div>
               <div className="flex-1 min-w-0 pt-0">
@@ -178,7 +178,7 @@ export const WelcomePopup = ({
         {/* Closing message */}
         <p className="text-center text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-3 md:mt-3 italic">
           Mamy nadzieję, że będziesz się świetnie bawić! Jeśli masz pytania, jesteśmy tutaj, aby
-          pomóc. 💙
+          pomóc. ❤️
         </p>
       </div>
     </Modal>
