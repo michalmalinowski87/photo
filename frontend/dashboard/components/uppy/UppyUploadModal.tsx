@@ -1150,9 +1150,9 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
                     <p className="text-sm font-medium text-photographer-accentDark dark:text-photographer-accentLight">
                       {uploadResult.failed > 0
                         ? uploadResult.successful > 0
-                          ? `Przesłano ${uploadResult.successful} z ${uploadResult.successful + uploadResult.failed} ${config.type === "finals" ? "zdjęć finalnych" : "zdjęć"}. ${uploadResult.failed} nie powiodło się.`
-                          : `Nie udało się przesłać żadnego ${config.type === "finals" ? "zdjęcia finalnego" : "zdjęcia"}.`
-                        : `${uploadResult.successful} ${uploadResult.successful === 1 ? (config.type === "finals" ? "zdjęcie finalne" : "zdjęcie") : config.type === "finals" ? "zdjęć finalnych" : "zdjęć"} zostało przesłanych`}
+                          ? `Przesłane: ${uploadResult.successful}. Nie powiodło się: ${uploadResult.failed}.`
+                          : `Nie powiodło się: ${uploadResult.failed}.`
+                        : `Przesłane: ${uploadResult.successful}`}
                     </p>
                   </div>
                 ) : null}

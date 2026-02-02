@@ -32,12 +32,7 @@ export const UploadCollisionModal = ({
     onChoice(action, applyToAllChecked);
   };
 
-  const applyToAllLabel =
-    totalCount === 1
-      ? "Zastosuj do 1 zdjęcia"
-      : totalCount < 5
-        ? `Zastosuj do wszystkich ${totalCount} zdjęć`
-        : `Zastosuj do wszystkich ${totalCount} zdjęć`;
+  const applyToAllLabel = `Zastosuj do: ${totalCount}`;
 
   return (
     <Modal

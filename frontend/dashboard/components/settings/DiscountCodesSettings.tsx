@@ -43,7 +43,9 @@ export default function DiscountCodesSettings() {
   if (error) {
     return (
       <div className="w-full p-6">
-        <p className="text-red-600 dark:text-red-400">Nie udało się załadować danych. Odśwież stronę.</p>
+        <p className="text-red-600 dark:text-red-400">
+          Nie udało się załadować danych. Odśwież stronę.
+        </p>
       </div>
     );
   }
@@ -201,7 +203,9 @@ export default function DiscountCodesSettings() {
         {rulesOpen && (
           <div className="px-4 pb-4 pt-4 text-sm text-photographer-text dark:text-gray-400 space-y-3 border-t border-photographer-border dark:border-gray-700">
             <ul className="list-disc list-inside space-y-1">
-              <li>Kto może zapraszać: po opłaceniu pierwszej galerii (nie tylko z bonusu powitalnego).</li>
+              <li>
+                Kto może zapraszać: po opłaceniu pierwszej galerii (nie tylko z bonusu powitalnego).
+              </li>
             </ul>
             <div>
               <p className="mb-2 text-photographer-text dark:text-gray-400">Nagrody:</p>
@@ -232,19 +236,26 @@ export default function DiscountCodesSettings() {
                   </tr>
                   <tr>
                     <td className="py-2 pr-3">10 lub więcej</td>
-                    <td className="py-2 pr-3">Doładowanie portfela za 20 PLN** + odznaka Top Inviter</td>
+                    <td className="py-2 pr-3">
+                      Doładowanie portfela za 20 PLN** + odznaka Top Inviter
+                    </td>
                     <td className="py-2">15% zniżki na pierwszą galerię</td>
                   </tr>
                 </tbody>
               </table>
               <p className="mt-2 text-xs text-photographer-text/80 dark:text-gray-500">
-                * Liczba osób, które zaprosiłeś i które opłaciły swoją pierwszą galerię (płatność realna, nie tylko z bonusu powitalnego).<br />
+                * Liczba osób, które zaprosiłeś i które opłaciły swoją pierwszą galerię (płatność
+                realna, nie tylko z bonusu powitalnego).
+                <br />
                 ** 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie.
               </p>
             </div>
             <ul className="list-disc list-inside space-y-1">
-<li>Kody są ważne na plany 1 GB i 3 GB (1 lub 3 miesiące). Nie na plany 12-miesięczne ani 10 GB.</li>
-          <li>Kody są ważne przez 6 miesięcy.</li>
+              <li>
+                Kody są ważne na plany 1 GB i 3 GB (1 lub 3 miesiące). Nie na plany 12-miesięczne
+                ani 10 GB.
+              </li>
+              <li>Kody są ważne przez 6 miesięcy.</li>
               <li>Kody są jednorazowe.</li>
               <li>Nie można łączyć z innymi promocjami.</li>
             </ul>

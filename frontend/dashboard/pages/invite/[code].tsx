@@ -20,7 +20,8 @@ export default function InviteByCode() {
           Zostałeś zaproszony
         </h1>
         <p className="text-photographer-text dark:text-gray-300 mb-6">
-          Załóż konto i dostaniesz 10% zniżki na pierwszą galerię (plany 1 GB i 3 GB, 1 lub 3 miesiące).
+          Załóż konto i dostaniesz 10% zniżki na pierwszą galerię (plany 1 GB i 3 GB, 1 lub 3
+          miesiące).
         </p>
         <Link href={signUpUrl}>
           <Button variant="primary" className="w-full">

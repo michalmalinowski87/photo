@@ -206,71 +206,69 @@ export const PackageStep = ({
           </p>
         </div>
         <div className="space-y-6">
-            <div>
-              <TypeformInput
-                type="text"
-                label="Cena usługi (PLN) *"
-                placeholder="0.00"
-                value={packagePriceInput ?? centsToPlnString(packagePriceCents)}
-                onChange={(e) => {
-                  const formatted = formatPriceInput(e.target.value);
-                  onPackagePriceInputChange(formatted);
-                  onDataChange({ packagePriceCents: plnToCents(formatted) });
-                }}
-                onBlur={() => {
-                  if (!packagePriceInput || packagePriceInput === "") {
-                    onPackagePriceInputChange(null);
-                  }
-                }}
-                error={!!fieldErrors.packagePriceCents}
-                errorMessage={fieldErrors.packagePriceCents}
-              />
-            </div>
-            <div>
-              <TypeformInput
-                type="text"
-                label="Kwota wpłacona przez klienta (PLN)"
-                placeholder="0.00"
-                value={paymentAmountInput ?? centsToPlnString(initialPaymentAmountCents)}
-                onChange={(e) => {
-                  const formatted = formatPriceInput(e.target.value);
-                  onPaymentAmountInputChange(formatted);
-                  onDataChange({
-                    initialPaymentAmountCents: plnToCents(formatted),
-                  });
-                }}
-                onBlur={() => {
-                  if (!paymentAmountInput || paymentAmountInput === "") {
-                    onPaymentAmountInputChange(null);
-                  }
-                }}
-                error={!!fieldErrors.initialPaymentAmountCents}
-                errorMessage={fieldErrors.initialPaymentAmountCents}
-              />
-              <div className="flex items-center gap-3 mt-3">
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Status płatności:
-                </span>
-                <Badge
-                  color={
-                    paymentStatus === "PAID"
-                      ? "success"
-                      : paymentStatus === "PARTIALLY_PAID"
-                        ? "warning"
-                        : "error"
-                  }
-                  variant="light"
-                >
-                  {paymentStatus === "PAID"
-                    ? "Opłacone"
+          <div>
+            <TypeformInput
+              type="text"
+              label="Cena usługi (PLN) *"
+              placeholder="0.00"
+              value={packagePriceInput ?? centsToPlnString(packagePriceCents)}
+              onChange={(e) => {
+                const formatted = formatPriceInput(e.target.value);
+                onPackagePriceInputChange(formatted);
+                onDataChange({ packagePriceCents: plnToCents(formatted) });
+              }}
+              onBlur={() => {
+                if (!packagePriceInput || packagePriceInput === "") {
+                  onPackagePriceInputChange(null);
+                }
+              }}
+              error={!!fieldErrors.packagePriceCents}
+              errorMessage={fieldErrors.packagePriceCents}
+            />
+          </div>
+          <div>
+            <TypeformInput
+              type="text"
+              label="Kwota wpłacona przez klienta (PLN)"
+              placeholder="0.00"
+              value={paymentAmountInput ?? centsToPlnString(initialPaymentAmountCents)}
+              onChange={(e) => {
+                const formatted = formatPriceInput(e.target.value);
+                onPaymentAmountInputChange(formatted);
+                onDataChange({
+                  initialPaymentAmountCents: plnToCents(formatted),
+                });
+              }}
+              onBlur={() => {
+                if (!paymentAmountInput || paymentAmountInput === "") {
+                  onPaymentAmountInputChange(null);
+                }
+              }}
+              error={!!fieldErrors.initialPaymentAmountCents}
+              errorMessage={fieldErrors.initialPaymentAmountCents}
+            />
+            <div className="flex items-center gap-3 mt-3">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Status płatności:</span>
+              <Badge
+                color={
+                  paymentStatus === "PAID"
+                    ? "success"
                     : paymentStatus === "PARTIALLY_PAID"
-                      ? "Częściowo opłacone"
-                      : "Nieopłacone"}
-                </Badge>
-              </div>
+                      ? "warning"
+                      : "error"
+                }
+                variant="light"
+              >
+                {paymentStatus === "PAID"
+                  ? "Opłacone"
+                  : paymentStatus === "PARTIALLY_PAID"
+                    ? "Częściowo opłacone"
+                    : "Nieopłacone"}
+              </Badge>
             </div>
           </div>
         </div>
+      </div>
     );
   }
 
@@ -293,7 +291,7 @@ export const PackageStep = ({
                 options={existingPackages.map((pkg) => {
                   const namePart = pkg.name ? `${pkg.name} • ` : "";
                   const pricePart = formatPrice(pkg.price ?? 0);
-                  const photosPart = `${pkg.includedPhotos ?? 0} zdjęć`;
+                  const photosPart = `Zdjęcia: ${pkg.includedPhotos ?? 0}`;
                   const extraPricePart = formatPrice(pkg.pricePerExtraPhoto ?? 0);
 
                   return {

@@ -34,12 +34,8 @@ export const BulkDeleteConfirmDialog = ({
     onClose();
   };
 
-  const getMessage = () => {
-    if (count === 1) {
-      return "Czy na pewno chcesz usunąć wybrane zdjęcie?\n\nTa operacja jest nieodwracalna.";
-    }
-    return `Czy na pewno chcesz usunąć ${count} wybranych zdjęć?`;
-  };
+  const getMessage = () =>
+    "Czy na pewno chcesz usunąć wybrane zdjęcia?\n\nTa operacja jest nieodwracalna.";
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} showCloseButton={true} className="max-w-2xl">
@@ -50,10 +46,10 @@ export const BulkDeleteConfirmDialog = ({
           </div>
           <div className="flex-1">
             <h2 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
-              Usuń {count === 1 ? "zdjęcie" : "zdjęcia"}
+              Usuń zdjęcia
             </h2>
             <p className="text-lg text-gray-600 dark:text-gray-400 whitespace-pre-line">
-              {getMessage()}
+              Liczba: {count}. {getMessage()}
             </p>
           </div>
         </div>
@@ -82,7 +78,7 @@ export const BulkDeleteConfirmDialog = ({
             disabled={loading}
             className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Usuwanie..." : `Usuń ${count === 1 ? "zdjęcie" : `${count} zdjęć`}`}
+            {loading ? "Usuwanie..." : `Usuń (${count})`}
           </Button>
         </div>
       </div>

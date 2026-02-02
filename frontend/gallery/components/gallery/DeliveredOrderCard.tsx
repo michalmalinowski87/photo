@@ -43,7 +43,7 @@ export function DeliveredOrderCard({
             Zamówienie #{order.orderNumber || order.orderId.slice(0, 8)}
           </p>
           <p className="text-sm text-gray-600">
-            {new Date(order.deliveredAt).toLocaleDateString("pl-PL")} • {order.selectedCount} zdjęć
+            {new Date(order.deliveredAt).toLocaleDateString("pl-PL")} • Zdjęcia: {order.selectedCount}
           </p>
         </div>
         <div className="flex items-center gap-3">

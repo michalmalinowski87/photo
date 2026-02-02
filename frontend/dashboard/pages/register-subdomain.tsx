@@ -192,7 +192,12 @@ export default function RegisterSubdomain() {
       }
 
       // Re-verify with subdomain (this will claim the subdomain)
-      const result = await confirmSignUpAndClaimSubdomain(email, code, requestedSubdomain, consents);
+      const result = await confirmSignUpAndClaimSubdomain(
+        email,
+        code,
+        requestedSubdomain,
+        consents
+      );
       if (typeof window !== "undefined") {
         localStorage.removeItem("pendingConsents");
       }

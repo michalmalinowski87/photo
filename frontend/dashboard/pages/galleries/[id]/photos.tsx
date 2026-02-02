@@ -1122,7 +1122,7 @@ export default function GalleryPhotos() {
       showToast(
         "error",
         "Błąd",
-        `Nie można usunąć ${blockedCount} ${blockedCount === 1 ? "zdjęcia" : "zdjęć"}, które ${blockedCount === 1 ? "jest" : "są"} częścią zatwierdzonej selekcji klienta lub dostarczonego zlecenia`
+        `Nie można usunąć (${blockedCount}). Te zdjęcia są częścią zatwierdzonej selekcji klienta lub dostarczonego zlecenia`
       );
     }
 
@@ -1895,12 +1895,7 @@ export default function GalleryPhotos() {
                 <Loading size="sm" />
               ) : (
                 <>
-                  {totalGalleryImageCount}{" "}
-                  {totalGalleryImageCount === 1
-                    ? "zdjęcie"
-                    : totalGalleryImageCount < 5
-                      ? "zdjęcia"
-                      : "zdjęć"}
+                  Zdjęcia: {totalGalleryImageCount}
                   {imagesFetching && (
                     <span className="ml-2 text-xs opacity-75">(aktualizacja...)</span>
                   )}
@@ -1953,13 +1948,7 @@ export default function GalleryPhotos() {
               </button>
               <div className="flex items-center gap-4 ml-auto">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {selectedKeys.size === 0
-                    ? "0 zdjęć wybranych"
-                    : selectedKeys.size === 1
-                      ? "1 zdjęcie wybrane"
-                      : selectedKeys.size < 5
-                        ? `${selectedKeys.size} zdjęcia wybrane`
-                        : `${selectedKeys.size} zdjęć wybranych`}
+                  Wybrane: {selectedKeys.size}
                 </span>
                 {(() => {
                   // Get count of selectable images (excluding approved and delivered)
@@ -2074,12 +2063,7 @@ export default function GalleryPhotos() {
                         )}
                       </div>
                       <div className="text-sm text-gray-400 dark:text-gray-500">
-                        {orderTotalCount}{" "}
-                        {orderTotalCount === 1
-                          ? "zdjęcie"
-                          : orderTotalCount < 5
-                            ? "zdjęcia"
-                            : "zdjęć"}
+                        Zdjęcia: {orderTotalCount}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -2156,12 +2140,7 @@ export default function GalleryPhotos() {
                     Niewybrane
                   </div>
                   <div className="text-sm text-gray-400 dark:text-gray-500">
-                    {totalUnselectedCount}{" "}
-                    {totalUnselectedCount === 1
-                      ? "zdjęcie"
-                      : totalUnselectedCount < 5
-                        ? "zdjęcia"
-                        : "zdjęć"}
+                    Zdjęcia: {totalUnselectedCount}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">

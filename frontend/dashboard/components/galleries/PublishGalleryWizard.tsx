@@ -142,8 +142,9 @@ export const PublishGalleryWizard = ({
   ]);
 
   const discountCodeTrimmed = discountCode?.trim() ?? "";
-  const earnedDiscountCodeId =
-    discountCodeTrimmed.toUpperCase().startsWith("DISC-") ? discountCodeTrimmed : undefined;
+  const earnedDiscountCodeId = discountCodeTrimmed.toUpperCase().startsWith("DISC-")
+    ? discountCodeTrimmed
+    : undefined;
   const referralCode = earnedDiscountCodeId
     ? undefined
     : discountCodeTrimmed

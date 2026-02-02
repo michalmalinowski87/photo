@@ -431,13 +431,7 @@ export function FinalsTab({
             </button>
             <div className="flex items-center gap-4 ml-auto">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {selectedKeys.size === 0
-                  ? "0 zdjęć wybranych"
-                  : selectedKeys.size === 1
-                    ? "1 zdjęcie wybrane"
-                    : selectedKeys.size < 5
-                      ? `${selectedKeys.size} zdjęcia wybrane`
-                      : `${selectedKeys.size} zdjęć wybranych`}
+                Wybrane: {selectedKeys.size}
               </span>
               {(() => {
                 const list = displayedImages;

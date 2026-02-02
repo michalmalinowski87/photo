@@ -65,9 +65,7 @@ export interface ReferralData {
   referralHistory: Array<{ date: string; rewardType: string }>;
 }
 
-export function useReferral(
-  options?: Omit<UseQueryOptions<ReferralData>, "queryKey" | "queryFn">
-) {
+export function useReferral(options?: Omit<UseQueryOptions<ReferralData>, "queryKey" | "queryFn">) {
   return useQuery<ReferralData>({
     queryKey: queryKeys.auth.referral(),
     queryFn: () => api.auth.getReferral(),
