@@ -3,14 +3,16 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { getUserIdFromEvent } from '../../lib/src/auth';
 import { createTransaction } from '../../lib/src/transactions';
-import { PRICING_PLANS } from '../../lib/src/pricing';
 
 	const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
+/** Welcome bonus amount: 7 PLN (700 cents) - fixed gift for new users */
+const WELCOME_BONUS_CENTS = 700;
+
 /**
- * Credit welcome bonus to new users (900 cents = 1GB 3-month plan cost)
+ * Credit welcome bonus to new users (700 cents = 7 PLN)
  * This is our customer acquisition cost (CAC) - allows users to try the service for free
- * 
+ *
  * SECURITY: Multiple safeguards prevent abuse:
  * 1. Checks for existing transactions before crediting
  * 2. Checks for existing WELCOME_BONUS ledger entries
@@ -24,7 +26,7 @@ async function creditWelcomeBonus(
 	transactionsTable: string,
 	logger: any
 ): Promise<number> {
-	const welcomeBonusCents = PRICING_PLANS['1GB-3m'].priceCents; // 900 cents (9 PLN)
+	const welcomeBonusCents = WELCOME_BONUS_CENTS;
 	const now = new Date().toISOString();
 	
 	// SECURITY CHECK 1: Check if user already has any transactions (to avoid double crediting)
@@ -94,10 +96,10 @@ async function creditWelcomeBonus(
 			paymentMethod: 'WALLET',
 			metadata: {
 				bonusType: 'NEW_USER_WELCOME',
-				planEquivalent: '1GB-3m',
+				planEquivalent: null,
 				planPriceCents: welcomeBonusCents
 			},
-			composites: ['Welcome Bonus - 1GB 3-month plan equivalent']
+			composites: ['Welcome Bonus - 7 PLN']
 		});
 		
 		// Mark transaction as PAID immediately (it's a bonus, not a payment)

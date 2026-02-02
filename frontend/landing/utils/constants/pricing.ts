@@ -8,9 +8,9 @@
  * then sync the values here to match (priceCents / 100).
  * 
  * Current prices (from backend):
- * - 1GB: 1m=700¢ (7 PLN), 3m=900¢ (9 PLN), 12m=1500¢ (15 PLN)
- * - 3GB: 1m=1200¢ (12 PLN), 3m=1400¢ (14 PLN), 12m=2100¢ (21 PLN)
- * - 10GB: 1m=1400¢ (14 PLN), 3m=1600¢ (16 PLN), 12m=2600¢ (26 PLN)
+ * - 1GB: 1m=500¢ (5 PLN), 3m=700¢ (7 PLN), 12m=1500¢ (15 PLN)
+ * - 3GB: 1m=800¢ (8 PLN), 3m=1000¢ (10 PLN), 12m=2100¢ (21 PLN)
+ * - 10GB: 1m=1000¢ (10 PLN), 3m=1200¢ (12 PLN), 12m=2600¢ (26 PLN)
  * 
  * Photo estimates are calculated using calculatePhotoEstimateFromStorage()
  * from utils/photo-estimates.ts (assumes 15-25MB per photo)
@@ -29,8 +29,8 @@ export const PLANS = [
     info: photoEstimate1GB.displayText,
     photoEstimate: photoEstimate1GB,
     price: {
-      "1m": 7,   // Matches backend: 700 cents
-      "3m": 9,   // Matches backend: 900 cents
+      "1m": 5,   // Matches backend: 500 cents
+      "3m": 7,   // Matches backend: 700 cents
       "12m": 15, // Matches backend: 1500 cents
     },
     features: [
@@ -50,8 +50,8 @@ export const PLANS = [
     info: photoEstimate3GB.displayText,
     photoEstimate: photoEstimate3GB,
     price: {
-      "1m": 12,  // Matches backend: 1200 cents
-      "3m": 14,  // Matches backend: 1400 cents
+      "1m": 8,   // Matches backend: 800 cents
+      "3m": 10,  // Matches backend: 1000 cents
       "12m": 21, // Matches backend: 2100 cents
     },
     features: [
@@ -71,8 +71,8 @@ export const PLANS = [
     info: photoEstimate10GB.displayText,
     photoEstimate: photoEstimate10GB,
     price: {
-      "1m": 14,  // Matches backend: 1400 cents
-      "3m": 16,  // Matches backend: 1600 cents
+      "1m": 10,  // Matches backend: 1000 cents
+      "3m": 12,  // Matches backend: 1200 cents
       "12m": 26, // Matches backend: 2600 cents
     },
     features: [

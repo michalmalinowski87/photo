@@ -20,11 +20,11 @@ export type PlanKey = '1GB-1m' | '1GB-3m' | '1GB-12m' | '3GB-1m' | '3GB-3m' | '3
  * Complete pricing plans configuration
  * 
  * Plans are organized by storage size (1GB, 3GB, 10GB) and duration (1m, 3m, 12m).
- * Prices are in PLN cents (e.g., 700 = 7.00 PLN).
+ * Prices are in PLN cents (e.g., 500 = 5.00 PLN).
  */
 export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 	'1GB-1m': {
-		priceCents: 700,      // 7 PLN
+		priceCents: 500,      // 5 PLN
 		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
 		expiryDays: 30,        // 1 month
 		label: '1GB - 1 miesiąc',
@@ -32,7 +32,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '1 miesiąc'
 	},
 	'1GB-3m': {
-		priceCents: 900,      // 9 PLN
+		priceCents: 700,      // 7 PLN
 		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
 		expiryDays: 90,        // 3 months
 		label: '1GB - 3 miesiące',
@@ -48,7 +48,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '12 miesięcy'
 	},
 	'3GB-1m': {
-		priceCents: 1200,     // 12 PLN
+		priceCents: 800,      // 8 PLN
 		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
 		expiryDays: 30,        // 1 month
 		label: '3GB - 1 miesiąc',
@@ -56,7 +56,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '1 miesiąc'
 	},
 	'3GB-3m': {
-		priceCents: 1400,     // 14 PLN
+		priceCents: 1000,     // 10 PLN
 		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
 		expiryDays: 90,        // 3 months
 		label: '3GB - 3 miesiące',
@@ -72,7 +72,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '12 miesięcy'
 	},
 	'10GB-1m': {
-		priceCents: 1400,     // 14 PLN
+		priceCents: 1000,     // 10 PLN
 		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
 		expiryDays: 30,        // 1 month
 		label: '10GB - 1 miesiąc',
@@ -80,7 +80,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '1 miesiąc'
 	},
 	'10GB-3m': {
-		priceCents: 1600,     // 16 PLN
+		priceCents: 1200,     // 12 PLN
 		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
 		expiryDays: 90,        // 3 months
 		label: '10GB - 3 miesiące',

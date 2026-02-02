@@ -43,11 +43,11 @@ export const CARDS = [
         <CardHeader>
           <CardTitle className="text-foreground">Proste ceny</CardTitle>
           <CardDescription>
-            Od 7 PLN za galerię
+            Od 5 PLN za galerię
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-foreground">7 PLN</div>
+          <div className="text-2xl font-bold text-foreground">5 PLN</div>
           <div className="text-sm text-muted-foreground">za 1 miesiąc</div>
         </CardContent>
       </Card>

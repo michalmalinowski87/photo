@@ -31,7 +31,7 @@ Photographers authenticate, receive welcome bonus on first registration, manage 
 2. **Welcome Bonus (New Users Only)**
    - **Automatic Credit**: When a new user accesses their wallet for the first time (via `GET /wallet/balance`):
      - System detects new user (no existing wallet and no previous transactions)
-     - Automatically credits **900 cents (9 PLN)** to wallet - equivalent to 1GB 3-month plan cost
+     - Automatically credits **700 cents (7 PLN)** to wallet as welcome gift
      - This is our customer acquisition cost (CAC) - allows users to try the service for free
      - Creates transaction record with type `WELCOME_BONUS` and status `PAID`
      - Creates ledger entry with type `WELCOME_BONUS`
@@ -72,7 +72,7 @@ Photographers authenticate, receive welcome bonus on first registration, manage 
 
 ### Data Flow
 ```
-New User → GET /wallet/balance → Welcome Bonus (900 cents) → Wallet Credit
+New User → GET /wallet/balance → Welcome Bonus (700 cents / 7 PLN) → Wallet Credit
 Dashboard → POST /payments/checkout → Stripe Checkout → Payment → Webhook → Wallet Credit
 ```
 
