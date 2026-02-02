@@ -673,9 +673,6 @@ export const PackageStep = ({
                         photoPrintCount: Math.max(0, Math.min(photoPrintCount ?? 0, includedCount)),
                       };
                       await onPackageSave(payload);
-                      // Reset payment amount when new package is saved
-                      onDataChange({ initialPaymentAmountCents: 0 });
-                      onPaymentAmountInputChange(null);
                     } finally {
                       setSaving(false);
                     }

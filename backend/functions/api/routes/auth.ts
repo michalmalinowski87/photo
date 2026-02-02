@@ -169,10 +169,18 @@ router.get('/referral', async (req: Request, res: Response) => {
 		let referralHistory = ((userGet.Item as { referralHistory?: { date: string; rewardType: string }[] } | undefined)?.referralHistory) || [];
 
 		if (!referralCode) {
-			const eligible = await isReferrerEligible(userId);
-			if (eligible) {
-				const result = await ensureUserReferralCode(userId);
-				referralCode = result.code;
+			try {
+				const eligible = await isReferrerEligible(userId);
+				if (eligible) {
+					const result = await ensureUserReferralCode(userId);
+					referralCode = result.code;
+				}
+			} catch (eligibilityError: any) {
+				logger?.warn('Referral eligibility check failed, treating as ineligible', {
+					userId,
+					error: eligibilityError?.message ?? String(eligibilityError)
+				});
+				// Leave referralCode null so ineligible users get 200 with null link and friendly UI
 			}
 		}
 
