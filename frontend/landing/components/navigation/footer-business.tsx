@@ -53,9 +53,25 @@ export default function FooterBusiness() {
                   </ul>
                 </div>
               </div>
+              <div className="col-lg-2 col-md-6 col-12">
+                <div className="footer-widget f-link">
+                  <h5>Dokumenty</h5>
+                  <ul>
+                    <li>
+                      <Link href="/terms">Regulamin</Link>
+                    </li>
+                    <li>
+                      <Link href="/privacy">Polityka Prywatności</Link>
+                    </li>
+                    <li>
+                      <a href="mailto:[email kontaktowy]">Kontakt</a>
+                    </li>
+                  </ul>
+                </div>
+              </div>
               <div className="col-lg-4 col-md-6 col-12">
                 <div className="footer-widget">
-                  <h5>Obserwuj Nas</h5>
+
                   <div className="footer-social">
                     <ul className="footer-social-list">
                       <li>

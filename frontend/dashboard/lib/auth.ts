@@ -473,7 +473,11 @@ export function signIn(email: string, password: string): Promise<string> {
   });
 }
 
-export function signUp(email: string, password: string): Promise<ISignUpResult["user"]> {
+export function signUp(
+  email: string,
+  password: string,
+  consents?: ConsentsPayload
+): Promise<ISignUpResult["user"]> {
   return new Promise(async (resolve, reject) => {
     // Use backend API for signup with rate limiting
     const apiUrl = getApiBaseUrlOrThrow();
@@ -484,7 +488,7 @@ export function signUp(email: string, password: string): Promise<ISignUpResult["
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, consents }),
       });
 
       if (!response.ok) {
@@ -545,6 +549,16 @@ export type ConfirmSignUpResult = {
   subdomainError?: { code: string; message: string };
 };
 
+export type LegalConsent = {
+  version: string;
+  acceptedAt: string; // ISO string
+};
+
+export type ConsentsPayload = {
+  terms: LegalConsent;
+  privacy: LegalConsent;
+};
+
 function getApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL;
   if (raw) {
@@ -571,14 +585,15 @@ function getApiBaseUrlOrThrow(): string {
 export async function confirmSignUpAndClaimSubdomain(
   email: string,
   code: string,
-  subdomain?: string
+  subdomain?: string,
+  consents?: ConsentsPayload
 ): Promise<ConfirmSignUpResult> {
   const apiUrl = getApiBaseUrlOrThrow();
 
   const response = await fetch(`${apiUrl}/auth/public/confirm-signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code, subdomain }),
+    body: JSON.stringify({ email, code, subdomain, consents }),
   });
 
   if (!response.ok) {

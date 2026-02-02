@@ -70,7 +70,7 @@ const faqCategories = [
 const gettingStartedSteps = [
   {
     title: "Utwórz konto",
-    description: "Zarejestruj się i otrzymaj 1 darmową galerię do przetestowania"
+    description: "Zarejestruj się i otrzymaj darmową galerię do przetestowania"
   },
   {
     title: "Utwórz galerię",

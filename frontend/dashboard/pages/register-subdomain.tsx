@@ -4,7 +4,12 @@ import React, { useState, useEffect } from "react";
 
 import Button from "../components/ui/button/Button";
 import { Label } from "../components/ui/label";
-import { initAuth, confirmSignUpAndClaimSubdomain, checkSubdomainAvailability } from "../lib/auth";
+import {
+  initAuth,
+  confirmSignUpAndClaimSubdomain,
+  checkSubdomainAvailability,
+  ConsentsPayload,
+} from "../lib/auth";
 import {
   normalizeSubdomainInput,
   validateSubdomainFormat,
@@ -164,6 +169,18 @@ export default function RegisterSubdomain() {
 
     setLoading(true);
     try {
+      let consents: ConsentsPayload | undefined;
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem("pendingConsents");
+        if (raw) {
+          try {
+            consents = JSON.parse(raw) as ConsentsPayload;
+          } catch (_e) {
+            consents = undefined;
+          }
+        }
+      }
+
       const normalized = normalizeSubdomainInput(subdomain);
       const validation = normalized ? validateSubdomainFormat(normalized) : { ok: true as const };
       const requestedSubdomain = normalized && validation.ok ? normalized : undefined;
@@ -175,7 +192,10 @@ export default function RegisterSubdomain() {
       }
 
       // Re-verify with subdomain (this will claim the subdomain)
-      const result = await confirmSignUpAndClaimSubdomain(email, code, requestedSubdomain);
+      const result = await confirmSignUpAndClaimSubdomain(email, code, requestedSubdomain, consents);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pendingConsents");
+      }
       setSuccess(true);
       if (result.subdomainClaimed && result.subdomain) {
         setSubdomainHint(`Zarezerwowano subdomenę: ${result.subdomain}`);
@@ -253,7 +273,7 @@ export default function RegisterSubdomain() {
             Wybierz swoją subdomenę
           </h1>
           <p className="text-base md:text-lg text-muted-foreground">
-            Utwórz unikalną subdomenę dla swojej marki (opcjonalnie)
+            Utwórz unikalną subdomenę dla swojej marki
           </p>
         </div>
 

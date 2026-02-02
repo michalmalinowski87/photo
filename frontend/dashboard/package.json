@@ -25,6 +25,7 @@
     "@tanstack/react-query/react": "^19.2.1"
   },
   "dependencies": {
+    "@photocloud/legal": "*",
     "@photocloud/gallery-components": "*",
     "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-slot": "^1.1.1",

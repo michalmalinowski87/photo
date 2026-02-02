@@ -14,6 +14,7 @@ import {
 } from "../components/ui/password-strength-validator";
 import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
 import { getPublicLandingUrl } from "../lib/public-env";
+import { LEGAL_DOC_VERSIONS } from "@photocloud/legal";
 
 interface CognitoError extends Error {
   message: string;
@@ -33,9 +34,16 @@ export default function SignUp() {
   const [loading, setLoading] = useState<boolean>(false);
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrengthResult | null>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
+  // Legal: consents must not be pre-selected; user must actively opt in.
+  const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState<boolean>(false);
   const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(
     null
   );
+
+  const landingUrl = getPublicLandingUrl().replace(/\/$/, "");
+  const termsUrl = `${landingUrl}/terms`;
+  const privacyUrl = `${landingUrl}/privacy`;
 
   useEffect(() => {
     const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID;
@@ -91,6 +99,11 @@ export default function SignUp() {
       return;
     }
 
+    if (!termsAccepted || !privacyAccepted) {
+      setError("Aby kontynuować, zaakceptuj Regulamin oraz Politykę Prywatności/RODO.");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Hasła nie są identyczne");
       return;
@@ -104,7 +117,23 @@ export default function SignUp() {
 
     setLoading(true);
     try {
-      await signUp(email, password);
+      // Persist consents for the verification flow (confirm happens later)
+      const acceptedAt = new Date().toISOString();
+      const consents = {
+        terms: { version: LEGAL_DOC_VERSIONS.terms, acceptedAt },
+        privacy: { version: LEGAL_DOC_VERSIONS.privacy, acceptedAt },
+      };
+      if (typeof window !== "undefined") {
+        localStorage.setItem(
+          "pendingConsents",
+          JSON.stringify({
+            terms: consents.terms,
+            privacy: consents.privacy,
+          })
+        );
+      }
+
+      await signUp(email, password, consents);
       // Redirect to verification page with email
       const returnUrl = router.query.returnUrl ?? "/";
       void router.push(
@@ -193,7 +222,7 @@ export default function SignUp() {
             Zarejestruj się
           </h2>
           <p className="text-base md:text-lg text-muted-foreground mb-8">
-            Utwórz konto i otrzymaj 1 darmową galerię do przetestowania
+            Utwórz konto i otrzymaj darmową galerię do przetestowania
           </p>
 
           {error && (
@@ -276,11 +305,81 @@ export default function SignUp() {
               )}
             </div>
 
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <div className="flex flex-col gap-3">
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 accent-primary"
+                      checked={termsAccepted}
+                      onChange={(e) => {
+                        setTermsAccepted(e.target.checked);
+                        setError("");
+                      }}
+                    />
+                    <span className="text-sm text-foreground leading-relaxed">
+                      Akceptuję{" "}
+                      <a
+                        href={termsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary font-bold hover:opacity-80"
+                      >
+                        Regulamin
+                      </a>{" "}
+                      (wymagane)
+                    </span>
+                  </label>
+
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 accent-primary"
+                      checked={privacyAccepted}
+                      onChange={(e) => {
+                        setPrivacyAccepted(e.target.checked);
+                        setError("");
+                      }}
+                    />
+                    <span className="text-sm text-foreground leading-relaxed">
+                      Przeczytałem/am i akceptuję{" "}
+                      <a
+                        href={privacyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary font-bold hover:opacity-80"
+                      >
+                        Politykę Prywatności oraz Informację o przetwarzaniu danych osobowych (RODO)
+                      </a>{" "}
+                      (wymagane)
+                    </span>
+                  </label>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      className="text-sm text-primary font-bold hover:opacity-80"
+                      onClick={() => {
+                        setTermsAccepted(true);
+                        setPrivacyAccepted(true);
+                        setError("");
+                      }}
+                    >
+                      Wyrażam wszystkie zgody
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <Button
               type="submit"
               variant="primary"
               className="w-full"
-              disabled={loading || !passwordStrength?.meetsMinimum}
+              disabled={
+                loading || !passwordStrength?.meetsMinimum || !termsAccepted || !privacyAccepted
+              }
             >
               {loading ? "Tworzenie konta..." : "Rozpocznij za darmo"}
             </Button>
@@ -289,19 +388,6 @@ export default function SignUp() {
           <p className="text-sm text-muted-foreground mt-5 text-center">
             Po rejestracji otrzymasz email z kodem weryfikacyjnym
           </p>
-
-          <div className="flex flex-col items-start w-full mt-10">
-            <p className="text-base text-muted-foreground">
-              Rejestrując się, akceptujesz nasze{" "}
-              <Link href="/terms" className="text-primary font-bold">
-                Warunki korzystania{" "}
-              </Link>
-              i{" "}
-              <Link href="/privacy" className="text-primary font-bold">
-                Politykę prywatności
-              </Link>
-            </p>
-          </div>
         </div>
 
         <div className="flex items-start mt-auto border-t border-border/80 py-8 w-full">

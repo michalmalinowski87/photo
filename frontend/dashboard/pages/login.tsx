@@ -33,6 +33,9 @@ export default function Login() {
   const hasRedirected = useRef<boolean>(false);
   const { setSessionExpired, updateAuthState } = useAuth();
   const isMobile = useIsMobile();
+  const landingUrl = getPublicLandingUrl().replace(/\/$/, "");
+  const termsUrl = `${landingUrl}/terms`;
+  const privacyUrl = `${landingUrl}/privacy`;
 
   useEffect(() => {
     // Setup auth status listener for landing page
@@ -292,13 +295,23 @@ export default function Login() {
           <div className="flex flex-col items-start w-full mt-10">
             <p className="text-base text-muted-foreground">
               Logując się, akceptujesz nasze{" "}
-              <Link href="/terms" className="text-primary font-bold">
-                Warunki korzystania{" "}
-              </Link>
+              <a
+                href={termsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-bold hover:opacity-80 transition-opacity"
+              >
+                Regulamin{" "}
+              </a>
               i{" "}
-              <Link href="/privacy" className="text-primary font-bold">
+              <a
+                href={privacyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-bold hover:opacity-80 transition-opacity"
+              >
                 Politykę prywatności
-              </Link>
+              </a>
             </p>
           </div>
         </div>

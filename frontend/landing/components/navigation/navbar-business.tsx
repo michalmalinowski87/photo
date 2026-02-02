@@ -192,17 +192,25 @@ export default function NavbarBusiness() {
                   {/* Right side: Dashboard when logged in, Login when not */}
                   {!isLoading && (
                     <ul className="navbar-nav ms-auto d-none d-lg-flex">
-                      <li className="nav-item">
-                        {isAuthenticated ? (
+                      {isAuthenticated ? (
+                        <li className="nav-item">
                           <Link className="page-scroll" href={`${dashboardUrl}/`}>
                             Dashboard
                           </Link>
-                        ) : (
-                          <Link className="page-scroll" href={`${dashboardUrl}/login`}>
-                            Logowanie
-                          </Link>
-                        )}
-                      </li>
+                        </li>
+                      ) : (
+                        <li className="nav-item">
+                          <span className="nav-login-signup">
+                            <Link className="page-scroll" href={`${dashboardUrl}/login`}>
+                              Logowanie
+                            </Link>
+                            <span className="nav-sep" aria-hidden="true"> / </span>
+                            <Link className="page-scroll" href={`${dashboardUrl}/sign-up`}>
+                              Rejestracja
+                            </Link>
+                          </span>
+                        </li>
+                      )}
                     </ul>
                   )}
                 </div>
@@ -281,15 +289,20 @@ export default function NavbarBusiness() {
                 </li>
               ) : (
                 <li>
-                  <Link href={`${dashboardUrl}/login`} onClick={() => setIsSidebarOpen(false)}>
-                    Logowanie
-                  </Link>
+                  <span className="nav-login-signup">
+                    <Link href={`${dashboardUrl}/login`} onClick={() => setIsSidebarOpen(false)}>
+                      Logowanie
+                    </Link>
+                    <span className="nav-sep" aria-hidden="true"> / </span>
+                    <Link href={`${dashboardUrl}/sign-up`} onClick={() => setIsSidebarOpen(false)}>
+                      Rejestracja
+                    </Link>
+                  </span>
                 </li>
               )}
             </ul>
           </div>
           <div className="sidebar-social align-items-center justify-content-center">
-            <h5 className="social-title">Obserwuj Nas</h5>
             <ul>
               <li>
                 <a href="javascript:void(0)">

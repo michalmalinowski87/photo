@@ -1,0 +1,156 @@
+/**
+ * Legal Document Styles
+ *
+ * Used for /terms and /privacy pages on LANDING.
+ * Designed to match business-template (variables in :root).
+ */
+ 
+.legal-page {
+  padding-top: 80px;
+  padding-bottom: 80px;
+}
+ 
+@media (max-width: 767px) {
+  .legal-page {
+    padding-top: 50px;
+    padding-bottom: 50px;
+  }
+}
+ 
+.legal-card {
+  background: var(--white);
+  border: 1px solid var(--gray-4);
+  border-radius: 12px;
+  padding: 36px 40px;
+}
+ 
+@media (max-width: 767px) {
+  .legal-card {
+    padding: 22px 18px;
+  }
+}
+ 
+.legal-doc {
+  color: var(--dark-2);
+}
+ 
+.legal-doc h1,
+.legal-doc h2,
+.legal-doc h3 {
+  color: var(--dark-1);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px 0;
+}
+ 
+.legal-doc h1 {
+  font-size: 34px;
+  line-height: 1.18;
+}
+ 
+.legal-doc h2 {
+  font-size: 22px;
+  line-height: 1.25;
+  margin-top: 28px;
+}
+ 
+.legal-doc h3 {
+  font-size: 18px;
+  line-height: 1.3;
+  margin-top: 18px;
+}
+ 
+.legal-doc p {
+  color: var(--dark-3);
+  margin: 0 0 14px 0;
+  font-size: 16px;
+  line-height: 1.75;
+}
+ 
+.legal-doc strong {
+  color: var(--dark-2);
+  font-weight: 800;
+}
+ 
+.legal-doc a {
+  color: var(--primary);
+  text-decoration: none;
+}
+ 
+.legal-doc a:hover {
+  color: var(--primary-dark);
+  text-decoration: underline;
+}
+ 
+.legal-doc ul,
+.legal-doc ol {
+  margin: 0 0 14px 0;
+  padding-left: 22px;
+  color: var(--dark-3);
+  font-size: 16px;
+  line-height: 1.75;
+}
+ 
+.legal-doc li {
+  margin: 6px 0;
+}
+ 
+.legal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin: 10px 0 20px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--gray-4);
+  background: var(--light-1);
+  border-radius: 10px;
+  color: var(--dark-3);
+  font-size: 14px;
+}
+ 
+.legal-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+ 
+.legal-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--gray-4);
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 18px 0 20px 0;
+}
+ 
+.legal-table th,
+.legal-table td {
+  border-bottom: 1px solid var(--gray-4);
+  padding: 12px 12px;
+  vertical-align: top;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--dark-3);
+}
+ 
+.legal-table th {
+  background: var(--light-1);
+  color: var(--dark-2);
+  font-weight: 800;
+}
+ 
+.legal-table tr:last-child td {
+  border-bottom: none;
+}
+ 
+.legal-note {
+  margin: 18px 0 0 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--gray-4);
+  background: var(--light-3);
+  color: var(--dark-3);
+  font-size: 14px;
+  line-height: 1.7;
+}
+

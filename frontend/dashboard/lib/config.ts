@@ -7,8 +7,17 @@ const CONFIG_CACHE_KEY = "photocloud_config";
 const CONFIG_CACHE_TIMESTAMP_KEY = "photocloud_config_timestamp";
 const CONFIG_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
+export interface CompanyConfig {
+  company_name: string;
+  company_tax_id: string;
+  company_address: string;
+  company_email: string;
+  legal_document_publication_date: string;
+}
+
 interface AppConfig {
   paymentMethods: string[];
+  company?: CompanyConfig;
   version: string;
 }
 

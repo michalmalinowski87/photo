@@ -76,20 +76,6 @@ function createVerificationCodeEmailTemplate(): string {
 		<tr>
 			<td align="center" style="padding: 40px 20px;">
 				<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: ${COLORS.surface.card}; border-radius: 16px; box-shadow: 0px 1px 3px 0px rgba(30, 26, 23, 0.10), 0px 1px 2px 0px rgba(30, 26, 23, 0.06); overflow: hidden;">
-					<!-- Header -->
-					<tr>
-						<td style="padding: 0; background-color: ${COLORS.surface.card};">
-							<div style="height: 6px; background: linear-gradient(90deg, ${COLORS.brand.accent} 0%, ${COLORS.brand.accentLight} 100%);"></div>
-							<div style="padding: 28px 40px 22px;">
-								<h1 style="margin: 0; font-size: 22px; font-weight: 800; color: ${COLORS.text.heading}; letter-spacing: -0.02em; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-									PhotoCloud
-								</h1>
-								<p style="margin: 6px 0 0 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.5; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-									Galerie i wybór zdjęć — prosto, bezpiecznie i pięknie.
-								</p>
-							</div>
-						</td>
-					</tr>
 					<!-- Content -->
 					<tr>
 						<td style="padding: 32px 40px;">
@@ -162,20 +148,6 @@ function createInvitationEmailTemplate(): string {
 		<tr>
 			<td align="center" style="padding: 40px 20px;">
 				<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: ${COLORS.surface.card}; border-radius: 16px; box-shadow: 0px 1px 3px 0px rgba(30, 26, 23, 0.10), 0px 1px 2px 0px rgba(30, 26, 23, 0.06); overflow: hidden;">
-					<!-- Header -->
-					<tr>
-						<td style="padding: 0; background-color: ${COLORS.surface.card};">
-							<div style="height: 6px; background: linear-gradient(90deg, ${COLORS.brand.accent} 0%, ${COLORS.brand.accentLight} 100%);"></div>
-							<div style="padding: 28px 40px 22px;">
-								<h1 style="margin: 0; font-size: 22px; font-weight: 800; color: ${COLORS.text.heading}; letter-spacing: -0.02em; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-									PhotoCloud
-								</h1>
-								<p style="margin: 6px 0 0 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.5; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-									Galerie i wybór zdjęć — prosto, bezpiecznie i pięknie.
-								</p>
-							</div>
-						</td>
-					</tr>
 					<!-- Content -->
 					<tr>
 						<td style="padding: 32px 40px;">
@@ -639,6 +611,33 @@ export class AppStack extends Stack {
 			parameterName: `${ssmParameterPrefix}/CorsOrigins`,
 			stringValue: corsOrigins.join(','),
 			description: 'Comma-separated list of allowed CORS origins'
+		});
+
+		// Company and legal document configuration (for legal pages and PDFs)
+		const companyNameParam = new StringParameter(this, 'CompanyNameParam', {
+			parameterName: `${ssmParameterPrefix}/CompanyName`,
+			stringValue: process.env.COMPANY_NAME ?? 'TBA',
+			description: 'Company name for legal documents'
+		});
+		const companyTaxIdParam = new StringParameter(this, 'CompanyTaxIdParam', {
+			parameterName: `${ssmParameterPrefix}/CompanyTaxId`,
+			stringValue: process.env.COMPANY_TAX_ID ?? 'TBA',
+			description: 'Company tax ID (NIP) for legal documents'
+		});
+		const companyAddressParam = new StringParameter(this, 'CompanyAddressParam', {
+			parameterName: `${ssmParameterPrefix}/CompanyAddress`,
+			stringValue: process.env.COMPANY_ADDRESS ?? 'TBA',
+			description: 'Company address for legal documents'
+		});
+		const companyEmailParam = new StringParameter(this, 'CompanyEmailParam', {
+			parameterName: `${ssmParameterPrefix}/CompanyEmail`,
+			stringValue: process.env.COMPANY_EMAIL ?? 'TBA',
+			description: 'Company contact email for legal documents'
+		});
+		const legalDocumentPublicationDateParam = new StringParameter(this, 'LegalDocumentPublicationDateParam', {
+			parameterName: `${ssmParameterPrefix}/LegalDocumentPublicationDate`,
+			stringValue: process.env.LEGAL_DOCUMENT_PUBLICATION_DATE ?? '02.02.2026',
+			description: 'Legal document publication date (e.g. 02.02.2026)'
 		});
 
 		// SSM Parameter Store policy for Lambda functions to read configuration
@@ -1237,6 +1236,11 @@ export class AppStack extends Stack {
 			]
 		}));
 
+		// SES permissions for welcome email (confirm-signup sends email with PDF attachments)
+		authFn.addToRolePolicy(new PolicyStatement({
+			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+			resources: ['*']
+		}));
 
 		// Single API Lambda function - handles all HTTP endpoints via Express router (except auth)
 		const apiFn = new NodejsFunction(this, 'ApiFunction', {

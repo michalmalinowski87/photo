@@ -2,6 +2,11 @@ import { Router, Request, Response } from 'express';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { CognitoIdentityProviderClient, SignUpCommand, ResendConfirmationCodeCommand, ForgotPasswordCommand, ConfirmForgotPasswordCommand, AdminGetUserCommand, ConfirmSignUpCommand } from '@aws-sdk/client-cognito-identity-provider';
+import { getRequiredConfigValue } from '../../../lib/src/ssm-config';
+import { getCompanyConfig } from '../../../lib/src/company-config';
+import { getSenderEmail } from '../../../lib/src/email-config';
+import { createWelcomeEmail } from '../../../lib/src/email';
+import { sendRawEmailWithAttachments } from '../../../lib/src/raw-email';
 
 const router = Router();
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -219,10 +224,21 @@ router.post('/signup', async (req: Request, res: Response) => {
 		return res.status(500).json({ error: 'Missing rate limit table configuration' });
 	}
 
-	const { email, password } = req.body;
+	const { email, password, consents } = req.body ?? {};
 
 	if (!email || !password) {
 		return res.status(400).json({ error: 'Email and password are required' });
+	}
+
+	// Require legal consents (fail closed)
+	if (
+		!consents ||
+		!consents.terms?.version ||
+		!consents.terms?.acceptedAt ||
+		!consents.privacy?.version ||
+		!consents.privacy?.acceptedAt
+	) {
+		return res.status(400).json({ error: 'Legal consents are required' });
 	}
 
 	const normalizedEmail = email.toLowerCase().trim();
@@ -703,6 +719,7 @@ router.get('/subdomain-availability', async (req: Request, res: Response) => {
 router.post('/confirm-signup', async (req: Request, res: Response) => {
 	const logger = (req as any).logger;
 	const envProc = (globalThis as any).process;
+	const stage = envProc?.env?.STAGE || 'dev';
 	const clientId = (envProc?.env?.COGNITO_USER_POOL_CLIENT_ID || envProc?.env?.COGNITO_CLIENT_ID) as string;
 	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
 	const usersTable = envProc?.env?.USERS_TABLE as string;
@@ -721,7 +738,7 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 		return res.status(500).json({ error: 'Missing SUBDOMAINS_TABLE configuration' });
 	}
 
-	const { email, code, subdomain: rawSubdomain } = req.body ?? {};
+	const { email, code, subdomain: rawSubdomain, consents } = req.body ?? {};
 	const normalizedEmail = String(email ?? '').toLowerCase().trim();
 
 	// Validate email + code
@@ -731,6 +748,17 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 	}
 	if (!/^\d{6}$/.test(String(code ?? ''))) {
 		return res.status(400).json({ error: 'Code must be 6 digits' });
+	}
+
+	// Require legal consents (fail closed)
+	if (
+		!consents ||
+		!consents.terms?.version ||
+		!consents.terms?.acceptedAt ||
+		!consents.privacy?.version ||
+		!consents.privacy?.acceptedAt
+	) {
+		return res.status(400).json({ error: 'Legal consents are required' });
 	}
 
 	// 1) Confirm signup in Cognito
@@ -762,6 +790,58 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 	if (!userId) {
 		// Account is confirmed, but we can't safely claim a subdomain without a stable userId
 		return res.json({ verified: true, subdomainClaimed: false, subdomainError: { code: 'USER_ID_MISSING', message: 'Account verified, but could not finalize subdomain setup. Please try later.' } });
+	}
+
+	// 2.5) Upsert user record with legal consents (always, regardless of subdomain)
+	try {
+		const now = new Date().toISOString();
+		await ddb.send(new UpdateCommand({
+			TableName: usersTable,
+			Key: { userId },
+			UpdateExpression:
+				'SET contactEmail = :e, updatedAt = :u, createdAt = if_not_exists(createdAt, :u), #legal = :legal',
+			ExpressionAttributeNames: {
+				'#legal': 'legal'
+			},
+			ExpressionAttributeValues: {
+				':e': normalizedEmail,
+				':u': now,
+				':legal': {
+					terms: consents.terms,
+					privacy: consents.privacy
+				}
+			}
+		}));
+	} catch (err: any) {
+		logger?.warn('Failed to store legal consents', { userId, errorName: err?.name, errorMessage: err?.message });
+	}
+
+	// 2.6) Welcome email (no attachments)
+	// Best-effort: failing to send email should not block account verification.
+	try {
+		const sender = await getSenderEmail();
+		const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+		const landingUrl = await getRequiredConfigValue(stage, 'PublicLandingUrl', { envVarName: 'PUBLIC_LANDING_URL' });
+		const privacyUrl = `${landingUrl.replace(/\/+$/, '')}/privacy`;
+		const termsUrl = `${landingUrl.replace(/\/+$/, '')}/terms`;
+		const company = await getCompanyConfig();
+
+		const template = createWelcomeEmail({ dashboardUrl, landingUrl, privacyUrl, termsUrl, companyName: company.company_name });
+
+		if (!sender) {
+			logger?.warn('Welcome email skipped: sender email not configured (SENDER_EMAIL or SSM SenderEmail)', { email: normalizedEmail });
+		} else {
+			await sendRawEmailWithAttachments({
+				to: normalizedEmail,
+				from: sender,
+				subject: template.subject,
+				html: template.html || template.text,
+				attachments: []
+			});
+			logger?.info('Welcome email sent', { email: normalizedEmail });
+		}
+	} catch (err: any) {
+		logger?.warn('Welcome email failed', { email: normalizedEmail, errorName: err?.name, errorMessage: err?.message });
 	}
 
 	// 3) Best-effort claim subdomain (optional)

@@ -76,20 +76,6 @@ function createEmailWrapper(content: string): string {
 		<tr>
 			<td align="center" style="padding: 40px 20px;">
 				<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: ${COLORS.surface.card}; border-radius: 16px; box-shadow: 0px 1px 3px 0px rgba(30, 26, 23, 0.10), 0px 1px 2px 0px rgba(30, 26, 23, 0.06); overflow: hidden;">
-					<!-- Header -->
-					<tr>
-						<td style="padding: 0; background-color: ${COLORS.surface.card};">
-							<div style="height: 6px; background: linear-gradient(90deg, ${COLORS.brand.accent} 0%, ${COLORS.brand.accentLight} 100%);"></div>
-							<div style="padding: 28px 40px 22px;">
-								<h1 style="margin: 0; font-size: 22px; font-weight: 800; color: ${COLORS.text.heading}; letter-spacing: -0.02em; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-									PhotoCloud
-								</h1>
-								<p style="margin: 6px 0 0 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.5; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-									Galerie i wybór zdjęć — prosto, bezpiecznie i pięknie.
-								</p>
-							</div>
-						</td>
-					</tr>
 					<!-- Content -->
 					<tr>
 						<td style="padding: 32px 40px;">
@@ -837,6 +823,62 @@ export function createVerificationCodeEmail(codePlaceholder: string = '{####}'):
 	`;
 	
 	return createEmailWrapper(content);
+}
+
+export function createWelcomeEmail(params: {
+	dashboardUrl: string;
+	landingUrl: string;
+	privacyUrl: string;
+	termsUrl: string;
+	companyName?: string;
+}): EmailTemplate {
+	const dashboardUrl = params.dashboardUrl.replace(/\/+$/, '');
+	const landingUrl = params.landingUrl.replace(/\/+$/, '');
+	const privacyUrl = params.privacyUrl || `${landingUrl}/privacy`;
+	const termsUrl = params.termsUrl || `${landingUrl}/terms`;
+	const companyName = params.companyName?.trim() || 'PhotoCloud';
+
+	const content = `
+		${createHeading("Witaj w PhotoCloud!", 2)}
+		${createParagraph("Twoje konto zostało pomyślnie utworzone. Cieszymy się, że jesteś z nami!")}
+
+		${createHeading("Pierwsze kroki", 2)}
+		${createParagraphHtml(`
+			<ol style="margin: 0 0 16px 0; padding-left: 20px; color: ${COLORS.text.body}; font-size: 16px; line-height: 1.7; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+				<li>Zaloguj się do panelu i dokończ konfigurację konta.</li>
+				<li>Utwórz pierwszą galerię (na start masz 1 darmową galerię testową).</li>
+				<li>Wyślij klientowi link i zbieraj wybór zdjęć bez chaosu w wiadomościach.</li>
+			</ol>
+		`)}
+		${createButton("Przejdź do panelu", `${dashboardUrl}/login`, "primary")}
+
+		${createHeading("Dokumenty i ochrona danych", 2)}
+		<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; border-radius: 12px; padding: 20px; margin: 20px 0;">
+			<p style="margin: 0 0 12px 0; font-size: 15px; color: ${COLORS.text.body}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+				Administratorem danych jest <strong>${escapeHtml(companyName)}</strong>. Szczegóły znajdziesz w dokumentach poniżej.
+			</p>
+			<p style="margin: 0; font-size: 14px; line-height: 1.8; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+				<a href="${escapeHtml(termsUrl)}" style="color: ${COLORS.brand.accent}; text-decoration: none; font-weight: 600;">Regulamin</a><br>
+				<a href="${escapeHtml(privacyUrl)}" style="color: ${COLORS.brand.accent}; text-decoration: none; font-weight: 600;">Polityka Prywatności / RODO</a>
+			</p>
+		</div>
+	`;
+
+	return {
+		subject: 'Witamy w PhotoCloud — pierwsze kroki',
+		text:
+			`Witaj w PhotoCloud!\n\n` +
+			`Twoje konto zostało pomyślnie utworzone.\n\n` +
+			`Pierwsze kroki:\n` +
+			`1) Zaloguj się do panelu\n` +
+			`2) Utwórz pierwszą galerię\n` +
+			`3) Wyślij klientowi link\n\n` +
+			`Panel: ${dashboardUrl}/login\n\n` +
+			`Administratorem danych jest ${companyName}.\n` +
+			`Regulamin: ${termsUrl}\n` +
+			`Polityka Prywatności/RODO: ${privacyUrl}\n`,
+		html: createEmailWrapper(content),
+	};
 }
 
 export function createZipGenerationFailedEmail(
