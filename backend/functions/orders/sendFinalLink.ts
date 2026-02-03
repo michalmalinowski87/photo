@@ -279,6 +279,45 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		}));
 		logger.info('Order marked as DELIVERED', { galleryId, orderId, deliveredAt: now, finalZipGeneratingSet: !!onOrderDeliveredFnName });
 		
+		// Update Gallery with deliveredAt timestamp (for conversion funnel tracking)
+		// Only set if this is the first delivered order (denormalized for performance)
+		const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
+		if (galleriesTable) {
+			try {
+				// Check if gallery already has deliveredAt set
+				const galleryGet = await ddb.send(new GetCommand({
+					TableName: galleriesTable,
+					Key: { galleryId },
+					ProjectionExpression: 'deliveredAt'
+				}));
+				
+				// Only update if deliveredAt is not already set (first delivery)
+				if (!galleryGet.Item?.deliveredAt) {
+					await ddb.send(new UpdateCommand({
+						TableName: galleriesTable,
+						Key: { galleryId },
+						UpdateExpression: 'SET deliveredAt = :da, updatedAt = :u',
+						ConditionExpression: 'attribute_not_exists(deliveredAt)',
+						ExpressionAttributeValues: {
+							':da': now,
+							':u': now
+						}
+					}));
+					logger.info('Set deliveredAt on gallery (first order delivered)', { galleryId, orderId });
+				}
+			} catch (galleryErr: any) {
+				// Log but don't fail order delivery if gallery update fails
+				// Conditional check might fail if another order was delivered concurrently - that's OK
+				if (galleryErr.name !== 'ConditionalCheckFailedException') {
+					logger.warn('Failed to update deliveredAt on gallery', {
+						galleryId,
+						orderId,
+						error: galleryErr.message
+					});
+				}
+			}
+		}
+		
 		// Trigger onOrderDelivered Lambda asynchronously to pre-generate finals ZIP and cleanup
 		if (onOrderDeliveredFnName) {
 			try {

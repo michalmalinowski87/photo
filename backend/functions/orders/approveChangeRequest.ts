@@ -111,9 +111,10 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	await ddb.send(new UpdateCommand({
 		TableName: ordersTable,
 		Key: { galleryId, orderId: targetOrderId },
-		UpdateExpression: 'SET deliveryStatus = :ds, updatedAt = :u REMOVE canceledAt',
+		UpdateExpression: 'SET deliveryStatus = :ds, clientSelectingAt = :csa, updatedAt = :u REMOVE canceledAt',
 		ExpressionAttributeValues: { 
 			':ds': 'CLIENT_SELECTING',
+			':csa': now, // Timestamp for CLIENT_SELECTING stage (for funnel tracking)
 			':u': now
 		}
 	}));

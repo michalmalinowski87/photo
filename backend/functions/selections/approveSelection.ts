@@ -248,9 +248,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// IMPORTANT: Always generate ZIP when selection is approved, regardless of status
 		// This is because the selection changed (via change request), so ZIP needs to be regenerated
 		// Status is PREPARING_DELIVERY if finals exist, but ZIP generation still happens
+		// Add stage-specific timestamps for funnel tracking
+		const stageTimestampField = deliveryStatus === 'CLIENT_APPROVED' ? 'clientApprovedAt' : 'preparingDeliveryAt';
 		const updateExpr = selectedKeysHash
-			? 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts, zipSelectedKeysHash = :h, photoBookKeys = :pbk, photoPrintKeys = :ppk REMOVE canceledAt, zipKey, zipProgress'
-			: 'SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts, photoBookKeys = :pbk, photoPrintKeys = :ppk REMOVE canceledAt, zipKey, zipSelectedKeysHash, zipProgress';
+			? `SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts, zipSelectedKeysHash = :h, photoBookKeys = :pbk, photoPrintKeys = :ppk, ${stageTimestampField} = :stageTs REMOVE canceledAt, zipKey, zipProgress`
+			: `SET deliveryStatus = :ds, selectedKeys = :sk, selectedCount = :sc, overageCount = :oc, overageCents = :ocents, totalCents = :tc, updatedAt = :u, zipGenerating = :g, zipGeneratingSince = :ts, photoBookKeys = :pbk, photoPrintKeys = :ppk, ${stageTimestampField} = :stageTs REMOVE canceledAt, zipKey, zipSelectedKeysHash, zipProgress`;
 		
 		const updateValues: any = {
 			':ds': deliveryStatus,
@@ -262,6 +264,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			':u': now,
 			':g': true,
 			':ts': Date.now(),
+			':stageTs': now, // Timestamp for stage transition
 			':pbk': photoBookKeys,
 			':ppk': photoPrintKeys
 		};
@@ -294,6 +297,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			photoBookKeys,
 			photoPrintKeys,
 			createdAt: now,
+			clientApprovedAt: now, // Timestamp for CLIENT_APPROVED stage (for funnel tracking)
 			zipGenerating: true,
 			zipGeneratingSince: Date.now()
 		};

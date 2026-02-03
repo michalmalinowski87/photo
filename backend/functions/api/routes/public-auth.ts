@@ -88,11 +88,7 @@ async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ 
 				}));
 			} catch (deleteError: any) {
 				// Log but continue - record will be cleaned up by DynamoDB eventually
-				const logger = (req as any).logger;
-				logger?.warn('Failed to delete expired rate limit record', {
-					email: normalizedEmail,
-					error: deleteError.message
-				}, deleteError);
+				// Note: Logger not available in this helper function - error is non-critical
 			}
 			return { allowed: true, remainingCodes: MAX_CODES_PER_HOUR, resetAt: null };
 		}
@@ -134,13 +130,8 @@ async function checkRateLimit(email: string, rateLimitTable: string): Promise<{ 
 			resetAt 
 		};
 	} catch (error: any) {
-		// On error, log but allow the request (fail open for availability)
-		const logger = (req as any).logger;
-		logger?.error('Rate limit check failed', {
-			email: normalizedEmail,
-			errorName: error.name,
-			errorMessage: error.message
-		}, error);
+		// On error, allow the request (fail open for availability)
+		// Note: Logger not available in this helper function - error is non-critical
 		return { allowed: true, remainingCodes: MAX_CODES_PER_HOUR, resetAt: null };
 	}
 }
@@ -197,13 +188,8 @@ async function recordCodeSend(email: string, rateLimitTable: string): Promise<vo
 			}));
 		}
 	} catch (error: any) {
-		// Log error but don't fail the request
-		const logger = (req as any).logger;
-		logger?.error('Failed to record code send', {
-			email: normalizedEmail,
-			errorName: error.name,
-			errorMessage: error.message
-		}, error);
+		// Error is non-critical - don't fail the request
+		// Note: Logger not available in this helper function
 	}
 }
 
@@ -956,9 +942,80 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 		return res.status(500).json({ error: 'Missing SUBDOMAINS_TABLE configuration' });
 	}
 
-	const { email, code, subdomain: rawSubdomain, consents, referralCode: referralCodeBody } = req.body ?? {};
+	const { email, code, subdomain: rawSubdomain, consents, referralCode: referralCodeBody, acquisitionSource, acquisitionSourceDetails } = req.body ?? {};
 	const normalizedEmail = String(email ?? '').toLowerCase().trim();
 	const referralCode = typeof referralCodeBody === 'string' ? referralCodeBody.trim().toUpperCase() : undefined;
+	
+	// Determine acquisition source if not provided
+	// Priority: referral code > provided source > referrer header > organic
+	let finalAcquisitionSource: 'organic' | 'referral' | 'google_ads' | 'social' | 'other' = 'organic';
+	let finalAcquisitionSourceDetails: {
+		utm_source?: string;
+		utm_medium?: string;
+		utm_campaign?: string;
+		referrer?: string;
+	} | undefined = undefined;
+	
+	if (referralCode) {
+		finalAcquisitionSource = 'referral';
+	} else if (acquisitionSource && ['organic', 'referral', 'google_ads', 'social', 'other'].includes(acquisitionSource)) {
+		finalAcquisitionSource = acquisitionSource as typeof finalAcquisitionSource;
+	} else {
+		// Try to infer from referrer header or query params
+		const referrer = req.headers.referer || req.headers.referrer;
+		const query = req.query || {};
+		
+		if (referrer) {
+			try {
+				const referrerStr = Array.isArray(referrer) ? referrer[0] : referrer;
+				if (referrerStr) {
+					const referrerUrl = new URL(referrerStr);
+					const hostname = referrerUrl.hostname.toLowerCase();
+					
+					if (hostname.includes('google') || hostname.includes('bing') || hostname.includes('yahoo')) {
+						finalAcquisitionSource = 'google_ads'; // Could be organic search too, but defaulting to ads
+					} else if (hostname.includes('facebook') || hostname.includes('instagram') || hostname.includes('twitter') || hostname.includes('linkedin')) {
+						finalAcquisitionSource = 'social';
+					}
+					
+					finalAcquisitionSourceDetails = {
+						referrer: referrerStr
+					};
+				}
+			} catch {
+				// Invalid referrer URL, ignore
+			}
+		}
+		
+		// Capture UTM parameters from query string
+		const utmSource = Array.isArray(query.utm_source) ? query.utm_source[0] : query.utm_source;
+		const utmMedium = Array.isArray(query.utm_medium) ? query.utm_medium[0] : query.utm_medium;
+		const utmCampaign = Array.isArray(query.utm_campaign) ? query.utm_campaign[0] : query.utm_campaign;
+		
+		if (utmSource || utmMedium || utmCampaign) {
+			finalAcquisitionSourceDetails = {
+				...(finalAcquisitionSourceDetails || {}),
+				utm_source: typeof utmSource === 'string' ? utmSource : undefined,
+				utm_medium: typeof utmMedium === 'string' ? utmMedium : undefined,
+				utm_campaign: typeof utmCampaign === 'string' ? utmCampaign : undefined
+			};
+			
+			// Infer source from UTM parameters
+			if (utmSource === 'google' || utmMedium === 'cpc') {
+				finalAcquisitionSource = 'google_ads';
+			} else if (utmSource === 'facebook' || utmSource === 'instagram' || utmSource === 'twitter') {
+				finalAcquisitionSource = 'social';
+			}
+		}
+		
+		// Use provided details if available
+		if (acquisitionSourceDetails && typeof acquisitionSourceDetails === 'object') {
+			finalAcquisitionSourceDetails = {
+				...(finalAcquisitionSourceDetails || {}),
+				...acquisitionSourceDetails
+			};
+		}
+	}
 
 	// Validate email + code
 	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1074,6 +1131,13 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 				setParts.push('referredDiscountPercent = :refDiscount');
 				values[':refDiscount'] = referredDiscountPercent;
 			}
+		}
+		// Store acquisition source for CAC tracking
+		setParts.push('acquisitionSource = :acqSource');
+		values[':acqSource'] = finalAcquisitionSource;
+		if (finalAcquisitionSourceDetails && Object.keys(finalAcquisitionSourceDetails).length > 0) {
+			setParts.push('acquisitionSourceDetails = :acqDetails');
+			values[':acqDetails'] = finalAcquisitionSourceDetails;
 		}
 		await ddb.send(new UpdateCommand({
 			TableName: usersTable,

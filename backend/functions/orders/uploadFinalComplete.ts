@@ -163,16 +163,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	if (needsStatusUpdate) {
 		try {
 			// Build update command based on whether deliveryStatus exists
+			const now = new Date().toISOString();
 			if (order.deliveryStatus) {
 				// Status exists - use conditional update to prevent race conditions
 				await ddb.send(new UpdateCommand({
 					TableName: ordersTable,
 					Key: { galleryId, orderId },
-					UpdateExpression: 'SET deliveryStatus = :ds',
+					UpdateExpression: 'SET deliveryStatus = :ds, preparingDeliveryAt = :pda, updatedAt = :u',
 					ConditionExpression: 'deliveryStatus = :currentStatus',
 					ExpressionAttributeValues: {
 						':ds': 'PREPARING_DELIVERY',
-						':currentStatus': order.deliveryStatus
+						':currentStatus': order.deliveryStatus,
+						':pda': now, // Timestamp for PREPARING_DELIVERY stage (for funnel tracking)
+						':u': now
 					}
 				}));
 			} else {
@@ -180,9 +183,11 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				await ddb.send(new UpdateCommand({
 					TableName: ordersTable,
 					Key: { galleryId, orderId },
-					UpdateExpression: 'SET deliveryStatus = :ds',
+					UpdateExpression: 'SET deliveryStatus = :ds, preparingDeliveryAt = :pda, updatedAt = :u',
 					ExpressionAttributeValues: {
-						':ds': 'PREPARING_DELIVERY'
+						':ds': 'PREPARING_DELIVERY',
+						':pda': now, // Timestamp for PREPARING_DELIVERY stage (for funnel tracking)
+						':u': now
 					}
 				}));
 			}

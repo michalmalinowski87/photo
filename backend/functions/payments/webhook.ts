@@ -316,17 +316,18 @@ async function processCheckoutSession(
 				
 				const updateExpr = gallery.selectionEnabled
 					? newScheduleName
-						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
-						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, updatedAt = :u REMOVE paymentLocked'
+						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, paidAt = :paidAt, updatedAt = :u REMOVE paymentLocked'
+						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, selectionStatus = :ss, paidAt = :paidAt, updatedAt = :u REMOVE paymentLocked'
 					: newScheduleName
-						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE paymentLocked'
-						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, updatedAt = :u REMOVE paymentLocked';
+						? 'SET #state = :s, expiresAt = :e, expiryScheduleName = :sn, originalsLimitBytes = :olb, finalsLimitBytes = :flb, paidAt = :paidAt, updatedAt = :u REMOVE paymentLocked'
+						: 'SET #state = :s, expiresAt = :e, originalsLimitBytes = :olb, finalsLimitBytes = :flb, paidAt = :paidAt, updatedAt = :u REMOVE paymentLocked';
 				const exprValues: any = {
 					':s': 'PAID_ACTIVE',
 					':e': expiresAt,
 					':olb': originalsLimitBytes,
 					':flb': finalsLimitBytes,
 					':o': userId,
+					':paidAt': now, // Track when gallery was paid (for conversion funnel analysis)
 					':u': now
 				};
 				const exprNames: any = {
@@ -365,7 +366,8 @@ async function processCheckoutSession(
 								overageCount: 0,
 								overageCents: 0,
 								totalCents: 0,
-								createdAt: now
+								createdAt: now,
+								awaitingFinalPhotosAt: now // Timestamp for AWAITING_FINAL_PHOTOS stage (for funnel tracking)
 							}
 						}));
 						await ddb.send(new UpdateCommand({

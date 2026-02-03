@@ -367,6 +367,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						orderNumber,
 						ownerId: gallery.ownerId, // Denormalize ownerId for efficient querying
 						deliveryStatus: 'CLIENT_SELECTING',
+						clientSelectingAt: now, // Timestamp for CLIENT_SELECTING stage (for funnel tracking)
 						paymentStatus: orderPaymentStatus,
 						selectedKeys: [],
 						selectedCount: 0,

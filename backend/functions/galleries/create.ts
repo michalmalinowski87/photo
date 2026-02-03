@@ -176,6 +176,45 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 		Item: item
 	}));
 
+	// Update Users table with firstGalleryCreatedAt (for conversion tracking)
+	// Only set if this is the user's first gallery (denormalized for performance)
+	const usersTable = envProc?.env?.USERS_TABLE as string;
+	if (usersTable) {
+		try {
+			// Check if user already has firstGalleryCreatedAt set
+			const userGet = await ddb.send(new GetCommand({
+				TableName: usersTable,
+				Key: { userId: ownerId },
+				ProjectionExpression: 'firstGalleryCreatedAt'
+			}));
+			
+			// Only update if firstGalleryCreatedAt is not already set
+			if (!userGet.Item?.firstGalleryCreatedAt) {
+				await ddb.send(new UpdateCommand({
+					TableName: usersTable,
+					Key: { userId: ownerId },
+					UpdateExpression: 'SET firstGalleryCreatedAt = :fgca, updatedAt = :u',
+					ConditionExpression: 'attribute_not_exists(firstGalleryCreatedAt)',
+					ExpressionAttributeValues: {
+						':fgca': now,
+						':u': now
+					}
+				}));
+				logger?.info('Set firstGalleryCreatedAt for user', { userId: ownerId, galleryId });
+			}
+		} catch (userErr: any) {
+			// Log but don't fail gallery creation if user update fails
+			// Conditional check might fail if another gallery was created concurrently - that's OK
+			if (userErr.name !== 'ConditionalCheckFailedException') {
+				logger?.warn('Failed to update firstGalleryCreatedAt', {
+					userId: ownerId,
+					galleryId,
+					error: userErr.message
+				});
+			}
+		}
+	}
+
 	// Create EventBridge schedule for gallery expiration
 	const deletionLambdaArn = envProc?.env?.GALLERY_EXPIRY_DELETION_LAMBDA_ARN as string;
 	const scheduleRoleArn = envProc?.env?.GALLERY_EXPIRY_SCHEDULE_ROLE_ARN as string;
@@ -253,7 +292,8 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 						overageCount: 0,
 						overageCents: 0,
 						totalCents: 0,
-						createdAt: now
+						createdAt: now,
+						awaitingFinalPhotosAt: now // Timestamp for AWAITING_FINAL_PHOTOS stage (for funnel tracking)
 					}
 				}));
 				await ddb.send(new UpdateCommand({
