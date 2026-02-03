@@ -2312,21 +2312,23 @@ export class AppStack extends Stack {
 		// We explicitly add bucket policy as well to ensure it's correctly configured
 		// Price Class 100 restricts to US, Canada, Europe, Israel (excludes expensive Asia/South America)
 		
-		// Create custom cache policy that includes query strings in cache key
-		// This allows cache-busting via query parameters (e.g., ?t=timestamp&v=random)
-		// This is essential for handling image replacements with the same filename
+		// Create optimized cache policy for images
+		// Only includes 'v' query parameter in cache key (for cache-busting on file replacement)
+		// This optimizes cache hit ratio by ignoring other query parameters that don't affect content
+		// Cache-busting strategy: When image is replaced, lastModified changes, creating new ?v={timestamp} URL
 		const imageCachePolicy = new CachePolicy(this, 'ImageCachePolicy', {
 			cachePolicyName: `PhotoCloud-${props.stage}-ImageCache`,
-			comment: 'Cache policy for images with query string support for cache-busting',
-			defaultTtl: Duration.days(365), // Long cache for images
+			comment: 'Optimized cache policy for images - only includes v query parameter for cache-busting',
+			defaultTtl: Duration.days(365), // Long cache for images (respects S3 Cache-Control headers)
 			minTtl: Duration.seconds(0),
 			maxTtl: Duration.days(365),
 			enableAcceptEncodingGzip: true,
 			enableAcceptEncodingBrotli: true,
-			// Include query strings in cache key to support cache-busting
-			queryStringBehavior: CacheQueryStringBehavior.all(),
-			// Don't include headers in cache key (standard for images)
-			headerBehavior: CacheHeaderBehavior.none(),
+			// Only include 'v' query parameter in cache key (for cache-busting)
+			// This improves cache hit ratio by ignoring irrelevant query parameters
+			queryStringBehavior: CacheQueryStringBehavior.allowList(['v']),
+			// Forward ETag header for better cache validation (304 Not Modified responses)
+			headerBehavior: CacheHeaderBehavior.allowList(['ETag', 'If-None-Match', 'If-Modified-Since']),
 			// Don't include cookies in cache key (standard for images)
 			cookieBehavior: CacheCookieBehavior.none()
 		});

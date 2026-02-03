@@ -149,11 +149,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const presignedUrls = await Promise.all(
 		files.map(async (file) => {
 			// Key format: galleries/{galleryId}/final/{orderId}/{filename}
+			// Use Intelligent-Tiering for finals (served via CloudFront, no direct S3 access needed)
 			const objectKey = `galleries/${galleryId}/final/${orderId}/${file.key}`;
 			const cmd = new PutObjectCommand({
 				Bucket: bucket,
 				Key: objectKey,
-				ContentType: file.contentType || 'application/octet-stream'
+				ContentType: file.contentType || 'application/octet-stream',
+				StorageClass: 'INTELLIGENT_TIERING',
+				// Finals are immutable once uploaded - set long cache time for CloudFront
+				// CloudFront will cache for 1 year, reducing origin requests and costs
+				CacheControl: 'max-age=31536000, immutable'
 			});
 			const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 });
 			
@@ -190,6 +195,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				const thumbKey = `galleries/${galleryId}/final/${orderId}/thumbs/${getWebpKey(filename)}`;
 				
 				// Generate presigned URLs for all three versions: preview, bigThumb, and thumbnail
+				// Note: Previews/thumbs/bigthumbs use standard storage (small files, frequently accessed)
 				const [previewUrl, bigThumbUrl, thumbUrl] = await Promise.all([
 					getSignedUrl(s3, new PutObjectCommand({
 						Bucket: bucket,

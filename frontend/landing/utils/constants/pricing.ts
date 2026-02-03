@@ -8,9 +8,9 @@
  * then sync the values here to match (priceCents / 100).
  * 
  * Current prices (from backend):
- * - 1GB: 1m=500¢ (5 PLN), 3m=700¢ (7 PLN), 12m=1500¢ (15 PLN)
- * - 3GB: 1m=800¢ (8 PLN), 3m=1000¢ (10 PLN), 12m=2100¢ (21 PLN)
- * - 10GB: 1m=1000¢ (10 PLN), 3m=1200¢ (12 PLN), 12m=2600¢ (26 PLN)
+ * - 1GB: 1m=500¢ (5 PLN), 3m=800¢ (8 PLN), 12m=1700¢ (17 PLN)
+ * - 3GB: 1m=800¢ (8 PLN), 3m=1000¢ (10 PLN), 12m=2300¢ (23 PLN)
+ * - 10GB: 1m=1000¢ (10 PLN), 3m=1400¢ (14 PLN), 12m=2800¢ (28 PLN)
  * 
  * Photo estimates are calculated using calculatePhotoEstimateFromStorage()
  * from utils/photo-estimates.ts (assumes 15-25MB per photo)
@@ -30,8 +30,8 @@ export const PLANS = [
     photoEstimate: photoEstimate1GB,
     price: {
       "1m": 5,   // Matches backend: 500 cents
-      "3m": 7,   // Matches backend: 700 cents
-      "12m": 15, // Matches backend: 1500 cents
+      "3m": 8,   // Matches backend: 800 cents
+      "12m": 17, // Matches backend: 1700 cents
     },
     features: [
       { text: "Galeria chroniona hasłem", tooltip: undefined },
@@ -52,7 +52,7 @@ export const PLANS = [
     price: {
       "1m": 8,   // Matches backend: 800 cents
       "3m": 10,  // Matches backend: 1000 cents
-      "12m": 21, // Matches backend: 2100 cents
+      "12m": 23, // Matches backend: 2300 cents
     },
     features: [
       { text: "Galeria chroniona hasłem", tooltip: undefined },
@@ -72,8 +72,8 @@ export const PLANS = [
     photoEstimate: photoEstimate10GB,
     price: {
       "1m": 10,  // Matches backend: 1000 cents
-      "3m": 12,  // Matches backend: 1200 cents
-      "12m": 26, // Matches backend: 2600 cents
+      "3m": 14,  // Matches backend: 1400 cents
+      "12m": 28, // Matches backend: 2800 cents
     },
     features: [
       { text: "Galeria chroniona hasłem", tooltip: undefined },

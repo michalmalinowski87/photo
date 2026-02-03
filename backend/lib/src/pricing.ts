@@ -32,7 +32,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '1 miesiąc'
 	},
 	'1GB-3m': {
-		priceCents: 700,      // 7 PLN
+		priceCents: 800,      // 8 PLN
 		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
 		expiryDays: 90,        // 3 months
 		label: '1GB - 3 miesiące',
@@ -40,7 +40,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '3 miesiące'
 	},
 	'1GB-12m': {
-		priceCents: 1500,     // 15 PLN
+		priceCents: 1700,     // 17 PLN
 		storageLimitBytes: 1 * 1024 * 1024 * 1024,  // 1 GB
 		expiryDays: 365,       // 12 months
 		label: '1GB - 12 miesięcy',
@@ -64,7 +64,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '3 miesiące'
 	},
 	'3GB-12m': {
-		priceCents: 2100,     // 21 PLN
+		priceCents: 2300,     // 23 PLN
 		storageLimitBytes: 3 * 1024 * 1024 * 1024,  // 3 GB
 		expiryDays: 365,       // 12 months
 		label: '3GB - 12 miesięcy',
@@ -80,7 +80,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '1 miesiąc'
 	},
 	'10GB-3m': {
-		priceCents: 1200,     // 12 PLN
+		priceCents: 1400,     // 14 PLN
 		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
 		expiryDays: 90,        // 3 months
 		label: '10GB - 3 miesiące',
@@ -88,7 +88,7 @@ export const PRICING_PLANS: Record<PlanKey, PlanMetadata> = {
 		duration: '3 miesiące'
 	},
 	'10GB-12m': {
-		priceCents: 2600,     // 26 PLN
+		priceCents: 2800,     // 28 PLN
 		storageLimitBytes: 10 * 1024 * 1024 * 1024, // 10 GB
 		expiryDays: 365,       // 12 months
 		label: '10GB - 12 miesięcy',

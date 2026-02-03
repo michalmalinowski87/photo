@@ -126,11 +126,16 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Key format: galleries/{galleryId}/final/{orderId}/{filename}
 	// Store in original, unprocessed format
+	// Use Intelligent-Tiering for finals (served via CloudFront, no direct S3 access needed)
 	const objectKey = `galleries/${galleryId}/final/${orderId}/${key}`;
 	const cmd = new PutObjectCommand({
 		Bucket: bucket,
 		Key: objectKey,
-		ContentType: contentType
+		ContentType: contentType,
+		StorageClass: 'INTELLIGENT_TIERING',
+		// Finals are immutable once uploaded - set long cache time for CloudFront
+		// CloudFront will cache for 1 year, reducing origin requests and costs
+		CacheControl: 'max-age=31536000, immutable'
 	});
 	const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 });
 

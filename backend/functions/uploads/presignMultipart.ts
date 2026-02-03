@@ -225,10 +225,19 @@ export const handler = lambdaLogger(async (event: any) => {
 			}
 
 			// Create multipart upload
+			// Use Intelligent-Tiering for originals and finals (served via CloudFront, no direct S3 access needed)
+			const isOriginal = file.key.startsWith('originals/');
+			const isFinal = file.key.startsWith('final/');
 			const createCmd = new CreateMultipartUploadCommand({
 				Bucket: bucket,
 				Key: objectKey,
 				ContentType: contentType,
+				...((isOriginal || isFinal) && { 
+					StorageClass: 'INTELLIGENT_TIERING',
+					// Originals and finals are immutable once uploaded - set long cache time for CloudFront
+					// CloudFront will cache for 1 year, reducing origin requests and costs
+					CacheControl: 'max-age=31536000, immutable'
+				})
 			});
 
 			const createResponse = await s3.send(createCmd);

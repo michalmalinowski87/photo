@@ -122,10 +122,18 @@ export const handler = lambdaLogger(async (event: any) => {
 
 	// Create PutObjectCommand without checksum to avoid browser upload issues
 	// The AWS SDK may add checksum parameters automatically, but we don't want to require them
+	// Use Intelligent-Tiering for originals (served via CloudFront, no direct S3 access needed)
+	const isOriginal = key.startsWith('originals/');
 	const cmd = new PutObjectCommand({
 		Bucket: bucket,
 		Key: objectKey,
-		ContentType: contentType
+		ContentType: contentType,
+		...(isOriginal && { 
+			StorageClass: 'INTELLIGENT_TIERING',
+			// Originals are immutable once uploaded - set long cache time for CloudFront
+			// CloudFront will cache for 1 year, reducing origin requests and costs
+			CacheControl: 'max-age=31536000, immutable'
+		})
 	});
 	
 	// Generate presigned URL

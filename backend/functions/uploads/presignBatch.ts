@@ -140,10 +140,18 @@ export const handler = lambdaLogger(async (event: any) => {
 	const presignedUrls = await Promise.all(
 		files.map(async (file) => {
 			const objectKey = `galleries/${galleryId}/${file.key}`;
+			// Use Intelligent-Tiering for originals (served via CloudFront, no direct S3 access needed)
+			const isOriginal = file.key.startsWith('originals/');
 			const cmd = new PutObjectCommand({
 				Bucket: bucket,
 				Key: objectKey,
-				ContentType: file.contentType || 'application/octet-stream'
+				ContentType: file.contentType || 'application/octet-stream',
+				...(isOriginal && { 
+					StorageClass: 'INTELLIGENT_TIERING',
+					// Originals are immutable once uploaded - set long cache time for CloudFront
+					// CloudFront will cache for 1 year, reducing origin requests and costs
+					CacheControl: 'max-age=31536000, immutable'
+				})
 			});
 			const url = await getSignedUrl(s3, cmd, { expiresIn: 3600 });
 			

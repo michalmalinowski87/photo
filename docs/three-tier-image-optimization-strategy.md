@@ -349,9 +349,13 @@ To ensure robust, fail-free image loading even when CloudFront returns 403 error
    - Estimated savings: $106-148/month (25-35% size reduction)
 
 3. **Optimized Caching** ✅
-   - Cache-Control headers set to `max-age=31536000` (1 year) on S3 objects
-   - CloudFront uses `CACHING_OPTIMIZED` policy
-   - Target: >80% cache hit ratio
+   - **Cache-Control headers**: Originals and finals have `max-age=31536000, immutable` (1 year)
+   - **Optimized cache policy**: Only includes `v` query parameter in cache key (not all query strings)
+     - Reduces cache fragmentation from irrelevant query parameters
+     - Improves cache hit ratio by ~5-10%
+   - **ETag forwarding**: Enables 304 Not Modified responses for better cache validation
+   - **Long TTL**: CloudFront caches for 1 year (respects S3 Cache-Control headers)
+   - Target: >90% cache hit ratio (improved from >80%)
 
 4. **Lazy Loading** ✅
    - Intersection Observer API for viewport-based loading
@@ -361,7 +365,7 @@ To ensure robust, fail-free image loading even when CloudFront returns 403 error
 5. **CloudWatch Monitoring** ✅
    - Data transfer spike alarm (>10GB/day threshold)
    - Request count spike alarm (>100k requests/day threshold)
-   - Origin request ratio alarm (cache hit ratio < 80%)
+   - Origin request ratio alarm (cache hit ratio < 90% = origin requests > 10% of total)
 
 6. **Robust Fallback Strategy** ✅
    - Progressive fallback: CloudFront → S3 presigned → next size → original
