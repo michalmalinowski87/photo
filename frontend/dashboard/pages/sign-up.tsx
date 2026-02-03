@@ -1,3 +1,4 @@
+import { LEGAL_DOC_VERSIONS } from "@photocloud/legal";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
@@ -14,7 +15,6 @@ import {
 } from "../components/ui/password-strength-validator";
 import { initAuth, signUp, checkUserVerificationStatus, validateReferralCode } from "../lib/auth";
 import { getPublicLandingUrl } from "../lib/public-env";
-import { LEGAL_DOC_VERSIONS } from "@photocloud/legal";
 
 interface CognitoError extends Error {
   message: string;

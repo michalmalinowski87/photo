@@ -130,6 +130,18 @@ export function getPlanKeysByDuration(duration: Duration): PlanKey[] {
 }
 
 /**
+ * Plan keys eligible for referral discount (1 GB and 3 GB, 1m or 3m only).
+ */
+export const REFERRAL_ELIGIBLE_PLAN_KEYS: PlanKey[] = ['1GB-1m', '1GB-3m', '3GB-1m', '3GB-3m'];
+
+/**
+ * Check if a plan is eligible for referral discount.
+ */
+export function isPlanEligibleForReferralDiscount(planKey: PlanKey): boolean {
+  return REFERRAL_ELIGIBLE_PLAN_KEYS.includes(planKey);
+}
+
+/**
  * Plan price in cents. Selection and non-selection galleries are priced the same (no discount for galeria bez wyboru).
  */
 export function calculatePriceWithDiscount(
@@ -141,6 +153,26 @@ export function calculatePriceWithDiscount(
     return 0;
   }
   return plan.priceCents;
+}
+
+/**
+ * Calculate plan price with automatic referral discount applied (10% or 15%).
+ * Only applies to eligible plans (1GB/3GB, 1m/3m) and only when referralDiscountPercent is set.
+ * Does not apply to manual discount codes entered by the user.
+ */
+export function calculatePriceWithReferralDiscount(
+  planKey: PlanKey,
+  referralDiscountPercent?: 10 | 15
+): number {
+  const basePrice = calculatePriceWithDiscount(planKey);
+  if (!referralDiscountPercent) {
+    return basePrice;
+  }
+  if (!isPlanEligibleForReferralDiscount(planKey)) {
+    return basePrice;
+  }
+  const discountMultiplier = 1 - referralDiscountPercent / 100;
+  return Math.floor(basePrice * discountMultiplier);
 }
 
 /**

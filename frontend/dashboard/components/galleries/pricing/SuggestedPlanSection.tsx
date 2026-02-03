@@ -3,7 +3,7 @@ import React from "react";
 import { formatPrice } from "../../../lib/format-price";
 import {
   getPlanByStorageAndDuration,
-  calculatePriceWithDiscount,
+  calculatePriceWithReferralDiscount,
   getPlan,
   type Duration,
   type PlanKey,
@@ -34,7 +34,7 @@ export const SuggestedPlanSection = ({
   suggestedStorage,
   selectedDuration,
   selectedPlanKey,
-  selectionEnabled,
+  selectionEnabled: _selectionEnabled,
   onDurationChange,
   onPlanKeyChange,
   mode = "publish",
@@ -50,7 +50,7 @@ export const SuggestedPlanSection = ({
         return {
           planKey: selectedPlanKey,
           name: plan.label,
-          priceCents: calculatePriceWithDiscount(selectedPlanKey, selectionEnabled),
+          priceCents: calculatePriceWithReferralDiscount(selectedPlanKey, referralDiscountPercent),
           storage: plan.storage,
           duration: plan.duration,
           storageLimitBytes: plan.storageLimitBytes,
@@ -66,7 +66,7 @@ export const SuggestedPlanSection = ({
         return {
           planKey,
           name: plan.label,
-          priceCents: calculatePriceWithDiscount(planKey, selectionEnabled),
+          priceCents: calculatePriceWithReferralDiscount(planKey, referralDiscountPercent),
           storage: plan.storage,
           duration: plan.duration,
           storageLimitBytes: plan.storageLimitBytes,
@@ -75,7 +75,7 @@ export const SuggestedPlanSection = ({
       }
     }
     return null;
-  }, [selectedPlanKey, selectedDuration, suggestedStorage, selectionEnabled]);
+  }, [selectedPlanKey, selectedDuration, suggestedStorage, referralDiscountPercent]);
 
   return (
     <div className="bg-gradient-to-r from-photographer-elevated to-photographer-lightBeige dark:from-photographer-accent/10 dark:to-photographer-accent/10 border-2 border-photographer-darkBeige dark:border-photographer-accent/30 rounded-lg px-6 pt-6 pb-4 mb-4">
@@ -94,7 +94,7 @@ export const SuggestedPlanSection = ({
               const planKey = getPlanByStorageAndDuration(suggestedStorage, duration);
               const isSelected =
                 selectedPlanKey === planKey || (!selectedPlanKey && selectedDuration === duration);
-              const fullPrice = planKey ? calculatePriceWithDiscount(planKey, selectionEnabled) : 0;
+              const fullPrice = planKey ? calculatePriceWithReferralDiscount(planKey, referralDiscountPercent) : 0;
               // For upgrades, show the upgrade price (difference)
               const displayPrice =
                 mode === "limitExceeded" && currentPlanPriceCents > 0 && planKey === currentPlanKey

@@ -6,7 +6,7 @@ import { calculatePhotoEstimateFromStorage } from "../../../lib/photo-estimates"
 import {
   getAllPlansGroupedByStorage,
   getPlanByStorageAndDuration,
-  calculatePriceWithDiscount,
+  calculatePriceWithReferralDiscount,
   getPlan,
   type Duration,
   type PlanKey,
@@ -32,7 +32,7 @@ export const PlanSelectionGrid = ({
   suggestedStorage,
   selectedDuration,
   selectedPlanKey,
-  selectionEnabled,
+  selectionEnabled: _selectionEnabled,
   onDurationChange,
   onPlanKeyChange,
   disabledPlanSizes = [],
@@ -120,7 +120,7 @@ export const PlanSelectionGrid = ({
             return null;
           }
 
-          const fullPrice = calculatePriceWithDiscount(planKey, selectionEnabled);
+          const fullPrice = calculatePriceWithReferralDiscount(planKey, referralDiscountPercent);
           // For upgrades, calculate the upgrade price (difference)
           const upgradePrice =
             mode === "limitExceeded" && currentPlanPriceCents > 0

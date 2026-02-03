@@ -5,10 +5,10 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 
 import { useCreateCheckout } from "../../hooks/mutations/useWalletMutations";
+import { useBusinessInfo, useReferral } from "../../hooks/queries/useAuth";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders, useOrderFinalImages } from "../../hooks/queries/useOrders";
 import { useWalletBalance } from "../../hooks/queries/useWallet";
-import { useBusinessInfo, useReferral } from "../../hooks/queries/useAuth";
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
@@ -18,6 +18,7 @@ import type { PricingModalData } from "../../lib/plan-types";
 import {
   getPlanByStorageAndDuration,
   calculatePriceWithDiscount,
+  calculatePriceWithReferralDiscount,
   getPlan,
   extractDurationFromPlanKey,
   extractStorageFromPlanKey,
@@ -310,14 +311,31 @@ export const PublishGalleryWizard = ({
     return pricingData?.selectionEnabled !== false;
   }, [mode, limitExceededData, gallery?.selectionEnabled, pricingData?.selectionEnabled]);
 
+
+  // Calculate referral discount percent for a given plan key
+  // This is calculated independently to avoid circular dependencies
+  const getReferralDiscountForPlan = useCallback((planKey: PlanKey | null): 10 | 15 | undefined => {
+    if (!planKey || !businessInfo?.shouldApplyReferralDiscount || mode === "limitExceeded") {
+      return undefined;
+    }
+    // Check if plan is eligible (1GB/3GB, 1m/3m only)
+    const isEligible = planKey === "1GB-1m" || planKey === "1GB-3m" || planKey === "3GB-1m" || planKey === "3GB-3m";
+    if (!isEligible) {
+      return undefined;
+    }
+    // Use stored discount percentage (determined at signup time)
+    return businessInfo?.referredDiscountPercent === 15 ? 15 : 10;
+  }, [businessInfo?.shouldApplyReferralDiscount, businessInfo?.referredDiscountPercent, mode]);
+
   // Get selected plan details
   const selectedPlan = useMemo(() => {
     if (selectedPlanKey) {
       const plan = getPlan(selectedPlanKey);
       if (plan) {
-        const fullPriceCents = calculatePriceWithDiscount(
+        const discountPercent = getReferralDiscountForPlan(selectedPlanKey);
+        const fullPriceCents = calculatePriceWithReferralDiscount(
           selectedPlanKey,
-          isSelectionGalleryForPricing
+          discountPercent
         );
 
         return {
@@ -331,7 +349,8 @@ export const PublishGalleryWizard = ({
     if (planKey) {
       const plan = getPlan(planKey);
       if (plan) {
-        const fullPriceCents = calculatePriceWithDiscount(planKey, isSelectionGalleryForPricing);
+        const discountPercent = getReferralDiscountForPlan(planKey);
+        const fullPriceCents = calculatePriceWithReferralDiscount(planKey, discountPercent);
 
         return {
           planKey,
@@ -340,7 +359,7 @@ export const PublishGalleryWizard = ({
       }
     }
     return null;
-  }, [selectedPlanKey, selectedDuration, suggestedStorage, isSelectionGalleryForPricing]);
+  }, [selectedPlanKey, selectedDuration, suggestedStorage, getReferralDiscountForPlan]);
 
   // Calculate display price (difference for upgrades, full price for new purchases)
   const displayPriceCents = useMemo(() => {
@@ -452,6 +471,7 @@ export const PublishGalleryWizard = ({
     mode !== "limitExceeded" &&
     (hasToppedUpWallet || willUseStripe);
   
+  // Calculate referral discount percent (only for eligible users)
   // Use stored discount percentage (determined at signup time) to ensure correct discount even if referrer account is deleted
   // This ensures: 1) First 9 referrals get 10%, 10th+ get 15% (not all get 15% if referrer becomes Top Inviter later)
   // 2) If referrer account is deleted, user still gets the discount they were promised
