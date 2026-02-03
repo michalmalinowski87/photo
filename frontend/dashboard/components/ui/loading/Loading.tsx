@@ -2,26 +2,37 @@ import React, { useState, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
 /** Themed three-dots loading indicator (used in FullPageLoading, ContentAreaLoadingOverlay, etc.) */
-export const ThreeDotsIndicator = ({ className = "" }: { className?: string }) => (
-  <div
-    className={`flex items-center justify-center gap-1.5 ${className}`}
-    role="status"
-    aria-label="Ładowanie"
-  >
+export const ThreeDotsIndicator = ({ 
+  className = "",
+  size = "md"
+}: { 
+  className?: string;
+  size?: "sm" | "md" | "lg";
+}) => {
+  const dotSize = size === "sm" ? "w-1.5 h-1.5" : size === "lg" ? "w-2.5 h-2.5" : "w-2 h-2";
+  const gap = size === "sm" ? "gap-1" : size === "lg" ? "gap-2.5" : "gap-2";
+  
+  return (
     <div
-      className="w-2 h-2 rounded-full bg-photographer-accent dark:bg-photographer-accent opacity-80 animate-pulse"
-      style={{ animationDelay: "0ms" }}
-    />
-    <div
-      className="w-2 h-2 rounded-full bg-photographer-accent dark:bg-photographer-accent opacity-80 animate-pulse"
-      style={{ animationDelay: "150ms" }}
-    />
-    <div
-      className="w-2 h-2 rounded-full bg-photographer-accent dark:bg-photographer-accent opacity-80 animate-pulse"
-      style={{ animationDelay: "300ms" }}
-    />
-  </div>
-);
+      className={`flex items-center justify-center ${gap} ${className}`}
+      role="status"
+      aria-label="Ładowanie"
+    >
+      <div
+        className={`${dotSize} rounded-full bg-photographer-accent dark:bg-photographer-accent animate-bounce`}
+        style={{ animationDelay: "0ms" }}
+      />
+      <div
+        className={`${dotSize} rounded-full bg-photographer-accent dark:bg-photographer-accent animate-bounce`}
+        style={{ animationDelay: "150ms" }}
+      />
+      <div
+        className={`${dotSize} rounded-full bg-photographer-accent dark:bg-photographer-accent animate-bounce`}
+        style={{ animationDelay: "300ms" }}
+      />
+    </div>
+  );
+};
 
 interface LoadingProps {
   size?: "sm" | "md" | "lg" | "xl";
@@ -30,25 +41,11 @@ interface LoadingProps {
 }
 
 export const Loading = ({ size = "md", text, className = "" }: LoadingProps) => {
-  const sizeClasses = {
-    sm: "w-4 h-4",
-    md: "w-8 h-8",
-    lg: "w-12 h-12",
-    xl: "w-16 h-16",
-  };
-
-  const spinnerSize = sizeClasses[size];
-
-  const spinner = (
-    <div className={`${spinnerSize} relative`}>
-      <div className="absolute inset-0 border-4 border-gray-500 dark:border-gray-700 rounded-full"></div>
-      <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 dark:border-t-brand-400 rounded-full animate-spin"></div>
-    </div>
-  );
+  const dotSize = size === "sm" ? "sm" : size === "lg" ? "lg" : size === "xl" ? "lg" : "md";
 
   return (
     <div className={`flex flex-col items-center justify-center gap-4 ${className}`}>
-      {spinner}
+      <ThreeDotsIndicator size={dotSize} />
       {text && <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">{text}</p>}
     </div>
   );

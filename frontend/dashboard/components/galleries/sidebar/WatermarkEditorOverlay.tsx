@@ -108,7 +108,7 @@ export const WatermarkEditorOverlay: React.FC<WatermarkEditorOverlayProps> = ({
       setSelectedPattern(settings.pattern);
       setCustomWatermarkUrl(settings.customWatermarkUrl);
       setOpacity(typeof settings.opacity === "number" ? settings.opacity : 0.4);
-      setWatermarkThumbnails(settings.watermarkThumbnails ?? false);
+      setWatermarkThumbnails(typeof settings.watermarkThumbnails === "boolean" ? settings.watermarkThumbnails : false);
       setIsLoadingWatermarks(true); // Start with loading state when opening
       wasRemovedRef.current = false; // Reset removal flag when opening
       noneSelectedRef.current = false; // Reset "none" selection flag when opening

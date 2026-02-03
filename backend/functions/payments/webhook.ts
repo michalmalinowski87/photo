@@ -11,7 +11,8 @@ import {
 	markEarnedCodeUsed,
 	grantReferrerRewardForPurchase,
 	ensureUserReferralCode,
-	getContactEmailForUser,
+	getEmailForUser,
+	getReferredByUserId,
 	countStripePaidTransactions
 } from '../../lib/src/referral';
 import { createEligibilityEmail, createReferrerRewardEmail } from '../../lib/src/email';
@@ -145,24 +146,62 @@ async function processCheckoutSession(
 				});
 				// Eligibility: only after first successful Stripe payment (e.g. first top-up)
 				try {
-					const stripePaidCount = await countStripePaidTransactions(userId);
-					if (stripePaidCount === 1) {
-						const { code, wasNew } = await ensureUserReferralCode(userId);
-						if (wasNew) {
-							const stage = envProc?.env?.STAGE || 'dev';
-							const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
-							const referralLink = `${dashboardUrl.replace(/\/+$/, '')}/invite/${code}`;
-							const toEmail = await getContactEmailForUser(userId);
-							const sender = await getSenderEmail();
-							if (toEmail && sender) {
-								const template = createEligibilityEmail({ referralCode: code, referralLink, dashboardUrl });
-								await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+					const stripePaidCountTopUp = await countStripePaidTransactions(userId);
+					if (stripePaidCountTopUp === 1) {
+						const { code: codeTopUp, wasNew: wasNewTopUp } = await ensureUserReferralCode(userId);
+						if (wasNewTopUp) {
+							const toEmailTopUp = await getEmailForUser(userId);
+							const senderTopUp = await getSenderEmail();
+							if (toEmailTopUp && senderTopUp) {
+							const stageTopUp = envProc?.env?.STAGE || 'dev';
+							const dashboardUrlTopUp = await getRequiredConfigValue(stageTopUp, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+							const referralLinkTopUp = `${dashboardUrlTopUp.replace(/\/+$/, '')}/sign-up?ref=${encodeURIComponent(codeTopUp)}`;
+							const templateTopUp = createEligibilityEmail({ referralCode: codeTopUp, referralLink: referralLinkTopUp, dashboardUrl: dashboardUrlTopUp });
+								await sendRawEmailWithAttachments({ to: toEmailTopUp, from: senderTopUp, subject: templateTopUp.subject, html: templateTopUp.html || templateTopUp.text, attachments: [] });
 								logger.info('Eligibility email sent (webhook wallet top-up, first Stripe payment)', { userId });
 							}
 						}
 					}
 				} catch (eligErr: any) {
 					logger.warn('Eligibility email failed (webhook wallet top-up)', { userId, error: eligErr?.message });
+				}
+				// Referrer reward: when referred user tops up wallet, grant referrer their reward (webhook resolves referrer from payer's record)
+				let referredByUserId: string | undefined = undefined;
+				if (userId) {
+					try {
+						referredByUserId = (await getReferredByUserId(userId)) ?? undefined;
+					} catch {
+						referredByUserId = undefined;
+					}
+				}
+				if (referredByUserId && transactionId) {
+					try {
+						const sourceId = `wallet_topup_${transactionId}`;
+						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserId, sourceId);
+						if (granted) {
+							logger.info('Granted referrer reward (webhook wallet top-up)', { referrerUserId: referredByUserId, sourceId });
+							if (rewardType === 'wallet_20pln' && walletCreditCents && walletsTable && ledgerTable) {
+								const refId = `referral_bonus_${referredByUserId}_${sourceId}`;
+								try {
+									const newBalance = await creditWalletLib(referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable);
+									logger.info('Referrer 10+ wallet credit applied (webhook wallet top-up)', { referrerUserId: referredByUserId, amountCents: walletCreditCents, newBalance });
+								} catch (walletErr: any) {
+									logger.warn('Failed to credit referrer wallet (webhook wallet top-up)', { referrerUserId: referredByUserId, error: walletErr?.message });
+								}
+							}
+							const toEmail = await getEmailForUser(referredByUserId);
+							const sender = await getSenderEmail();
+							if (toEmail && sender) {
+								const stage = envProc?.env?.STAGE || 'dev';
+								const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+								const template = createReferrerRewardEmail({ rewardType: rewardType as '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln', dashboardUrl });
+								await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+								logger.info('Referrer reward email sent (webhook wallet top-up)', { referrerUserId: referredByUserId });
+							}
+						}
+					} catch (refErr: any) {
+						logger.warn('Referrer reward failed (webhook wallet top-up)', { referredByUserId, error: refErr?.message });
+					}
 				}
 			} catch (txnErr: any) {
 				logger.error('Failed to update wallet top-up transaction', {
@@ -316,22 +355,30 @@ async function processCheckoutSession(
 						logger.warn('Failed to mark earned code used (webhook)', { galleryId, error: refErr?.message });
 					}
 				}
-				let referrerRewardGranted: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
-				if (session.metadata?.referredByUserId) {
+				let referredByUserIdGallery: string | undefined = undefined;
+				if (userId) {
 					try {
-						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(session.metadata.referredByUserId, galleryId);
+						referredByUserIdGallery = (await getReferredByUserId(userId)) ?? undefined;
+					} catch {
+						referredByUserIdGallery = undefined;
+					}
+				}
+				let referrerRewardGranted: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
+				if (referredByUserIdGallery) {
+					try {
+						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserIdGallery, galleryId);
 						if (granted) {
-							logger.info('Granted referrer reward (webhook)', { galleryId, referrerUserId: session.metadata.referredByUserId });
+							logger.info('Granted referrer reward (webhook)', { galleryId, referrerUserId: referredByUserIdGallery });
 							if (rewardType) referrerRewardGranted = { rewardType };
 							if (walletCreditCents && walletsTable && ledgerTable) {
-								const refId = `referral_bonus_${session.metadata.referredByUserId}_${galleryId}`;
+								const refId = `referral_bonus_${referredByUserIdGallery}_${galleryId}`;
 								try {
-									const newBalance = await creditWalletLib(session.metadata.referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable);
+									const newBalance = await creditWalletLib(referredByUserIdGallery, walletCreditCents, refId, walletsTable, ledgerTable);
 									if (newBalance != null) {
-										logger.info('Referrer 10+ wallet credit applied (webhook)', { referrerUserId: session.metadata.referredByUserId, amountCents: walletCreditCents, newBalance });
+										logger.info('Referrer 10+ wallet credit applied (webhook)', { referrerUserId: referredByUserIdGallery, amountCents: walletCreditCents, newBalance });
 									}
 								} catch (walletErr: any) {
-									logger.warn('Failed to credit referrer wallet (webhook)', { referrerUserId: session.metadata.referredByUserId, error: walletErr?.message });
+									logger.warn('Failed to credit referrer wallet (webhook)', { referrerUserId: referredByUserIdGallery, error: walletErr?.message });
 								}
 							}
 						}
@@ -345,13 +392,13 @@ async function processCheckoutSession(
 					if (stripePaidCount === 1) {
 						const { code, wasNew } = await ensureUserReferralCode(userId);
 						if (wasNew) {
-							const stage = envProc?.env?.STAGE || 'dev';
-							const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
-							const referralLink = `${dashboardUrl.replace(/\/+$/, '')}/invite/${code}`;
-							const toEmail = await getContactEmailForUser(userId);
-							const sender = await getSenderEmail();
-							if (toEmail && sender) {
-								const template = createEligibilityEmail({ referralCode: code, referralLink, dashboardUrl });
+					const stage = envProc?.env?.STAGE || 'dev';
+					const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+					const referralLink = `${dashboardUrl.replace(/\/+$/, '')}/sign-up?ref=${encodeURIComponent(code)}`;
+					const toEmail = await getEmailForUser(userId);
+					const sender = await getSenderEmail();
+					if (toEmail && sender) {
+						const template = createEligibilityEmail({ referralCode: code, referralLink, dashboardUrl });
 								await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
 								logger.info('Eligibility email sent (webhook, first Stripe payment)', { userId });
 							}
@@ -361,16 +408,16 @@ async function processCheckoutSession(
 					logger.warn('Eligibility email failed (webhook)', { userId, error: eligErr?.message });
 				}
 				// Referrer reward email
-				if (referrerRewardGranted && session.metadata?.referredByUserId) {
+				if (referrerRewardGranted && referredByUserIdGallery) {
 					try {
-						const toEmail = await getContactEmailForUser(session.metadata.referredByUserId);
+						const toEmail = await getEmailForUser(referredByUserIdGallery);
 						const sender = await getSenderEmail();
 						if (toEmail && sender) {
 							const stage = envProc?.env?.STAGE || 'dev';
 							const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
 							const template = createReferrerRewardEmail({ rewardType: referrerRewardGranted.rewardType, dashboardUrl });
 							await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
-							logger.info('Referrer reward email sent (webhook)', { referrerUserId: session.metadata.referredByUserId });
+							logger.info('Referrer reward email sent (webhook)', { referrerUserId: referredByUserIdGallery });
 						}
 					} catch (refEmailErr: any) {
 						logger.warn('Referrer reward email failed (webhook)', { error: refEmailErr?.message });
@@ -519,22 +566,30 @@ async function processCheckoutSession(
 								logger.warn('Failed to mark earned code used (webhook upgrade)', { galleryId, error: refErr?.message });
 							}
 						}
-						let referrerRewardGrantedUpgrade: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
-						if (session.metadata?.referredByUserId) {
+						let referredByUserIdUpgrade: string | undefined = undefined;
+						if (userId) {
 							try {
-								const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(session.metadata.referredByUserId, galleryId);
+								referredByUserIdUpgrade = (await getReferredByUserId(userId)) ?? undefined;
+							} catch {
+								referredByUserIdUpgrade = undefined;
+							}
+						}
+						let referrerRewardGrantedUpgrade: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
+						if (referredByUserIdUpgrade) {
+							try {
+								const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserIdUpgrade, galleryId);
 								if (granted) {
-									logger.info('Granted referrer reward (webhook upgrade)', { galleryId, referrerUserId: session.metadata.referredByUserId });
+									logger.info('Granted referrer reward (webhook upgrade)', { galleryId, referrerUserId: referredByUserIdUpgrade });
 									if (rewardType) referrerRewardGrantedUpgrade = { rewardType };
 									if (walletCreditCents && walletsTable && ledgerTable) {
-										const refId = `referral_bonus_${session.metadata.referredByUserId}_${galleryId}`;
+										const refId = `referral_bonus_${referredByUserIdUpgrade}_${galleryId}`;
 										try {
-											const newBalance = await creditWalletLib(session.metadata.referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable);
+											const newBalance = await creditWalletLib(referredByUserIdUpgrade, walletCreditCents, refId, walletsTable, ledgerTable);
 											if (newBalance != null) {
-												logger.info('Referrer 10+ wallet credit applied (webhook upgrade)', { referrerUserId: session.metadata.referredByUserId, amountCents: walletCreditCents, newBalance });
+												logger.info('Referrer 10+ wallet credit applied (webhook upgrade)', { referrerUserId: referredByUserIdUpgrade, amountCents: walletCreditCents, newBalance });
 											}
 										} catch (walletErr: any) {
-											logger.warn('Failed to credit referrer wallet (webhook upgrade)', { referrerUserId: session.metadata.referredByUserId, error: walletErr?.message });
+											logger.warn('Failed to credit referrer wallet (webhook upgrade)', { referrerUserId: referredByUserIdUpgrade, error: walletErr?.message });
 										}
 									}
 								}
@@ -542,16 +597,16 @@ async function processCheckoutSession(
 								logger.warn('Failed to grant referrer reward (webhook upgrade)', { galleryId, error: refErr?.message });
 							}
 						}
-						if (referrerRewardGrantedUpgrade && session.metadata?.referredByUserId) {
+						if (referrerRewardGrantedUpgrade && referredByUserIdUpgrade) {
 							try {
-								const toEmail = await getContactEmailForUser(session.metadata.referredByUserId);
+								const toEmail = await getEmailForUser(referredByUserIdUpgrade);
 								const sender = await getSenderEmail();
 								if (toEmail && sender) {
 									const stage = envProc?.env?.STAGE || 'dev';
 									const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
 									const template = createReferrerRewardEmail({ rewardType: referrerRewardGrantedUpgrade.rewardType, dashboardUrl });
 									await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
-									logger.info('Referrer reward email sent (webhook upgrade)', { referrerUserId: session.metadata.referredByUserId });
+									logger.info('Referrer reward email sent (webhook upgrade)', { referrerUserId: referredByUserIdUpgrade });
 								}
 							} catch (refEmailErr: any) {
 								logger.warn('Referrer reward email failed (webhook upgrade)', { error: refEmailErr?.message });
@@ -559,18 +614,18 @@ async function processCheckoutSession(
 						}
 						// Eligibility: only after first successful Stripe payment
 						try {
-							const stripePaidCount = await countStripePaidTransactions(userId);
-							if (stripePaidCount === 1) {
-								const { code, wasNew } = await ensureUserReferralCode(userId);
-								if (wasNew) {
-									const stage = envProc?.env?.STAGE || 'dev';
-									const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
-									const referralLink = `${dashboardUrl.replace(/\/+$/, '')}/invite/${code}`;
-									const toEmail = await getContactEmailForUser(userId);
-									const sender = await getSenderEmail();
-									if (toEmail && sender) {
-										const template = createEligibilityEmail({ referralCode: code, referralLink, dashboardUrl });
-										await sendRawEmailWithAttachments({ to: toEmail, from: sender, subject: template.subject, html: template.html || template.text, attachments: [] });
+							const stripePaidCountUpgrade = await countStripePaidTransactions(userId);
+							if (stripePaidCountUpgrade === 1) {
+								const { code: codeUpg, wasNew: wasNewUpg } = await ensureUserReferralCode(userId);
+								if (wasNewUpg) {
+									const toEmailUpg = await getEmailForUser(userId);
+									const senderUpg = await getSenderEmail();
+									if (toEmailUpg && senderUpg) {
+										const stageUpg = envProc?.env?.STAGE || 'dev';
+									const dashboardUrlUpg = await getRequiredConfigValue(stageUpg, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
+									const referralLinkUpg = `${dashboardUrlUpg.replace(/\/+$/, '')}/sign-up?ref=${encodeURIComponent(codeUpg)}`;
+									const templateUpg = createEligibilityEmail({ referralCode: codeUpg, referralLink: referralLinkUpg, dashboardUrl: dashboardUrlUpg });
+										await sendRawEmailWithAttachments({ to: toEmailUpg, from: senderUpg, subject: templateUpg.subject, html: templateUpg.html || templateUpg.text, attachments: [] });
 										logger.info('Eligibility email sent (webhook upgrade, first Stripe payment)', { userId });
 									}
 								}

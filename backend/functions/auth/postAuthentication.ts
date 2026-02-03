@@ -82,13 +82,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		// For new users, set email from Cognito attributes
 		// For existing users, preserve existing email but update if Cognito has a different one
 		if (emailFromCognito) {
-			// If user doesn't have email in DynamoDB, or if Cognito email is different, update it
 			if (!existingUser.email || existingUser.email !== emailFromCognito) {
 				updateData.email = emailFromCognito.toLowerCase().trim();
-				// Also set contactEmail if it's not set
-				if (!existingUser.contactEmail) {
-					updateData.contactEmail = emailFromCognito.toLowerCase().trim();
-				}
 			}
 		}
 

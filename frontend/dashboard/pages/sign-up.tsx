@@ -40,6 +40,7 @@ export default function SignUp() {
   const [validatorPosition, setValidatorPosition] = useState<{ top: number; left: number } | null>(
     null
   );
+  const [referralCode, setReferralCode] = useState<string | null>(null);
 
   const landingUrl = getPublicLandingUrl().replace(/\/$/, "");
   const termsUrl = `${landingUrl}/terms`;
@@ -61,8 +62,20 @@ export default function SignUp() {
     // Preserve referral code for post-signup (Publish wizard will pre-fill)
     const refParam = router.query.ref;
     if (refParam && typeof refParam === "string" && refParam.trim()) {
+      const code = refParam.trim().toUpperCase();
+      setReferralCode(code);
       try {
-        sessionStorage.setItem("referral_ref", refParam.trim().toUpperCase());
+        sessionStorage.setItem("referral_ref", code);
+      } catch {
+        // ignore
+      }
+    } else {
+      // Check if referral code exists in sessionStorage (e.g., from direct URL access)
+      try {
+        const storedRef = sessionStorage.getItem("referral_ref");
+        if (storedRef) {
+          setReferralCode(storedRef);
+        }
       } catch {
         // ignore
       }
@@ -143,6 +156,12 @@ export default function SignUp() {
       }
 
       await signUp(email, password, consents);
+      // Clear referral code from sessionStorage after successful signup
+      try {
+        sessionStorage.removeItem("referral_ref");
+      } catch {
+        // ignore
+      }
       // Redirect to verification page with email
       const returnUrl = router.query.returnUrl ?? "/";
       void router.push(
@@ -289,6 +308,13 @@ export default function SignUp() {
                 )}
                 {confirmPassword && password === confirmPassword && password.length > 0 && (
                   <p className="text-sm text-green-500 mt-2">Hasła są identyczne</p>
+                )}
+                {referralCode && (
+                  <div className="mt-3 p-3 rounded-lg border border-photographer-accent/30 bg-photographer-accent/5">
+                    <p className="text-sm font-medium text-photographer-accent dark:text-photographer-accentLight">
+                      Użyty kod referencyjny: <span className="font-mono font-semibold">{referralCode}</span>
+                    </p>
+                  </div>
                 )}
               </div>
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 
 import Button from "../components/ui/button/Button";
 import Input from "../components/ui/input/InputField";
-import { FullPageLoading } from "../components/ui/loading/Loading";
+import { FullPageLoading, ThreeDotsIndicator } from "../components/ui/loading/Loading";
 import { MobileWarningModal } from "../components/ui/mobile-warning/MobileWarningModal";
 import { useAuth } from "../context/AuthProvider";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -205,11 +205,8 @@ export default function Login() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center max-w-sm w-full px-4">
-          <div className="relative">
-            <div className="border-[3px] border-primary rounded-full border-b-transparent animate-spin w-12 h-12"></div>
-            <div className="absolute inset-0 border-[3px] border-transparent rounded-full border-t-primary/30"></div>
-          </div>
-          <p className="text-base text-muted-foreground mt-5">Sprawdzanie sesji...</p>
+          <ThreeDotsIndicator className="mb-5" />
+          <p className="text-base text-muted-foreground">Sprawdzanie sesji...</p>
         </div>
       </div>
     );

@@ -2,6 +2,8 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 import React from "react";
 import { createPortal } from "react-dom";
 
+import { ThreeDotsIndicator } from "../ui/loading/Loading";
+
 import type { UploadStats } from "../../hooks/useUppyUpload";
 import type { UploadType } from "../../lib/uppy-config";
 import { formatBytes } from "../../utils/format-bytes";
@@ -76,12 +78,10 @@ export const UploadCompletionOverlay = ({
                 </h2>
                 {isFinalizing && (
                   <div className="flex items-center gap-2 mt-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-photographer-accent rounded-full animate-pulse" />
-                      <p className="text-sm font-medium text-photographer-accent dark:text-photographer-accent">
-                        Przetwarzanie metadanych i przygotowywanie zdjęć...
-                      </p>
-                    </div>
+                    <ThreeDotsIndicator />
+                    <p className="text-sm font-medium text-photographer-accent dark:text-photographer-accent">
+                      Przetwarzanie metadanych i przygotowywanie zdjęć...
+                    </p>
                   </div>
                 )}
                 {!isFinalizing && (

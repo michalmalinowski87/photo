@@ -1,5 +1,6 @@
 "use client";
 
+import type { GetServerSideProps } from "next";
 import { useState } from "react";
 
 import Button from "../../components/ui/button/Button";
@@ -8,6 +9,14 @@ import { useAuth } from "../../context/AuthProvider";
 import { useDeletionStatus } from "../../hooks/queries/useAuth";
 import { useToast } from "../../hooks/useToast";
 import api, { formatApiError } from "../../lib/api-service";
+
+// Prevent static generation for this dev page and block in production
+export const getServerSideProps: GetServerSideProps = () => {
+  if (process.env.NODE_ENV !== "development") {
+    return Promise.resolve({ notFound: true });
+  }
+  return Promise.resolve({ props: {} });
+};
 
 export default function TestUserDeletion() {
   const { user } = useAuth();

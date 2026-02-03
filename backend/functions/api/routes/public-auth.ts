@@ -7,6 +7,7 @@ import { getCompanyConfig } from '../../../lib/src/company-config';
 import { getSenderEmail } from '../../../lib/src/email-config';
 import { createWelcomeEmail, createReferralProgramInfoEmail } from '../../../lib/src/email';
 import { sendRawEmailWithAttachments } from '../../../lib/src/raw-email';
+import { findUserIdByReferralCode } from '../../../lib/src/referral';
 
 const router = Router();
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -738,8 +739,9 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 		return res.status(500).json({ error: 'Missing SUBDOMAINS_TABLE configuration' });
 	}
 
-	const { email, code, subdomain: rawSubdomain, consents } = req.body ?? {};
+	const { email, code, subdomain: rawSubdomain, consents, referralCode: referralCodeBody } = req.body ?? {};
 	const normalizedEmail = String(email ?? '').toLowerCase().trim();
+	const referralCode = typeof referralCodeBody === 'string' ? referralCodeBody.trim().toUpperCase() : undefined;
 
 	// Validate email + code
 	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -792,25 +794,37 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 		return res.json({ verified: true, subdomainClaimed: false, subdomainError: { code: 'USER_ID_MISSING', message: 'Account verified, but could not finalize subdomain setup. Please try later.' } });
 	}
 
-	// 2.5) Upsert user record with legal consents (always, regardless of subdomain)
+	// 2.5) Upsert user record with legal consents and optional referral link (always, regardless of subdomain)
+	let referredByUserId: string | undefined;
+	if (referralCode) {
+		try {
+			const resolved = await findUserIdByReferralCode(referralCode);
+			if (resolved && resolved !== userId) {
+				referredByUserId = resolved;
+				logger?.info('Referral link stored for new user', { userId, referredByUserId });
+			}
+		} catch (refErr: any) {
+			logger?.warn('Could not resolve referral code at signup', { referralCode: referralCode?.slice(0, 8), error: refErr?.message });
+		}
+	}
 	try {
 		const now = new Date().toISOString();
+		const setParts = ['email = :e', 'updatedAt = :u', 'createdAt = if_not_exists(createdAt, :u)', '#legal = :legal'];
+		const values: Record<string, unknown> = {
+			':e': normalizedEmail,
+			':u': now,
+			':legal': { terms: consents.terms, privacy: consents.privacy }
+		};
+		if (referredByUserId) {
+			setParts.push('referredByUserId = :ref');
+			values[':ref'] = referredByUserId;
+		}
 		await ddb.send(new UpdateCommand({
 			TableName: usersTable,
 			Key: { userId },
-			UpdateExpression:
-				'SET contactEmail = :e, updatedAt = :u, createdAt = if_not_exists(createdAt, :u), #legal = :legal',
-			ExpressionAttributeNames: {
-				'#legal': 'legal'
-			},
-			ExpressionAttributeValues: {
-				':e': normalizedEmail,
-				':u': now,
-				':legal': {
-					terms: consents.terms,
-					privacy: consents.privacy
-				}
-			}
+			UpdateExpression: `SET ${setParts.join(', ')}`,
+			ExpressionAttributeNames: { '#legal': 'legal' },
+			ExpressionAttributeValues: values
 		}));
 	} catch (err: any) {
 		logger?.warn('Failed to store legal consents', { userId, errorName: err?.name, errorMessage: err?.message });
@@ -826,7 +840,7 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 		const termsUrl = `${landingUrl.replace(/\/+$/, '')}/terms`;
 		const company = await getCompanyConfig();
 
-		const template = createWelcomeEmail({ dashboardUrl, landingUrl, privacyUrl, termsUrl, companyName: company.company_name });
+		const template = createWelcomeEmail({ dashboardUrl, landingUrl, privacyUrl, termsUrl, companyName: company.company_name, isReferred: !!referredByUserId });
 
 		if (!sender) {
 			logger?.warn('Welcome email skipped: sender email not configured (SENDER_EMAIL or SSM SenderEmail)', { email: normalizedEmail });
@@ -848,7 +862,7 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 		try {
 			const senderForRef = await getSenderEmail();
 			const dashboardUrlForRef = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
-			const templateRef = createReferralProgramInfoEmail({ dashboardUrl: dashboardUrlForRef });
+			const templateRef = createReferralProgramInfoEmail({ dashboardUrl: dashboardUrlForRef, isReferred: !!referredByUserId });
 			if (senderForRef) {
 				await sendRawEmailWithAttachments({
 					to: normalizedEmail,
@@ -889,7 +903,7 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 		await ddb.send(new UpdateCommand({
 			TableName: usersTable,
 			Key: { userId },
-			UpdateExpression: 'SET subdomain = :s, contactEmail = :e, updatedAt = :u, createdAt = if_not_exists(createdAt, :u)',
+			UpdateExpression: 'SET subdomain = :s, email = :e, updatedAt = :u, createdAt = if_not_exists(createdAt, :u)',
 			ExpressionAttributeValues: {
 				':s': subdomain,
 				':e': normalizedEmail,

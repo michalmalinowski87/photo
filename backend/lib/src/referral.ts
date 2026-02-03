@@ -195,9 +195,9 @@ export async function ensureUserReferralCode(userId: string): Promise<{ code: st
 }
 
 /**
- * Get user contact email by userId (for sending referral/eligibility emails).
+ * Get user email by userId (for sending referral/eligibility emails).
  */
-export async function getContactEmailForUser(userId: string): Promise<string | null> {
+export async function getEmailForUser(userId: string): Promise<string | null> {
 	const envProc = (globalThis as any).process || process;
 	const usersTable = envProc?.env?.USERS_TABLE as string;
 	if (!usersTable) return null;
@@ -205,9 +205,9 @@ export async function getContactEmailForUser(userId: string): Promise<string | n
 	const res = await ddb.send(new GetCommand({
 		TableName: usersTable,
 		Key: { userId },
-		ProjectionExpression: 'contactEmail'
+		ProjectionExpression: 'email'
 	}));
-	const email = (res.Item as { contactEmail?: string } | undefined)?.contactEmail;
+	const email = (res.Item as { email?: string } | undefined)?.email;
 	return typeof email === 'string' && email.trim() ? email.trim() : null;
 }
 
@@ -257,6 +257,23 @@ const ERR_REFERRAL_INVALID = 'Nieprawidłowy kod zaproszenia.';
 const ERR_REFERRAL_SELF = 'Nie możesz użyć własnego kodu.';
 const ERR_REFERRAL_PLAN = 'Kod zaproszenia obowiązuje tylko dla planów 1 GB i 3 GB (1 lub 3 miesiące).';
 const ERR_REFERRAL_NOT_FIRST = 'Kod zaproszenia obowiązuje tylko przy pierwszej płatnej galerii.';
+
+/**
+ * Get user's referredByUserId (set when they signed up via invite link). Returns null if not set.
+ */
+export async function getReferredByUserId(userId: string): Promise<string | null> {
+	const envProc = (globalThis as any).process || process;
+	const usersTable = envProc?.env?.USERS_TABLE as string;
+	if (!usersTable) return null;
+	const ddb = getDocClient();
+	const res = await ddb.send(new GetCommand({
+		TableName: usersTable,
+		Key: { userId },
+		ProjectionExpression: 'referredByUserId'
+	}));
+	const referredByUserId = (res.Item as { referredByUserId?: string } | undefined)?.referredByUserId;
+	return referredByUserId && typeof referredByUserId === 'string' ? referredByUserId : null;
+}
 
 /**
  * Get user's referral-related fields from USERS_TABLE.
@@ -372,6 +389,36 @@ export async function validateReferralCodeForCheckout(
 	}
 	if (referrerUserId === buyerUserId) {
 		return { valid: false, errorMessage: ERR_REFERRAL_SELF };
+	}
+	if (!isPlanEligibleForReferralDiscount(planKey)) {
+		return { valid: false, errorMessage: ERR_REFERRAL_PLAN };
+	}
+	const [referrerEligible, firstPurchase] = await Promise.all([
+		isReferrerEligible(referrerUserId),
+		isBuyerFirstGalleryPurchase(buyerUserId)
+	]);
+	if (!referrerEligible) {
+		return { valid: false, errorMessage: ERR_REFERRAL_INVALID };
+	}
+	if (!firstPurchase) {
+		return { valid: false, errorMessage: ERR_REFERRAL_NOT_FIRST };
+	}
+	const { topInviterBadge, referralSuccessCount } = await getUserReferralFields(referrerUserId);
+	const isTopInviter = !!topInviterBadge || (referralSuccessCount ?? 0) >= 10;
+	const discountCents = getReferralDiscountForReferred(planKey, isTopInviter);
+	return { valid: true, referrerUserId, discountCents, isTopInviter };
+}
+
+/**
+ * Validate linked referrer (user.referredByUserId) for checkout. Same rules as code path; used when buyer signed up via invite link.
+ */
+export async function validateReferrerUserIdForCheckout(
+	buyerUserId: string,
+	referrerUserId: string,
+	planKey: string
+): Promise<ValidateReferralCodeResult> {
+	if (!referrerUserId || referrerUserId === buyerUserId) {
+		return { valid: false, errorMessage: ERR_REFERRAL_INVALID };
 	}
 	if (!isPlanEligibleForReferralDiscount(planKey)) {
 		return { valid: false, errorMessage: ERR_REFERRAL_PLAN };

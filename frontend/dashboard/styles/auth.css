@@ -110,6 +110,13 @@ html:has(.auth-layout) body {
   color: #2d241f !important; /* var(--dark-2) */
 }
 
+/* Exception: success icon should use accent color */
+.auth-layout svg[class*="lucide-check"],
+.auth-layout svg.text-photographer-accent {
+  color: #8b6f57 !important; /* photographer-accent */
+  stroke: #8b6f57 !important; /* photographer-accent */
+}
+
 /* Dark buttons should have white text - override the general rule */
 .auth-layout button[class*="bg-photographer-accent"],
 .auth-layout button[class*="bg-primary"],

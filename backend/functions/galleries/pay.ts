@@ -12,9 +12,11 @@ import {
 	isPlanEligibleForReferralDiscount,
 	validateEarnedCodeForCheckout,
 	validateReferralCodeForCheckout,
+	validateReferrerUserIdForCheckout,
+	getReferredByUserId,
 	markEarnedCodeUsed,
 	grantReferrerRewardForPurchase,
-	getContactEmailForUser
+	getEmailForUser
 } from '../../lib/src/referral';
 import { createReferrerRewardEmail } from '../../lib/src/email';
 import { sendRawEmailWithAttachments } from '../../lib/src/raw-email';
@@ -991,6 +993,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			const discountCents = ref.discountCents ?? 0;
 			totalAmountCents = Math.max(0, totalAmountCents - discountCents);
 			referralMetadata = ref.referrerUserId ? { referredByUserId: ref.referrerUserId, referralDiscountCents: discountCents, referredDiscountType: ref.isTopInviter ? '15_percent' : '10_percent' } : null;
+		} else {
+			// Linked referrer (user signed up via invite link) – no code required
+			const linkedReferrer = await getReferredByUserId(ownerId);
+			if (linkedReferrer) {
+				const ref = await validateReferrerUserIdForCheckout(ownerId, linkedReferrer, planKeyPay);
+				if (ref.valid && ref.referrerUserId != null) {
+					const discountCents = ref.discountCents ?? 0;
+					totalAmountCents = Math.max(0, totalAmountCents - discountCents);
+					referralMetadata = { referredByUserId: ref.referrerUserId, referralDiscountCents: discountCents, referredDiscountType: ref.isTopInviter ? '15_percent' : '10_percent' };
+				}
+			}
 		}
 	}
 
@@ -1444,7 +1457,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				// Referrer reward email
 				if (referrerRewardGranted && txnMeta.referredByUserId) {
 					try {
-						const toEmail = await getContactEmailForUser(txnMeta.referredByUserId);
+						const toEmail = await getEmailForUser(txnMeta.referredByUserId);
 						const sender = await getSenderEmail();
 						if (toEmail && sender) {
 							const dashboardUrl = await getRequiredConfigValue(stage, 'PublicDashboardUrl', { envVarName: 'PUBLIC_DASHBOARD_URL' });
@@ -1634,8 +1647,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					previousPlan: currentPlanKey,
 					newPriceCents: galleryPriceCents.toString()
 				} : {}),
-				...(existingMeta.earnedDiscountCodeId && { earnedDiscountCodeId: existingMeta.earnedDiscountCodeId }),
-				...(existingMeta.referredByUserId && { referredByUserId: existingMeta.referredByUserId })
+				...(existingMeta.earnedDiscountCodeId && { earnedDiscountCodeId: existingMeta.earnedDiscountCodeId })
 			},
 			mode: 'payment'
 		});

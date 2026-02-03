@@ -105,6 +105,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const walletsTable = envProc?.env?.WALLETS_TABLE as string;
 	const ledgerTable = envProc?.env?.WALLET_LEDGER_TABLE as string;
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
+	const subdomainsTable = envProc?.env?.SUBDOMAINS_TABLE as string;
 	// Use GALLERIES_BUCKET to match infrastructure (BUCKET_NAME is legacy)
 	const bucket = envProc?.env?.GALLERIES_BUCKET || envProc?.env?.BUCKET_NAME as string;
 	const userPoolId = envProc?.env?.COGNITO_USER_POOL_ID as string;
@@ -168,7 +169,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 		// Preserve email before deletion for final confirmation email
 		// Try to get email from users table first, then from Cognito as fallback
-		let userEmail = user.contactEmail || user.email;
+		let userEmail = user.email;
 		
 		// If email not in users table, try to get it from Cognito before we delete the user
 		if (!userEmail && userPoolId) {
@@ -734,6 +735,24 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			}
 		}
 
+		// 7.5. Delete subdomain entry so the subdomain can be reclaimed
+		if (user.subdomain && subdomainsTable) {
+			try {
+				await ddb.send(new DeleteCommand({
+					TableName: subdomainsTable,
+					Key: { subdomain: user.subdomain }
+				}));
+				logger.info('Deleted subdomain entry', { userId, subdomain: user.subdomain });
+			} catch (subdomainErr: any) {
+				logger.warn('Failed to delete subdomain entry (may not exist)', {
+					error: subdomainErr.message,
+					userId,
+					subdomain: user.subdomain
+				});
+				// Continue even if subdomain deletion fails
+			}
+		}
+
 		// 8. Soft delete user - nullify PII, preserve userId and transactional data
 		const deletedEmail = `deleted_user_${userId}@deleted.example.com`;
 		const now = new Date().toISOString();
@@ -742,7 +761,6 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			userId,
 			status: 'deleted',
 			email: deletedEmail,
-			contactEmail: deletedEmail,
 			businessName: null,
 			phone: null,
 			address: null,

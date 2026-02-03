@@ -63,6 +63,7 @@ export interface ReferralData {
   referralCount: number;
   topInviterBadge: boolean;
   referralHistory: Array<{ date: string; rewardType: string }>;
+  referredByUserId: string | null;
 }
 
 export function useReferral(options?: Omit<UseQueryOptions<ReferralData>, "queryKey" | "queryFn">) {

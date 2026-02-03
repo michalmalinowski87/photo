@@ -301,6 +301,12 @@ const TERMS_HTML = `
     <li>doładowania Portfela są niezwrotne (wyjątek od prawa odstąpienia – art. 38 pkt 13 ustawy o prawach konsumenta – świadczenie w pełni wykonane za wyraźną zgodą konsumenta przed upływem terminu odstąpienia).</li>
   </ul>
 
+  <h3>6.6. Program „Zaproszenia i nagrody”</h3>
+  <p>6.6.1. Użytkownik, który dokonał co najmniej jednej udanej płatności Stripe (Opłata za Galerię, upgrade planu lub doładowanie Portfela), może uczestniczyć w programie „Zaproszenia i nagrody” i udostępniać osobisty link zaproszenia.</p>
+  <p>6.6.2. Osoba, która założy Konto poprzez link zaproszenia, ma Konto powiązane z zaproszeniem (soft-link). Zapraszający otrzymuje nagrodę (kod rabatowy, darmowa galeria lub doładowanie Portfela – zgodnie z tabelą nagród w panelu), gdy zaproszona osoba po raz pierwszy opłaci Galerię lub doładuje Portfel (płatność realna, poprzez STRIPE). Przy pierwszej płatności zaproszonej osoby kod rabatowy nie jest wymagany – zniżka za link polecający nalicza się automatycznie, ponieważ powiązanie wynika z rejestracji przez link.</p>
+  <p>6.6.3. Nagrody (kody rabatowe, darmowa galeria, doładowanie Portfela) są przyznawane według zasad opublikowanych w panelu. Kody rabatowe obowiązują na wybrane plany i przez określony czas. Doładowanie Portfela w ramach nagrody (np. 20 PLN za 10. zaproszenie) podlega tym samym zasadom co Portfel (pkt 6.3).</p>
+  <p>6.6.4. Usługodawca zastrzega prawo zmiany lub zakończenia programu „Zaproszenia i nagrody” z zachowaniem już przyznanych nagród.</p>
+
   <h2>7. Prawo odstąpienia od umowy (dla konsumentów)</h2>
   <p>7.1. Konsument ma prawo odstąpić od umowy w terminie 14 dni bez podania przyczyny.</p>
   <p>7.2. Termin biegnie od dnia zawarcia umowy (utworzenia pierwszej Galerii lub doładowania Portfela).</p>

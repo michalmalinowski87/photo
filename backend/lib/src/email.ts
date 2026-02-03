@@ -51,6 +51,21 @@ function stripHtmlTags(text: string): string {
 	return text.replace(/<[^>]*>/g, '');
 }
 
+/**
+ * Break URL for display so email clients (e.g. Gmail) do not auto-convert it to a clickable anchor.
+ * Wraps the protocol (https:// or http://) in a span to break the URL pattern; the rest is escaped.
+ * Text stays copyable and readable, but is not turned into a link by the client.
+ */
+function breakUrlForDisplay(url: string): string {
+	const match = url.match(/^(https?:\/\/)(.*)$/);
+	if (match) {
+		const protocol = match[1];
+		const rest = match[2];
+		return '<span>' + escapeHtml(protocol) + '</span>' + escapeHtml(rest);
+	}
+	return escapeHtml(url);
+}
+
 function sanitizeInlineText(text: string): string {
 	return stripHtmlTags(text).replace(/\s+/g, ' ').trim();
 }
@@ -831,17 +846,31 @@ export function createWelcomeEmail(params: {
 	privacyUrl: string;
 	termsUrl: string;
 	companyName?: string;
+	isReferred?: boolean;
 }): EmailTemplate {
 	const dashboardUrl = params.dashboardUrl.replace(/\/+$/, '');
 	const landingUrl = params.landingUrl.replace(/\/+$/, '');
 	const privacyUrl = params.privacyUrl || `${landingUrl}/privacy`;
 	const termsUrl = params.termsUrl || `${landingUrl}/terms`;
 	const companyName = params.companyName?.trim() || 'PhotoCloud';
+	const isReferred = params.isReferred === true;
+
+	const referralDiscountInfo = isReferred
+		? `
+		<div style="background-color: ${COLORS.semantic.info[50]}; border: 1px solid ${COLORS.brand.accent}; border-radius: 12px; padding: 16px; margin: 20px 0;">
+			<p style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600; color: ${COLORS.text.heading}; font-family: Outfit, Inter, sans-serif;">🎁 Zniżka za link polecający</p>
+			<p style="margin: 0; font-size: 14px; color: ${COLORS.text.body}; line-height: 1.6; font-family: Outfit, Inter, sans-serif;">
+				Twoje konto jest powiązane z zaproszeniem. Zniżka za link polecający naliczy się automatycznie przy pierwszej płatnej galerii (gdy doładujesz portfel lub wykorzystasz już prezent powitalny). Kod rabatowy nie jest wymagany — powiązanie wynika z rejestracji przez link.
+			</p>
+		</div>
+	`
+		: '';
 
 	const content = `
 		${createHeading("Witaj w PhotoCloud!", 2)}
 		${createParagraph("Twoje konto zostało pomyślnie utworzone. Cieszymy się, że jesteś z nami!")}
 		${createParagraph("W podziękowaniu zostawiliśmy w Twoim portfelu mały prezent powitalny — wystarczy na pierwszą galerię. To nasz sposób, by powiedzieć: Dziękujemy za Twój czas!")}
+		${referralDiscountInfo}
 
 		${createHeading("Pierwsze kroki", 2)}
 		${createParagraphHtml(`
@@ -865,12 +894,17 @@ export function createWelcomeEmail(params: {
 		</div>
 	`;
 
+	const textReferralInfo = isReferred
+		? `\n🎁 Zniżka za link polecający: Twoje konto jest powiązane z zaproszeniem. Zniżka naliczy się automatycznie przy pierwszej płatnej galerii (gdy doładujesz portfel lub wykorzystasz już prezent powitalny). Kod rabatowy nie jest wymagany.\n\n`
+		: '';
+
 	return {
 		subject: 'Witamy w PhotoCloud — pierwsze kroki',
 		text:
 			`Witaj w PhotoCloud!\n\n` +
 			`Twoje konto zostało pomyślnie utworzone.\n\n` +
-			`W podziękowaniu zostawiliśmy w Twoim portfelu mały prezent powitalny — wystarczy na pierwszą galerię. To nasz sposób, by powiedzieć: Dziękujemy za Twój czas!\n\n` +
+			`W podziękowaniu zostawiliśmy w Twoim portfelu mały prezent powitalny — wystarczy na pierwszą galerię. To nasz sposób, by powiedzieć: Dziękujemy za Twój czas!\n` +
+			textReferralInfo +
 			`Pierwsze kroki:\n` +
 			`1) Zaloguj się do panelu\n` +
 			`2) Utwórz pierwszą galerię\n` +
@@ -884,12 +918,26 @@ export function createWelcomeEmail(params: {
 }
 
 /** Second email: referral program info (no code – user not eligible yet). Polish. */
-export function createReferralProgramInfoEmail(params: { dashboardUrl: string }): EmailTemplate {
+export function createReferralProgramInfoEmail(params: { dashboardUrl: string; isReferred?: boolean }): EmailTemplate {
 	const dashboardUrl = params.dashboardUrl.replace(/\/+$/, '');
+	const isReferred = params.isReferred === true;
+
+	const referredUserInfo = isReferred
+		? `
+		<div style="background-color: ${COLORS.semantic.info[50]}; border: 1px solid ${COLORS.brand.accent}; border-radius: 12px; padding: 16px; margin: 20px 0;">
+			<p style="margin: 0 0 8px 0; font-size: 15px; font-weight: 600; color: ${COLORS.text.heading}; font-family: Outfit, Inter, sans-serif;">🎁 Zniżka za link polecający</p>
+			<p style="margin: 0; font-size: 14px; color: ${COLORS.text.body}; line-height: 1.6; font-family: Outfit, Inter, sans-serif;">
+				Twoje konto jest powiązane z zaproszeniem. Zniżka za link polecający naliczy się automatycznie przy pierwszej płatnej galerii (gdy doładujesz portfel lub wykorzystasz już prezent powitalny). Kod rabatowy nie jest wymagany — powiązanie wynika z rejestracji przez link.
+			</p>
+		</div>
+	`
+		: '';
+
 	const content = `
-		${createHeading('Zaproszenia i nagrody', 2)}
-		${createParagraph('W programie „Zaproszenia i nagrody” zapraszasz znajomych do PhotoCloud. Gdy zaproszona osoba opłaci pierwszą galerię (z Twoim kodem), otrzymasz kod rabatowy na kolejne galerie. Swój unikalny link i kod dostaniesz w panelu po opłaceniu przez Ciebie pierwszej galerii (nie tylko z bonusu powitalnego).')}
-		${createHeading('Tabela nagród', 2)}
+		${createHeading("Zaproszenia i nagrody", 2)}
+		${referredUserInfo}
+		${createParagraph("W programie „Zaproszenia i nagrody” zapraszasz znajomych do PhotoCloud. Gdy zaproszona osoba opłaci pierwszą galerię lub doładuje portfel, otrzymasz kod rabatowy. Swój unikalny link i kod znajdziesz w panelu po opłaceniu przez Ciebie pierwszej galerii lub doładowaniu portfela używając STRIPE.")}
+		${createHeading("Tabela nagród", 2)}
 		<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-collapse: collapse; margin: 16px 0; font-size: 15px; color: ${COLORS.text.body}; font-family: Outfit, Inter, sans-serif;">
 			<thead>
 				<tr style="border-bottom: 2px solid ${COLORS.surface.border};">
@@ -916,8 +964,8 @@ export function createReferralProgramInfoEmail(params: { dashboardUrl: string })
 				</tr>
 			</tbody>
 		</table>
-		<p style="margin: 0 0 16px 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6;">* Liczba osób, które zaprosiłeś i które opłaciły swoją pierwszą galerię (płatność realna, nie tylko z bonusu powitalnego).<br/>** 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie.</p>
-		${createParagraph('Swój link i kod zobaczysz w panelu po opłaceniu pierwszej galerii.')}
+		<p style="margin: 0 0 16px 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6;">* Liczba osób powiązanych z Twoim linkiem, które opłaciły pierwszą galerię lub doładowały portfel (płatność realna STRIPE).<br/>** 20 PLN – jednorazowy bonus; środki bezzwrotne do wykorzystania wyłącznie w naszym systemie.</p>
+		${createParagraph("Swój link i kod zobaczysz w panelu po opłaceniu pierwszej galerii lub doładowaniu portfela.")}
 		<div style="margin: 20px 0 0 0; padding: 12px 16px; background-color: ${COLORS.surface.elevated}; border-radius: 8px; font-size: 12px; color: ${COLORS.text.muted}; line-height: 1.6;">
 			<strong style="color: ${COLORS.text.body};">Ograniczenia:</strong>
 			<ul style="margin: 8px 0 0 0; padding-left: 20px;">
@@ -927,19 +975,24 @@ export function createReferralProgramInfoEmail(params: { dashboardUrl: string })
 				<li style="margin-bottom: 4px;">Nie można łączyć z innymi promocjami.</li>
 			</ul>
 		</div>
-		${createButton('Przejdź do panelu', dashboardUrl, 'primary')}
+		${createButton("Przejdź do panelu", dashboardUrl, "primary")}
 	`;
+	const textReferredInfo = isReferred
+		? '\nZniżka za link polecający: Twoje konto jest powiązane z zaproszeniem. Zniżka naliczy się automatycznie przy pierwszej płatnej galerii (gdy doładujesz portfel lub wykorzystasz już prezent powitalny). Kod rabatowy nie jest wymagany.\n\n'
+		: '';
+
 	return {
-		subject: 'Zaproszenia i nagrody — zdobądź kody rabatowe',
-		text:
-			'Zaproszenia i nagrody\n\n' +
-			'W programie zapraszasz znajomych; gdy opłacą pierwszą galerię (z Twoim kodem), Ty dostajesz kod rabatowy. Swój link otrzymasz w panelu po opłaceniu pierwszej galerii.\n\n' +
-			'Tabela nagród (* = liczba zaproszonych osób, które opłaciły pierwszą galerię):\n' +
-			'1 – Kod rabatowy 10% (osoba polecona: 10% zniżki)\n3 – Darmowa galeria 1 GB (osoba polecona: 10% zniżki)\n10+ – Doładowanie portfela za 20 PLN** + odznaka Top Inviter (osoba polecona: 15% zniżki)\n** 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie.\n\n' +
-			'Ograniczenia:\n• Kody są ważne na plany 1 GB i 3 GB (1 lub 3 miesiące), nie na plany 12-miesięczne ani 10 GB\n• Kody są ważne przez 6 miesięcy\n• Kody są jednorazowe\n• Nie można łączyć z innymi promocjami\n\n' +
-			`Panel: ${dashboardUrl}\n`,
-		html: createEmailWrapper(content),
-	};
+    subject: "Zaproszenia i nagrody — zdobądź kody rabatowe",
+    text:
+      "Zaproszenia i nagrody\n\n" +
+      textReferredInfo +
+      "W programie zapraszasz znajomych; gdy opłacą pierwszą galerię lub doładują portfel, Ty dostajesz kod rabatowy. Swój link otrzymasz w panelu po opłaceniu pierwszej galerii lub doładowaniu portfela.\n\n" +
+      "Tabela nagród (* = liczba osób powiązanych z linkiem, które opłaciły pierwszą galerię lub doładowały portfel):\n" +
+      "1 – Kod rabatowy 10% (osoba polecona: 10% zniżki)\n3 – Darmowa galeria 1 GB (osoba polecona: 10% zniżki)\n10+ – Doładowanie portfela za 20 PLN** + odznaka Top Inviter (osoba polecona: 15% zniżki)\n** 20 PLN – jednorazowy bonus; środki bezzwrotne do wykorzystania wyłącznie w naszym systemie.\n\n" +
+      "Ograniczenia:\n• Kody są ważne na plany 1 GB i 3 GB (1 lub 3 miesiące), nie na plany 12-miesięczne ani 10 GB\n• Kody są ważne przez 6 miesięcy\n• Kody są jednorazowe\n• Nie można łączyć z innymi promocjami\n\n" +
+      `Panel: ${dashboardUrl}\n`,
+    html: createEmailWrapper(content),
+  };
 }
 
 /** Eligibility email: user just became eligible – send their referral code and link. Polish. */
@@ -949,15 +1002,21 @@ export function createEligibilityEmail(params: {
 	dashboardUrl: string;
 }): EmailTemplate {
 	const { referralCode, referralLink, dashboardUrl } = params;
+	const linkBoxBg = COLORS.semantic.info[50];
+	const linkBoxBorder = COLORS.brand.accent;
+	const linkColor = COLORS.brand.accentDark;
 	const content = `
 		${createHeading('Twój link zaproszenia jest gotowy', 2)}
-		${createParagraph('Opłaciłeś pierwszą galerię – możesz teraz zapraszać znajomych i zdobywać kody rabatowe.')}
+		${createParagraph('Gratulacje! – możesz teraz zapraszać znajomych i zdobywać kody rabatowe.')}
 		<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; border-radius: 12px; padding: 20px; margin: 20px 0;">
 			<p style="margin: 0 0 8px 0; font-size: 14px; color: ${COLORS.text.muted}; font-family: Outfit, Inter, sans-serif;">Twój kod:</p>
-			<p style="margin: 0 0 12px 0; font-size: 18px; font-weight: 600; color: ${COLORS.text.heading}; font-family: monospace;">${escapeHtml(referralCode)}</p>
-			<p style="margin: 0; font-size: 14px; color: ${COLORS.text.muted}; word-break: break-all;">${escapeHtml(referralLink)}</p>
+			<p style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: ${COLORS.text.heading}; font-family: monospace;">${escapeHtml(referralCode)}</p>
+			<p style="margin: 0 0 8px 0; font-size: 14px; color: ${COLORS.text.muted}; font-family: Outfit, Inter, sans-serif;">Twój link zaproszenia:</p>
+			<div style="background-color: ${linkBoxBg}; border: 2px solid ${linkBoxBorder}; border-radius: 12px; padding: 16px 20px; margin: 8px 0 0 0;">
+				<p style="display: block; margin: 0; font-size: 18px; font-weight: 600; color: ${linkColor}; text-decoration: none; word-break: break-all; font-family: Outfit, Inter, sans-serif; user-select: all; -webkit-user-select: all; cursor: text;">${breakUrlForDisplay(referralLink)}</p>
+			</div>
 		</div>
-		${createParagraph('Udostępnij link znajomym. Gdy opłacą pierwszą galerię (z kodem), otrzymasz kod rabatowy.')}
+		${createParagraph('Udostępnij link znajomym. Gdy opłacą pierwszą galerię lub doładują portfel, otrzymasz kod rabatowy.')}
 		${createButton('Otwórz panel', dashboardUrl.replace(/\/+$/, ''), 'primary')}
 	`;
 	return {
@@ -983,25 +1042,25 @@ export function createReferrerRewardEmail(params: {
 					? 'Doładowanie portfela za 20 PLN'
 					: 'darmowa galeria 1 GB';
 	const content = isWallet
-		? `
-		${createHeading('Świetna robota!', 2)}
-		${createParagraph('Ktoś opłacił galerię dzięki Twojemu linkowi. Otrzymałeś doładowanie portfela za 20 PLN* (nagroda za 10. zaproszenie).')}
-		<p style="margin: 0 0 16px 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6;">* 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie.</p>
-		${createParagraph('Sprawdź saldo w panelu w sekcji „Portfel”.')}
-		${createButton('Otwórz panel', dashboardUrl, 'primary')}
+    ? `
+		${createHeading("Świetna robota!", 2)}
+		${createParagraph("Ktoś powiązany z Twoim linkiem opłacił galerię lub doładował portfel. Otrzymałeś doładowanie portfela za 20 PLN* (nagroda za 10. zaproszenie).")}
+		<p style="margin: 0 0 16px 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6;">* 20 PLN – jednorazowy bonus; środki bezzwrotne do wykorzystania wyłącznie w naszym systemie.</p>
+		${createParagraph("Sprawdź saldo w panelu w sekcji „Portfel”.")}
+		${createButton("Otwórz panel", dashboardUrl, "primary")}
 	`
-		: params.rewardType === 'free_small'
-			? `
-		${createHeading('Świetna robota!', 2)}
-		${createParagraph('Ktoś opłacił galerię dzięki Twojemu linkowi. Otrzymałeś nagrodę: darmowa galeria 1 GB.')}
-		${createParagraph('Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.')}
-		${createButton('Otwórz panel', dashboardUrl, 'primary')}
+    : params.rewardType === "free_small"
+      ? `
+		${createHeading("Świetna robota!", 2)}
+		${createParagraph("Ktoś powiązany z Twoim linkiem opłacił galerię lub doładował portfel. Otrzymałeś nagrodę: darmowa galeria 1 GB.")}
+		${createParagraph("Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.")}
+		${createButton("Otwórz panel", dashboardUrl, "primary")}
 	`
-			: `
-		${createHeading('Świetna robota!', 2)}
-		${createParagraph(`Ktoś opłacił galerię dzięki Twojemu linkowi. Otrzymałeś kod rabatowy ${label}.`)}
-		${createParagraph('Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.')}
-		${createButton('Otwórz panel', dashboardUrl, 'primary')}
+      : `
+		${createHeading("Świetna robota!", 2)}
+		${createParagraph(`Ktoś powiązany z Twoim linkiem opłacił galerię lub doładował portfel. Otrzymałeś kod rabatowy ${label}.`)}
+		${createParagraph("Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.")}
+		${createButton("Otwórz panel", dashboardUrl, "primary")}
 	`;
 	const subject = isWallet
 		? 'Otrzymałeś doładowanie portfela za 20 PLN — PhotoCloud'
@@ -1009,10 +1068,10 @@ export function createReferrerRewardEmail(params: {
 			? 'Otrzymałeś nagrodę: darmowa galeria 1 GB — PhotoCloud'
 			: `Otrzymałeś kod rabatowy ${label} — PhotoCloud`;
 	const textBody = isWallet
-		? `Świetna robota! Otrzymałeś doładowanie portfela za 20 PLN* (nagroda za 10. zaproszenie). * 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie. Sprawdź saldo w panelu.\n\n${dashboardUrl}\n`
-		: params.rewardType === 'free_small'
-			? `Świetna robota! Otrzymałeś nagrodę: darmowa galeria 1 GB. Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.\n\n${dashboardUrl}\n`
-			: `Świetna robota! Otrzymałeś kod rabatowy ${label}. Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.\n\n${dashboardUrl}\n`;
+    ? `Świetna robota! Otrzymałeś doładowanie portfela za 20 PLN* (nagroda za 10. zaproszenie). * 20 PLN – jednorazowy bonus; środki bezzwrotne do wykorzystania wyłącznie w naszym systemie. Sprawdź saldo w panelu.\n\n${dashboardUrl}\n`
+    : params.rewardType === "free_small"
+      ? `Świetna robota! Otrzymałeś nagrodę: darmowa galeria 1 GB. Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.\n\n${dashboardUrl}\n`
+      : `Świetna robota! Otrzymałeś kod rabatowy ${label}. Sprawdź go w panelu w sekcji „Zaproszenia i nagrody”.\n\n${dashboardUrl}\n`;
 	return {
 		subject,
 		text: textBody,

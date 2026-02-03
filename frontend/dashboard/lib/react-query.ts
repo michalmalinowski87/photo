@@ -161,8 +161,16 @@ export function makeQueryClient(): QueryClient {
         refetchOnWindowFocus: true,
         // Don't refetch on reconnect by default (can be overridden per query)
         refetchOnReconnect: false,
-        // Retry failed requests 1 time
-        retry: 1,
+        // Retry failed requests 1 time, but NOT for 401/403 (we handle those in api-service)
+        retry: (failureCount, error) => {
+          // Don't retry auth errors (401/403) - api-service handles these with token refresh
+          const errorWithStatus = error as { status?: number };
+          if (errorWithStatus?.status === 401 || errorWithStatus?.status === 403) {
+            return false;
+          }
+          // Retry other errors once
+          return failureCount < 1;
+        },
         // Retry delay increases exponentially
         retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
         // Enable structural sharing (default in v5, but explicit is better)
@@ -170,8 +178,16 @@ export function makeQueryClient(): QueryClient {
         structuralSharing: true,
       },
       mutations: {
-        // Retry mutations once on failure
-        retry: 1,
+        // Retry mutations once on failure, but NOT for 401/403 (we handle those in api-service)
+        retry: (failureCount, error) => {
+          // Don't retry auth errors (401/403) - api-service handles these with token refresh
+          const errorWithStatus = error as { status?: number };
+          if (errorWithStatus?.status === 401 || errorWithStatus?.status === 403) {
+            return false;
+          }
+          // Retry other errors once
+          return failureCount < 1;
+        },
       },
     },
   });

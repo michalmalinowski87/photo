@@ -65,6 +65,11 @@ const navItems: NavItem[] = [
     path: "/wallet",
   },
   {
+    name: "Zaproszenia i nagrody",
+    icon: <Gift size={20} />,
+    path: "/rewards",
+  },
+  {
     name: "Ustawienia",
     icon: <Settings size={20} />,
     subItems: [
@@ -72,17 +77,6 @@ const navItems: NavItem[] = [
       { name: "Bezpieczeństwo", path: "/settings/security" },
       { name: "Galeria", path: "/settings/gallery" },
     ],
-  },
-  {
-    name: "Zaproszenia i nagrody",
-    icon: <Gift size={20} />,
-    path: "/settings/discount-codes",
-  },
-  {
-    name: "Strona główna",
-    icon: <Globe size={20} />,
-    path: getPublicLandingUrl(),
-    external: true,
   },
 ];
 
@@ -396,16 +390,25 @@ const AppSidebar = () => {
       {(isExpanded || isMobileOpen) && (
         <div className="mt-auto pb-6 space-y-2 flex-shrink-0">
           <Link
-            href="/dev"
-            className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors active:scale-[0.98] ${
-              router.pathname?.startsWith("/dev")
-                ? "bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300"
-                : "text-gray-700 dark:text-gray-400 hover:bg-purple-50 dark:hover:bg-purple-900/10"
-            }`}
+            href={getPublicLandingUrl()}
+            className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-400 rounded-lg hover:bg-photographer-elevated dark:hover:bg-white/5 transition-colors active:scale-[0.98]"
           >
-            <FlaskConical size={20} />
-            <span>Dev Menu</span>
+            <Globe size={20} />
+            <span>Strona główna</span>
           </Link>
+          {process.env.NODE_ENV === "development" && (
+            <Link
+              href="/dev"
+              className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors active:scale-[0.98] ${
+                router.pathname?.startsWith("/dev")
+                  ? "bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300"
+                  : "text-gray-700 dark:text-gray-400 hover:bg-purple-50 dark:hover:bg-purple-900/10"
+              }`}
+            >
+              <FlaskConical size={20} />
+              <span>Dev Menu</span>
+            </Link>
+          )}
           <Link
             href="/login"
             className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-photographer-text rounded-lg hover:bg-photographer-elevated dark:text-gray-400 dark:hover:bg-white/5 transition active:scale-[0.98]"

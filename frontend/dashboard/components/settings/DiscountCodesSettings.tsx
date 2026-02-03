@@ -76,7 +76,7 @@ export default function DiscountCodesSettings() {
               type="text"
               readOnly
               value={referralData.referralLink}
-              className="flex-1 min-w-[200px] px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              className="flex-1 min-w-[200px] h-12 px-3 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
             />
             <Button
               variant="outline"
@@ -89,7 +89,7 @@ export default function DiscountCodesSettings() {
           </div>
         ) : (
           <p className="text-sm text-photographer-text dark:text-gray-400 mt-2">
-            Opłać pierwszą galerię, żeby otrzymać swój link zaproszenia.
+            Opłać pierwszą galerię, lub doładuj portfel, żeby otrzymać swój link zaproszenia.
           </p>
         )}
       </div>
@@ -116,8 +116,9 @@ export default function DiscountCodesSettings() {
         </h2>
         {referralData.earnedDiscountCodes.length === 0 ? (
           <p className="text-sm text-photographer-text dark:text-gray-400">
-            Nie masz jeszcze kodów. Zaproś znajomych – po opłaceniu przez nich pierwszej galerii
-            otrzymasz kod rabatowy.
+            Nie masz jeszcze kodów. Zaproś znajomych – gdy opłacą pierwszą galerię lub doładują
+            portfel, otrzymasz kod rabatowy który pojawi się w tabeli poniej wraz z terminem
+            ważności.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-photographer-border dark:border-gray-700">
@@ -204,7 +205,8 @@ export default function DiscountCodesSettings() {
           <div className="px-4 pb-4 pt-4 text-sm text-photographer-text dark:text-gray-400 space-y-3 border-t border-photographer-border dark:border-gray-700">
             <ul className="list-disc list-inside space-y-1">
               <li>
-                Kto może zapraszać: po opłaceniu pierwszej galerii (nie tylko z bonusu powitalnego).
+                Kto może zapraszać: po opłaceniu pierwszej galerii lub doładowaniu portfela (poprzez
+                STRIPE).
               </li>
             </ul>
             <div>
@@ -244,10 +246,11 @@ export default function DiscountCodesSettings() {
                 </tbody>
               </table>
               <p className="mt-2 text-xs text-photographer-text/80 dark:text-gray-500">
-                * Liczba osób, które zaprosiłeś i które opłaciły swoją pierwszą galerię (płatność
-                realna, nie tylko z bonusu powitalnego).
+                * Liczba osób powiązanych z Twoim linkiem, które opłaciły pierwszą galerię lub
+                doładowały portfel (płatność realna, poprzez STRIPE).
                 <br />
-                ** 20 PLN – jednorazowy bonus; środki do wykorzystania wyłącznie w naszym systemie.
+                ** 20 PLN – jednorazowy bonus; środki bezzwrotne do wykorzystania wyłącznie w naszym
+                systemie.
               </p>
             </div>
             <ul className="list-disc list-inside space-y-1">

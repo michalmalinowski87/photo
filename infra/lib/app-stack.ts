@@ -1558,10 +1558,15 @@ export class AppStack extends Stack {
 		walletLedger.grantReadWriteData(paymentsWebhookFn);
 		galleries.grantReadWriteData(paymentsWebhookFn);
 		orders.grantReadWriteData(paymentsWebhookFn);
+		users.grantReadWriteData(paymentsWebhookFn); // Referral: ensureUserReferralCode, getEmailForUser
 
 		// SSM Parameter Store permissions for payment functions
 		paymentsCheckoutFn.addToRolePolicy(ssmPolicy);
 		paymentsWebhookFn.addToRolePolicy(ssmPolicy);
+		paymentsWebhookFn.addToRolePolicy(new PolicyStatement({
+			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+			resources: ['*']
+		})); // Referral eligibility + referrer reward emails
 		paymentsSuccessFn.addToRolePolicy(ssmPolicy);
 		paymentsCancelFn.addToRolePolicy(ssmPolicy);
 		paymentsCheckStatusFn.addToRolePolicy(ssmPolicy);
@@ -1799,6 +1804,8 @@ export class AppStack extends Stack {
 		apiFn.addToRolePolicy(passRolePolicy);
 		expiryFn.addToRolePolicy(schedulerPolicy);
 		expiryFn.addToRolePolicy(passRolePolicy);
+		paymentsWebhookFn.addToRolePolicy(schedulerPolicy); // Cancel gallery-expiry schedule when payment completes
+		paymentsWebhookFn.addToRolePolicy(passRolePolicy);
 		
 		// Add environment variables for schedule management
 		envVars['GALLERY_EXPIRY_DELETION_LAMBDA_ARN'] = galleryExpiryDeletionFn.functionArn;
@@ -1892,6 +1899,7 @@ export class AppStack extends Stack {
 
 		// Grant permissions to PerformUserDeletion Lambda
 		users.grantReadWriteData(performUserDeletionFn);
+		subdomains.grantReadWriteData(performUserDeletionFn);
 		galleries.grantReadWriteData(performUserDeletionFn);
 		orders.grantReadWriteData(performUserDeletionFn);
 		packages.grantReadWriteData(performUserDeletionFn);

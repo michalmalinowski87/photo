@@ -141,7 +141,6 @@ To comply with data minimization principles, inactive accounts are automatically
   // PII fields nullified on deletion:
   businessName: null;
   email: 'deleted_user_{userId}@deleted.example.com';
-  contactEmail: 'deleted_user_{userId}@deleted.example.com';
   phone: null;
   address: null;
   nip: null;
@@ -193,32 +192,36 @@ To comply with data minimization principles, inactive accounts are automatically
    - Amount: negative wallet balance (debit)
    - Allows claiming unused funds per T&C
 
-7. **Soft Delete User**
+7. **Delete Subdomain Entry**
+   - If the user had a tenant subdomain, delete the row from the Subdomains table (partition key: `subdomain`)
+   - Allows the subdomain to be reclaimed by another user
+   - Continues even if subdomain deletion fails (logs warning)
+
+8. **Soft Delete User**
    - Nullify all PII fields: `businessName`, `phone`, `address`, `nip`
    - Set email to `deleted_user_{userId}@deleted.example.com`
-   - Set `contactEmail` to same deleted email
    - Set `status = "deleted"`
    - Set `deletedAt` timestamp
    - Preserve `userId`, `createdAt`, transaction references
 
-8. **Delete Cognito User**
+9. **Delete Cognito User**
    - Uses `AdminDeleteUser` command
    - Username: `userId` (Cognito sub attribute)
    - Allows user to re-register with same email
    - Continues even if Cognito deletion fails (logs error)
 
-9. **Cancel EventBridge Schedule**
+10. **Cancel EventBridge Schedule**
    - Cancels user deletion schedule using `cancelUserDeletionSchedule()`
    - Schedule name: `user-deletion-{userId}`
    - Does NOT cancel gallery expiry schedules
    - Continues even if schedule cancellation fails (may not exist)
 
-10. **Send Final Email**
+11. **Send Final Email**
     - Confirmation email sent to preserved email address (before deletion)
     - Uses `createDeletionCompletedEmail()` template
     - Continues even if email fails (logs error)
 
-11. **Audit Logging**
+12. **Audit Logging**
     - Full audit trail logged to CloudWatch
     - Includes: galleries deleted/preserved, S3 objects deleted, packages deleted, deletion reason, timestamps
 
@@ -360,7 +363,7 @@ To comply with data minimization principles, inactive accounts are automatically
 
 2. **Personal Information**
    - `businessName` → `null`
-   - `contactEmail` → `deleted_user_{userId}@deleted.example.com`
+   - `email` → `deleted_user_{userId}@deleted.example.com`
    - `phone` → `null`
    - `address` → `null`
    - `nip` → `null`

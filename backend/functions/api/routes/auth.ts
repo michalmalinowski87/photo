@@ -117,7 +117,7 @@ router.get('/business-info', async (req: Request, res: Response) => {
 		
 		const businessInfo = {
 			businessName: userData.businessName || '',
-			email: userData.contactEmail || '',
+			email: userData.email || '',
 			phone: userData.phone || '',
 			address: userData.address || '',
 			nip: userData.nip || '',
@@ -160,13 +160,14 @@ router.get('/referral', async (req: Request, res: Response) => {
 		const userGet = await ddb.send(new GetCommand({
 			TableName: usersTable,
 			Key: { userId },
-			ProjectionExpression: 'referralCode, earnedDiscountCodes, referralSuccessCount, topInviterBadge, referralHistory'
+			ProjectionExpression: 'referralCode, earnedDiscountCodes, referralSuccessCount, topInviterBadge, referralHistory, referredByUserId'
 		}));
 		let referralCode = (userGet.Item as { referralCode?: string } | undefined)?.referralCode;
 		let earnedDiscountCodes = ((userGet.Item as { earnedDiscountCodes?: EarnedDiscountCode[] } | undefined)?.earnedDiscountCodes) || [];
 		const referralSuccessCount = (userGet.Item as { referralSuccessCount?: number } | undefined)?.referralSuccessCount ?? 0;
 		const topInviterBadge = (userGet.Item as { topInviterBadge?: boolean } | undefined)?.topInviterBadge === true;
 		let referralHistory = ((userGet.Item as { referralHistory?: { date: string; rewardType: string }[] } | undefined)?.referralHistory) || [];
+		const referredByUserId = (userGet.Item as { referredByUserId?: string } | undefined)?.referredByUserId || null;
 
 		if (!referralCode) {
 			try {
@@ -190,7 +191,7 @@ router.get('/referral', async (req: Request, res: Response) => {
 		} catch {
 			dashboardUrl = '';
 		}
-		const referralLink = referralCode ? `${dashboardUrl.replace(/\/$/, '')}/invite/${referralCode}` : null;
+		const referralLink = referralCode ? `${dashboardUrl.replace(/\/+$/, '')}/sign-up?ref=${encodeURIComponent(referralCode)}` : null;
 
 		const now = new Date();
 		const earnedWithStatus = earnedDiscountCodes.map((c: EarnedDiscountCode) => ({
@@ -208,7 +209,8 @@ router.get('/referral', async (req: Request, res: Response) => {
 			earnedDiscountCodes: earnedWithStatus,
 			referralCount: referralSuccessCount,
 			topInviterBadge,
-			referralHistory
+			referralHistory,
+			referredByUserId
 		});
 	} catch (error: any) {
 		logger?.error('Get referral failed', {
@@ -275,8 +277,8 @@ router.put('/business-info', async (req: Request, res: Response) => {
 	}
 
 	if (email !== undefined) {
-		updateExpressions.push('contactEmail = :contactEmail');
-		expressionAttributeValues[':contactEmail'] = email !== null && email !== '' ? email.trim().toLowerCase() : '';
+		updateExpressions.push('email = :email');
+		expressionAttributeValues[':email'] = email !== null && email !== '' ? email.trim().toLowerCase() : '';
 	}
 
 	if (phone !== undefined) {

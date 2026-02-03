@@ -586,14 +586,20 @@ export async function confirmSignUpAndClaimSubdomain(
   email: string,
   code: string,
   subdomain?: string,
-  consents?: ConsentsPayload
+  consents?: ConsentsPayload,
+  referralCode?: string
 ): Promise<ConfirmSignUpResult> {
   const apiUrl = getApiBaseUrlOrThrow();
+
+  const body: Record<string, unknown> = { email, code, subdomain, consents };
+  if (referralCode?.trim()) {
+    body.referralCode = referralCode.trim().toUpperCase();
+  }
 
   const response = await fetch(`${apiUrl}/auth/public/confirm-signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code, subdomain, consents }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

@@ -280,6 +280,131 @@ class ApiService {
             }
           }
 
+          // Handle 403 - try refresh token and retry (for expired/deleted users)
+          // Track 403 retries separately from the main retry loop
+          if (response.status === 403 && typeof window !== "undefined") {
+            const MAX_403_RETRIES = 1; // Try refreshing token and retrying once
+
+            for (let retry403Attempt = 0; retry403Attempt <= MAX_403_RETRIES; retry403Attempt++) {
+              try {
+                // Try refreshing token and retrying
+                const newToken = await getValidToken();
+                const retryConfig: RequestInit = {
+                  ...config,
+                  headers: {
+                    ...config.headers,
+                    Authorization: `Bearer ${newToken}`,
+                  },
+                };
+
+                const retryResponse = await fetch(url, retryConfig);
+                const retryContentType = retryResponse.headers.get("content-type");
+                const retryIsJson = retryContentType?.includes("application/json") ?? false;
+
+                let retryBody: unknown;
+                try {
+                  retryBody = retryIsJson ? await retryResponse.json() : await retryResponse.text();
+                } catch (_e) {
+                  retryBody = null;
+                }
+
+                // If retry succeeded, return the result
+                if (retryResponse.ok) {
+                  return retryBody as T;
+                }
+
+                // If still 403 and we have retries left, continue the loop
+                if (retryResponse.status === 403 && retry403Attempt < MAX_403_RETRIES) {
+                  // Small delay before retry
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                  continue;
+                }
+
+                // If still 403 after all retries, or got a different error, handle accordingly
+                if (retryResponse.status === 403) {
+                  // All retries exhausted - trigger logout
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                      new CustomEvent("session-expired", {
+                        detail: { returnUrl: window.location.pathname + window.location.search },
+                      })
+                    );
+                  }
+
+                  const retryBodyObj = retryBody as { error?: string; message?: string } | null;
+                  const error: ApiError = new Error(
+                    retryBodyObj?.error ??
+                      retryBodyObj?.message ??
+                      "Brak dostępu. Sesja może być nieważna lub konto zostało usunięte."
+                  );
+                  error.status = 403;
+                  error.body = retryBody;
+                  error.refreshFailed = true;
+                  throw error;
+                }
+
+                // If we got a different status code (not 403), throw it normally
+                // This will be handled by the outer error handling
+                const retryBodyObj = retryBody as { error?: string; message?: string } | null;
+                const error: ApiError = new Error(
+                  retryBodyObj?.error ?? retryBodyObj?.message ?? `HTTP ${retryResponse.status}`
+                );
+                error.status = retryResponse.status;
+                error.body = retryBody;
+                throw error;
+              } catch (retryError) {
+                const apiRetryError = retryError as ApiError;
+                // If token refresh itself failed (not a 403 from the API), trigger logout
+                if (
+                  retry403Attempt === MAX_403_RETRIES ||
+                  (apiRetryError.status !== 403 && apiRetryError.status !== undefined)
+                ) {
+                  // Token refresh failed or non-403 error - trigger logout for 403 context
+                  if (apiRetryError.status === 403 || retry403Attempt === MAX_403_RETRIES) {
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(
+                        new CustomEvent("session-expired", {
+                          detail: { returnUrl: window.location.pathname + window.location.search },
+                        })
+                      );
+                    }
+
+                    const error: ApiError = new Error(
+                      "Brak dostępu. Sesja może być nieważna lub konto zostało usunięte."
+                    );
+                    error.status = 403;
+                    error.body = body;
+                    error.refreshFailed = true;
+                    throw error;
+                  }
+                }
+                // If it's a 403 and we have retries left, continue
+                if (apiRetryError.status === 403 && retry403Attempt < MAX_403_RETRIES) {
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+                  continue;
+                }
+                // Otherwise, re-throw to be handled by outer catch
+                throw retryError;
+              }
+            }
+
+            // If we get here, all retries failed (shouldn't happen due to throw above, but safety check)
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("session-expired", {
+                  detail: { returnUrl: window.location.pathname + window.location.search },
+                })
+              );
+            }
+            const error: ApiError = new Error(
+              "Brak dostępu. Sesja może być nieważna lub konto zostało usunięte."
+            );
+            error.status = 403;
+            error.body = body;
+            error.refreshFailed = true;
+            throw error;
+          }
+
           if (!response.ok) {
             const bodyObj = body as { error?: string; message?: string } | null;
             const error: ApiError = new Error(
@@ -2252,6 +2377,7 @@ class ApiService {
       referralCount: number;
       topInviterBadge: boolean;
       referralHistory: Array<{ date: string; rewardType: string }>;
+      referredByUserId: string | null;
     }> => {
       return await this._request("/auth/referral");
     },

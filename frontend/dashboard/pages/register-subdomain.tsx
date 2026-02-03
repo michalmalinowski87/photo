@@ -33,6 +33,7 @@ export default function RegisterSubdomain() {
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isTestMode, setIsTestMode] = useState<boolean>(false);
   const [hostname, setHostname] = useState<string>("");
   const [subdomainHint, setSubdomainHint] = useState<string>("");
   const [subdomainCheck, setSubdomainCheck] = useState<
@@ -58,6 +59,22 @@ export default function RegisterSubdomain() {
       initAuth(userPoolId, clientId);
     }
 
+    // Wait for router to be ready before checking query params
+    if (!router.isReady) {
+      return;
+    }
+
+    // Test mode: allow bypassing registration flow for testing UI
+    // Check this FIRST before any other logic
+    const testParam = router.query.test;
+    if (testParam === "true" && process.env.NODE_ENV === "development") {
+      setIsTestMode(true);
+      setSuccess(true);
+      setEmail("test@example.com");
+      // Early return to prevent any redirects
+      return;
+    }
+
     // Get email and code from query params
     const emailParam = router.query.email;
     const codeParam = router.query.code;
@@ -65,8 +82,10 @@ export default function RegisterSubdomain() {
     if (emailParam) {
       setEmail(decodeURIComponent(typeof emailParam === "string" ? emailParam : emailParam[0]));
     } else {
-      // No email provided, redirect to sign-up
-      void router.push("/sign-up");
+      // No email provided, redirect to sign-up (but not in test mode)
+      if (!isTestMode) {
+        void router.push("/sign-up");
+      }
     }
 
     if (codeParam) {
@@ -75,8 +94,10 @@ export default function RegisterSubdomain() {
       );
       setCode(decodedCode.replace(/\D/g, "").slice(0, 6));
     } else {
-      // No code provided, redirect to verify-email
-      void router.push(`/verify-email?email=${encodeURIComponent(email || "")}`);
+      // No code provided, redirect to verify-email (but not in test mode)
+      if (!isTestMode && email) {
+        void router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+      }
     }
 
     const subdomainParam = router.query.subdomain;
@@ -89,7 +110,7 @@ export default function RegisterSubdomain() {
         )
       );
     }
-  }, [router, email]);
+  }, [router.isReady, router.query, email, isTestMode]);
 
   // Subdomain availability check (best-effort)
   useEffect(() => {
@@ -191,12 +212,17 @@ export default function RegisterSubdomain() {
         );
       }
 
-      // Re-verify with subdomain (this will claim the subdomain)
+      // Re-verify with subdomain (this will claim the subdomain); pass referral code if user came via invite link
+      const referralCode =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("referral_ref")
+          : null;
       const result = await confirmSignUpAndClaimSubdomain(
         email,
         code,
         requestedSubdomain,
-        consents
+        consents,
+        referralCode ?? undefined
       );
       if (typeof window !== "undefined") {
         localStorage.removeItem("pendingConsents");
@@ -209,13 +235,15 @@ export default function RegisterSubdomain() {
           `Konto zweryfikowane, ale subdomena nie została zarezerwowana: ${result.subdomainError.message}`
         );
       }
-      // Redirect to login after a short delay
-      const returnUrl = router.query.returnUrl ?? "/";
-      setTimeout(() => {
-        void router.push(
-          `/login?verified=true${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
-        );
-      }, 2000);
+      // Redirect to login after a short delay (skip in test mode)
+      if (!isTestMode) {
+        const returnUrl = router.query.returnUrl ?? "/";
+        setTimeout(() => {
+          void router.push(
+            `/login?verified=true${returnUrl ? `&returnUrl=${encodeURIComponent(typeof returnUrl === "string" ? returnUrl : returnUrl[0])}` : ""}`
+          );
+        }, 2000);
+      }
     } catch (err) {
       const error = err as CognitoError;
       setLoading(false);
@@ -250,19 +278,46 @@ export default function RegisterSubdomain() {
 
   if (success) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <div className="max-w-sm md:max-w-lg w-full mx-auto px-4 md:px-8">
-          <div className="text-center">
-            <div className="mb-5 text-green-600 text-5xl">✓</div>
-            <h2 className="text-xl md:text-2xl font-semibold mb-3 text-foreground">
-              Konto zweryfikowane!
-            </h2>
-            {subdomainHint && (
-              <p className="text-base text-muted-foreground mb-3">{subdomainHint}</p>
-            )}
-            <p className="text-base text-muted-foreground mb-8">
-              Przekierowywanie do strony logowania...
-            </p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-photographer-background dark:bg-gray-dark px-4">
+        <div className="max-w-md w-full mx-auto">
+          <div className="text-center space-y-6">
+            {/* Success Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                {/* Animated background circle */}
+                <div className="absolute inset-0 rounded-full bg-photographer-accent/20 dark:bg-photographer-accent/30 animate-pulse"></div>
+                {/* Icon container */}
+                <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full bg-photographer-elevated dark:bg-photographer-accentDark/30 border-4 border-photographer-accent dark:border-photographer-accent flex items-center justify-center shadow-lg shadow-photographer-accent/25 dark:shadow-photographer-accent/20">
+                  <Check
+                    className="w-12 h-12 md:w-14 md:h-14 text-photographer-accent dark:text-photographer-accent"
+                    strokeWidth={3}
+                    fill="none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <div>
+              <h2 className="text-2xl md:text-3xl font-semibold mb-3 text-photographer-heading dark:text-white">
+                Konto zweryfikowane!
+              </h2>
+              {subdomainHint && (
+                <p className="text-base text-photographer-text dark:text-gray-300 mb-2">{subdomainHint}</p>
+              )}
+              <p className="text-base text-photographer-mutedText dark:text-gray-400">
+                {isTestMode ? "Tryb testowy - przekierowanie wyłączone" : "Przekierowywanie do strony logowania..."}
+              </p>
+            </div>
+
+            {/* Loading indicator */}
+            <div className="flex justify-center pt-4">
+              <div className="flex gap-2">
+                <div className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                <div className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                <div className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

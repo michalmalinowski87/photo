@@ -5,8 +5,11 @@ import type { GetServerSideProps } from "next";
 import Link from "next/link";
 import React from "react";
 
-// Prevent static generation for this dev page
+// Prevent static generation for this dev page and block in production
 export const getServerSideProps: GetServerSideProps = () => {
+  if (process.env.NODE_ENV !== "development") {
+    return Promise.resolve({ notFound: true });
+  }
   return Promise.resolve({ props: {} });
 };
 

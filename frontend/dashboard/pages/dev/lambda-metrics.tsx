@@ -14,8 +14,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "../../hooks/useToast";
 import api from "../../lib/api-service";
 
-// Prevent static generation for this dev page
+// Prevent static generation for this dev page and block in production
 export const getServerSideProps: GetServerSideProps = () => {
+  if (process.env.NODE_ENV !== "development") {
+    return Promise.resolve({ notFound: true });
+  }
   return Promise.resolve({ props: {} });
 };
 

@@ -4,8 +4,11 @@ import { Clock, CheckCircle2, XCircle, Loader2, Calendar, Image as ImageIcon } f
 import type { GetServerSideProps } from "next";
 import React, { useState, useEffect } from "react";
 
-// Prevent static generation for this dev page
+// Prevent static generation for this dev page and block in production
 export const getServerSideProps: GetServerSideProps = () => {
+  if (process.env.NODE_ENV !== "development") {
+    return Promise.resolve({ notFound: true });
+  }
   return Promise.resolve({ props: {} });
 };
 

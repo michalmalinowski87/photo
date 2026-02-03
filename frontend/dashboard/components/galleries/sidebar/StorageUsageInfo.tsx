@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import React from "react";
 
 import { useGallery } from "../../../hooks/queries/useGalleries";
+import { ThreeDotsIndicator } from "../../ui/loading/Loading";
 
 interface StorageUsageInfoProps {
   orderId?: string;
@@ -73,7 +74,7 @@ export const StorageUsageInfo = ({ orderId }: StorageUsageInfoProps) => {
             <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
           )}
           {isUpdating && (
-            <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin ml-1" />
+            <ThreeDotsIndicator size="sm" className="ml-1" />
           )}
         </div>
       )}

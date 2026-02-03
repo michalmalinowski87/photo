@@ -8,6 +8,7 @@ import { useCreateCheckout } from "../../hooks/mutations/useWalletMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders, useOrderFinalImages } from "../../hooks/queries/useOrders";
 import { useWalletBalance } from "../../hooks/queries/useWallet";
+import { useReferral } from "../../hooks/queries/useAuth";
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
@@ -73,6 +74,7 @@ export const PublishGalleryWizard = ({
   const router = useRouter();
   const { data: walletData } = useWalletBalance();
   const walletBalanceCents = walletData?.balanceCents ?? 0;
+  const { data: referralData } = useReferral();
   const { refetch: refetchOrders, data: galleryOrders = [] } = useOrders(galleryId);
   const { isNonSelectionGallery } = useGalleryType();
   const { data: gallery } = useGallery(galleryId);
@@ -424,6 +426,44 @@ export const PublishGalleryWizard = ({
   const isBalanceSufficient = selectedPlan ? walletBalance >= priceToCheck : false;
   const balanceShortfall = selectedPlan ? Math.max(0, priceToCheck - walletBalance) : 0;
 
+  // Check if plan is eligible for referral discount (1GB/3GB, 1m/3m only)
+  const isPlanEligibleForReferral = useMemo(() => {
+    if (!selectedPlan?.planKey) return false;
+    const planKey = selectedPlan.planKey;
+    return (
+      planKey === "1GB-1m" ||
+      planKey === "1GB-3m" ||
+      planKey === "3GB-1m" ||
+      planKey === "3GB-3m"
+    );
+  }, [selectedPlan?.planKey]);
+
+  // Check if user is referred and meets conditions for automatic discount message
+  const isReferred = !!referralData?.referredByUserId;
+  const WELCOME_BONUS_CENTS = 700; // 7 PLN welcome bonus
+  const willUseStripe = selectedPlan && priceToCheck > walletBalance;
+  const hasToppedUpWallet = walletBalanceCents > WELCOME_BONUS_CENTS;
+  
+  // Show automatic discount message ONLY if user is referred AND meets conditions
+  const meetsReferralDiscountConditions =
+    isReferred &&
+    isPlanEligibleForReferral &&
+    mode !== "limitExceeded" &&
+    (hasToppedUpWallet || willUseStripe);
+
+  // Hide discount code input if user has only welcome bonus and won't use Stripe
+  // This applies REGARDLESS of referral status (referred or not)
+  // Show discount code input if:
+  // - Plan is not eligible for referral discount, OR
+  // - Mode is "limitExceeded" (upgrade), OR
+  // - User has topped up wallet (balance > 7 PLN), OR
+  // - User will use Stripe (price > wallet balance)
+  const shouldShowDiscountInput =
+    !isPlanEligibleForReferral ||
+    mode === "limitExceeded" ||
+    hasToppedUpWallet ||
+    willUseStripe;
+
   const handlePublish = () => {
     if (!selectedPlan) {
       showToast("error", "Błąd", "Proszę wybrać plan");
@@ -726,22 +766,32 @@ export const PublishGalleryWizard = ({
           Anuluj
         </Button>
         <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-          <label
-            htmlFor="publish-gallery-discount-code"
-            className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
-          >
-            Kod rabatowy
-          </label>
-          <input
-            id="publish-gallery-discount-code"
-            type="text"
-            placeholder="Kod rabatowy"
-            value={discountCode}
-            onChange={(e) => setDiscountCode(e.target.value)}
-            disabled={isProcessing || pricingLoading}
-            className="h-12 px-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 w-40 max-w-[180px]"
-            aria-label="Kod rabatowy"
-          />
+          {meetsReferralDiscountConditions ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-photographer-accent/10 dark:bg-photographer-accent/20 border border-photographer-accent/30 dark:border-photographer-accent/40">
+              <span className="text-sm font-medium text-photographer-accent dark:text-photographer-accent">
+                🎁 Zniżka za link polecający naliczy się automatycznie
+              </span>
+            </div>
+          ) : shouldShowDiscountInput ? (
+            <>
+              <label
+                htmlFor="publish-gallery-discount-code"
+                className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap"
+              >
+                Kod rabatowy
+              </label>
+              <input
+                id="publish-gallery-discount-code"
+                type="text"
+                placeholder="Kod rabatowy"
+                value={discountCode}
+                onChange={(e) => setDiscountCode(e.target.value)}
+                disabled={isProcessing || pricingLoading}
+                className="h-12 px-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 w-40 max-w-[180px]"
+                aria-label="Kod rabatowy"
+              />
+            </>
+          ) : null}
           <Button
             variant="primary"
             onClick={handlePublish}

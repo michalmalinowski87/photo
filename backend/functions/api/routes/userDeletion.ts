@@ -93,23 +93,20 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 			return res.status(400).json({ error: 'Deletion already scheduled', deletionScheduledAt: user.deletionScheduledAt });
 		}
 
-		// Use contactEmail from user record, fallback to email from token
-		const email = user.contactEmail || emailFromToken || user.email || '';
+		const email = user.email || emailFromToken || '';
 		
 		logger?.debug('Email resolution for deletion', {
 			userId,
-			contactEmail: user.contactEmail || 'not set',
-			emailFromToken: emailFromToken || 'not found',
 			userEmail: user.email || 'not set',
+			emailFromToken: emailFromToken || 'not found',
 			resolvedEmail: email || 'NOT FOUND'
 		});
 
 		if (!email) {
 			logger?.warn('Email not found for user deletion request', {
 				userId,
-				hasContactEmail: !!user.contactEmail,
-				hasEmailFromToken: !!emailFromToken,
-				hasUserEmail: !!user.email
+				hasUserEmail: !!user.email,
+				hasEmailFromToken: !!emailFromToken
 			});
 			return res.status(400).json({ error: 'Email not found. Please ensure your account has a valid email address.' });
 		}
@@ -133,14 +130,10 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 			updatedAt: new Date().toISOString()
 		};
 
-		// Explicitly ensure email fields are preserved - never nullify during request phase
-		// Email will only be nullified during actual deletion in performUserDeletion.ts (line 646-653)
-		// If email exists in user object, preserve it; if it doesn't exist, don't add it
+		// Explicitly ensure email is preserved - never nullify during request phase
+		// Email will only be nullified during actual deletion in performUserDeletion.ts
 		if ('email' in user) {
-			updateData.email = user.email; // Preserve email value (even if null, but don't set to null if it wasn't null)
-		}
-		if ('contactEmail' in user) {
-			updateData.contactEmail = user.contactEmail;
+			updateData.email = user.email;
 		}
 
 		await ddb.send(new PutCommand({
@@ -274,7 +267,7 @@ router.post('/cancel-deletion', async (req: Request, res: Response) => {
 		}));
 
 		// Send cancellation email
-		const userEmail = user.contactEmail || user.email;
+		const userEmail = user.email;
 		if (sender && userEmail) {
 			const emailTemplate = createDeletionCancelledEmail(userEmail);
 			
@@ -441,7 +434,7 @@ publicUndoDeletionRouter.get('/undo-deletion/:token', async (req: Request, res: 
 		}));
 
 		// Send cancellation email
-		const userEmail = user.contactEmail || user.email;
+		const userEmail = user.email;
 		if (sender && userEmail) {
 			const emailTemplate = createDeletionCancelledEmail(userEmail);
 			

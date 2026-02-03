@@ -121,6 +121,14 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const successUrl = `${apiUrl}/payments/success?session_id={CHECKOUT_SESSION_ID}`;
 		const cancelUrl = `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}${transactionId ? `&transactionId=${transactionId}&userId=${requester}` : ''}`;
 
+		const metadata: Record<string, string> = {
+			userId: requester,
+			type,
+			galleryId: galleryId,
+			transactionId: transactionId || '',
+			redirectUrl: finalRedirectUrl
+		};
+
 		const session = await createStripeCheckoutSession(stripe, {
 			lineItems: [
 				{
@@ -139,13 +147,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 			],
 			successUrl,
 			cancelUrl,
-			metadata: {
-				userId: requester,
-				type,
-				galleryId: galleryId,
-				transactionId: transactionId || '',
-				redirectUrl: finalRedirectUrl // Store redirect URL in metadata
-			},
+			metadata,
 			clientReferenceId: `${requester}-${Date.now()}`,
 			mode: 'payment'
 		});

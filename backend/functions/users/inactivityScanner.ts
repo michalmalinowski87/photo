@@ -96,7 +96,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				usersProcessed++;
 				const userId = user.userId;
 				const lastLoginAt = user.lastLoginAt;
-				const userEmail = user.contactEmail || user.email;
+				const userEmail = user.email;
 				const userStatus = user.status || '(not set)';
 
 				if (!lastLoginAt) {
