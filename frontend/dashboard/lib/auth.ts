@@ -572,7 +572,7 @@ export async function validateReferralCode(referralCode: string): Promise<{ vali
 		// Code is valid - clear any cached failure and return success
 		clearCachedValidation(normalizedCode);
 		return { valid: true };
-	} catch (err) {
+	} catch (_err) {
 		const result = {
 			valid: false,
 			error: 'Failed to validate referral code. You can continue without it.',

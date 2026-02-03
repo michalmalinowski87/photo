@@ -93,18 +93,6 @@ export function ZipDownloadButton({
 
   const [supportModalOpen, setSupportModalOpen] = useState(false);
 
-  const handleRetry = () => {
-    retryZipMutation.mutate({ galleryId, orderId, type });
-  };
-
-  const handleErrorClick = () => {
-    if (canRetry) {
-      handleRetry();
-    } else {
-      setSupportModalOpen(true);
-    }
-  };
-
   // Use generating flag from ZIP status polling (authoritative source)
   // Fall back to cache flag only if ZIP status polling hasn't fetched yet
   // Backend sets isGenerating flag, so we trust it - no guessing!
@@ -121,6 +109,18 @@ export function ZipDownloadButton({
   const hasError = (zipStatus as ZipStatus | undefined)?.status === "error";
   const errorInfo = (zipStatus as ZipStatus | undefined)?.error;
   const canRetry = errorInfo?.canRetry ?? false;
+
+  const handleRetry = () => {
+    retryZipMutation.mutate({ galleryId, orderId, type });
+  };
+
+  const handleErrorClick = () => {
+    if (canRetry) {
+      handleRetry();
+    } else {
+      setSupportModalOpen(true);
+    }
+  };
 
   // Determine button state
   // For error state: button is enabled - click triggers retry (if canRetry) or support modal (if !canRetry)

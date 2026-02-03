@@ -140,7 +140,7 @@ export function OriginalsTab({
         </div>
       );
     },
-    [layout, showFilters, showPhotoBookUi, showPhotoPrintUi, photoBookSet, photoPrintSet]
+    [layout, showFilters, showPhotoBookUi, showPhotoPrintUi, photoBookSet, photoPrintSet, galleryId]
   );
 
   // Auto-fetch if we have selectedKeys and need to fetch more to match them

@@ -58,6 +58,12 @@ interface UppyFileWithMeta {
   [key: string]: unknown;
 }
 
+interface UploadError extends Error {
+  status?: number;
+  code?: string;
+  message: string;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
   static VERSION = "1.0.0";
@@ -251,33 +257,34 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
         await this.uploadToS3(presignedUrl, blob, contentType);
         // Success - return immediately
         return;
-      } catch (error: any) {
-        lastError = error;
+      } catch (error: unknown) {
+        const uploadError = error as UploadError;
+        lastError = uploadError instanceof Error ? uploadError : new Error(String(uploadError));
 
         // Don't retry on 403/404 errors (permission/not found)
-        if (error?.status === 403 || error?.status === 404) {
+        if (uploadError?.status === 403 || uploadError?.status === 404) {
           console.warn(
-            `[ThumbnailUpload] ${sizeType} upload failed with ${error.status}, not retrying`
+            `[ThumbnailUpload] ${sizeType} upload failed with ${uploadError.status}, not retrying`
           );
-          throw error;
+          throw uploadError;
         }
 
         // Retry on network errors, timeouts, or 5xx errors
         const isRetryable =
-          error?.code === "ECONNRESET" ||
-          error?.code === "ETIMEDOUT" ||
-          error?.code === "ENOTFOUND" ||
-          error?.message?.includes("timeout") ||
-          error?.message?.includes("network") ||
-          (error?.status >= 500 && error?.status < 600);
+          uploadError?.code === "ECONNRESET" ||
+          uploadError?.code === "ETIMEDOUT" ||
+          uploadError?.code === "ENOTFOUND" ||
+          (uploadError?.message?.includes("timeout") ?? false) ||
+          (uploadError?.message?.includes("network") ?? false) ||
+          (uploadError?.status !== undefined && uploadError.status >= 500 && uploadError.status < 600);
 
         if (!isRetryable || attempt === maxRetries - 1) {
           // Last attempt or non-retryable error
           console.error(
             `[ThumbnailUpload] ${sizeType} upload failed after ${attempt + 1} attempts:`,
-            error
+            uploadError
           );
-          throw error;
+          throw uploadError;
         }
 
         // Exponential backoff: 1s, 2s, 4s
@@ -309,21 +316,22 @@ export class ThumbnailUploadPlugin extends BasePlugin<any, any, any> {
       });
 
       if (!response.ok) {
-        const error = new Error(
+        const error: UploadError = new Error(
           `Failed to upload to S3: ${response.status} ${response.statusText}`
-        );
-        (error as any).status = response.status;
+        ) as UploadError;
+        error.status = response.status;
         throw error;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Preserve error properties for retry logic
-      if (error.name === "TypeError" && error.message.includes("fetch")) {
+      const err = error as UploadError;
+      if (err.name === "TypeError" && err.message?.includes("fetch")) {
         // Network error - wrap it
-        const networkError = new Error(`Network error: ${error.message}`);
-        (networkError as any).code = "ENOTFOUND";
+        const networkError: UploadError = new Error(`Network error: ${err.message}`) as UploadError;
+        networkError.code = "ENOTFOUND";
         throw networkError;
       }
-      throw error;
+      throw err;
     }
   }
 

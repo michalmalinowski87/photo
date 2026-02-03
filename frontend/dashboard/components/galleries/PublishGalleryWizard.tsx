@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 
 import { useCreateCheckout } from "../../hooks/mutations/useWalletMutations";
-import { useBusinessInfo, useReferral } from "../../hooks/queries/useAuth";
+import { useBusinessInfo } from "../../hooks/queries/useAuth";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders, useOrderFinalImages } from "../../hooks/queries/useOrders";
 import { useWalletBalance } from "../../hooks/queries/useWallet";
@@ -76,7 +76,6 @@ export const PublishGalleryWizard = ({
   const { data: walletData } = useWalletBalance();
   const walletBalanceCents = walletData?.balanceCents ?? 0;
   const { data: businessInfo } = useBusinessInfo();
-  const { data: referralData } = useReferral();
   const { refetch: refetchOrders, data: galleryOrders = [] } = useOrders(galleryId);
   const { isNonSelectionGallery } = useGalleryType();
   const { data: gallery } = useGallery(galleryId);
@@ -180,7 +179,7 @@ export const PublishGalleryWizard = ({
         // ignore
       }
     }
-  }, [isOpen]);
+  }, [isOpen, discountCode]);
 
   // Restore state from initialState prop (set by store from URL params)
   // BUT: In limitExceeded mode, we want to use the suggested plan, not initialState
@@ -301,7 +300,7 @@ export const PublishGalleryWizard = ({
   }, [mode, gallery?.plan, gallery?.selectionEnabled, limitExceededData]);
 
   // Determine selection enabled status for price calculations
-  const isSelectionGalleryForPricing = useMemo(() => {
+  const _isSelectionGalleryForPricing = useMemo(() => {
     if (mode === "limitExceeded" && limitExceededData) {
       return limitExceededData.isSelectionGallery !== false;
     }

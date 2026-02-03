@@ -91,7 +91,7 @@ export default function SignUp() {
                 // ignore
               }
             } else {
-              setError(validation.error || "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
+              setError(validation.error ?? "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
             }
           }
         }).catch(() => {
@@ -125,7 +125,7 @@ export default function SignUp() {
                     // ignore
                   }
                 } else {
-                  setError(validation.error || "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
+                  setError(validation.error ?? "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
                 }
               }
             }).catch(() => {
@@ -215,7 +215,7 @@ export default function SignUp() {
               // ignore
             }
           } else {
-            setError(validation.error || "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
+            setError(validation.error ?? "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
           }
           return;
         }

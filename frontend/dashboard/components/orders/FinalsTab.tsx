@@ -372,6 +372,7 @@ export function FinalsTab({
       deletingImages,
       layout,
       handleSelectionClick,
+      galleryId,
       displayedImages,
       onDeleteImage,
       orderDeliveryStatus,

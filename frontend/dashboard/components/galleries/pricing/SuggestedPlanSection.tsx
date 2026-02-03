@@ -178,7 +178,7 @@ export const SuggestedPlanSection = ({
                   <p className="text-3xl font-bold text-photographer-accent dark:text-photographer-accentLight">
                     {formatPrice(upgradePrice)}
                   </p>
-                  {mode !== "limitExceeded" && referralDiscountPercent != null && (
+                  {mode !== "limitExceeded" && referralDiscountPercent !== null && (
                     <p className="text-sm text-green-600 dark:text-green-400 mt-1">
                       (zniżka {referralDiscountPercent}% za link polecający)
                     </p>

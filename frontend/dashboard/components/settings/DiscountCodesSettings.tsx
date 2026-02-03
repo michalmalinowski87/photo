@@ -67,7 +67,7 @@ export default function DiscountCodesSettings() {
       </div>
 
       {/* Invited with referral code (from business info, loaded with config after login) */}
-      {businessInfo?.referredByUserId != null && businessInfo?.referredByReferralCode && (
+      {businessInfo?.referredByUserId !== null && businessInfo?.referredByReferralCode && (
         <div className="rounded-xl border border-photographer-accent/30 bg-photographer-accent/5 dark:bg-photographer-accent/10 p-4">
           <p className="text-sm text-photographer-text dark:text-gray-300">
             Zostałeś zaproszony kodem referencyjnym:{" "}

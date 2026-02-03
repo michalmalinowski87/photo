@@ -763,7 +763,7 @@ class ApiService {
     getImagePresignedUrl: async (
       galleryId: string,
       imageKey: string,
-      size?: "thumb" | "preview" | "bigthumb" | "original" | string
+      size?: "thumb" | "preview" | "bigthumb" | "original"
     ): Promise<{
       thumbUrl?: string | null;
       previewUrl?: string | null;

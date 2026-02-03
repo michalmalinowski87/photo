@@ -1597,6 +1597,7 @@ export default function GalleryPhotos() {
       selectedKeys,
       isSelectionMode,
       handleSelectionClick,
+      galleryIdForQuery,
       handleDeletePhotoClick,
       layout,
       showPhotoBookUi,

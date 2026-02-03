@@ -110,7 +110,7 @@ export default function RegisterSubdomain() {
         )
       );
     }
-  }, [router.isReady, router.query, email, isTestMode]);
+  }, [router.isReady, router.query, router, email, isTestMode]);
 
   // Subdomain availability check (best-effort)
   useEffect(() => {

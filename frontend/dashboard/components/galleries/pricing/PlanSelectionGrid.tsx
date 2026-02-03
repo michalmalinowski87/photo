@@ -226,7 +226,7 @@ export const PlanSelectionGrid = ({
                         {formatPrice(displayPrice)}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
-                      {mode !== "limitExceeded" && referralDiscountPercent != null && (
+                      {mode !== "limitExceeded" && referralDiscountPercent !== null && (
                         <div className="text-xs text-green-600 dark:text-green-400 mt-1">
                           Zniżka {referralDiscountPercent}% za link polecający
                         </div>
