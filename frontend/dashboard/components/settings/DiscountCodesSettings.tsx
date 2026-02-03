@@ -1,7 +1,7 @@
 import { Copy, ChevronDown } from "lucide-react";
 import { useState } from "react";
 
-import { useReferral } from "../../hooks/queries/useAuth";
+import { useBusinessInfo, useReferral } from "../../hooks/queries/useAuth";
 import { useToast } from "../../hooks/useToast";
 import Button from "../ui/button/Button";
 
@@ -20,6 +20,7 @@ const statusLabels: Record<string, string> = {
 
 export default function DiscountCodesSettings() {
   const { showToast } = useToast();
+  const { data: businessInfo } = useBusinessInfo();
   const { data: referralData, isLoading, error } = useReferral();
   const [rulesOpen, setRulesOpen] = useState(false);
 
@@ -64,6 +65,18 @@ export default function DiscountCodesSettings() {
           Kody działają tylko na plany 1 GB i 3 GB (1 lub 3 miesiące). Wykorzystaj je, kiedy chcesz!
         </p>
       </div>
+
+      {/* Invited with referral code (from business info, loaded with config after login) */}
+      {businessInfo?.referredByUserId != null && businessInfo?.referredByReferralCode && (
+        <div className="rounded-xl border border-photographer-accent/30 bg-photographer-accent/5 dark:bg-photographer-accent/10 p-4">
+          <p className="text-sm text-photographer-text dark:text-gray-300">
+            Zostałeś zaproszony kodem referencyjnym:{" "}
+            <span className="font-mono font-semibold text-photographer-heading dark:text-white">
+              {businessInfo.referredByReferralCode}
+            </span>
+          </p>
+        </div>
+      )}
 
       {/* Invite banner */}
       <div className="rounded-xl border border-photographer-border dark:border-gray-700 bg-photographer-elevated dark:bg-gray-800/50 p-6">

@@ -12,7 +12,7 @@ import {
   PasswordStrengthResult,
   PasswordStrengthValidator,
 } from "../components/ui/password-strength-validator";
-import { initAuth, signUp, checkUserVerificationStatus } from "../lib/auth";
+import { initAuth, signUp, checkUserVerificationStatus, validateReferralCode } from "../lib/auth";
 import { getPublicLandingUrl } from "../lib/public-env";
 import { LEGAL_DOC_VERSIONS } from "@photocloud/legal";
 
@@ -41,6 +41,8 @@ export default function SignUp() {
     null
   );
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [referralCodeValidated, setReferralCodeValidated] = useState<boolean>(false);
+  const validationInProgressRef = React.useRef<boolean>(false);
 
   const landingUrl = getPublicLandingUrl().replace(/\/$/, "");
   const termsUrl = `${landingUrl}/terms`;
@@ -69,12 +71,68 @@ export default function SignUp() {
       } catch {
         // ignore
       }
+      // Validate referral code immediately when page loads (prevent double calls in React StrictMode)
+      if (!validationInProgressRef.current) {
+        validationInProgressRef.current = true;
+        validateReferralCode(code).then((validation) => {
+          validationInProgressRef.current = false;
+          if (validation.valid) {
+            setReferralCodeValidated(true);
+          } else {
+            if (validation.code === "REFERRER_ACCOUNT_REMOVED") {
+              setError(
+                "Niestety konto osoby, która poleciła Cię w tym kodzie, nie jest już aktywne. Możesz założyć konto bez kodu polecającego lub znaleźć nowy link.\n\nUsuń kod polecający z adresu URL lub wyszukaj nowy link, aby kontynuować."
+              );
+              // Clear referral code from sessionStorage so user can retry
+              try {
+                sessionStorage.removeItem("referral_ref");
+                setReferralCode(null);
+              } catch {
+                // ignore
+              }
+            } else {
+              setError(validation.error || "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
+            }
+          }
+        }).catch(() => {
+          validationInProgressRef.current = false;
+          // Silently fail - validation will happen again on form submit
+        });
+      }
     } else {
       // Check if referral code exists in sessionStorage (e.g., from direct URL access)
       try {
         const storedRef = sessionStorage.getItem("referral_ref");
         if (storedRef) {
           setReferralCode(storedRef);
+          // Validate stored referral code as well (prevent double calls in React StrictMode)
+          if (!validationInProgressRef.current) {
+            validationInProgressRef.current = true;
+            validateReferralCode(storedRef).then((validation) => {
+              validationInProgressRef.current = false;
+              if (validation.valid) {
+                setReferralCodeValidated(true);
+              } else {
+                if (validation.code === "REFERRER_ACCOUNT_REMOVED") {
+                  setError(
+                    "Niestety konto osoby, która poleciła Cię w tym kodzie, nie jest już aktywne. Możesz założyć konto bez kodu polecającego lub znaleźć nowy link.\n\nUsuń kod polecający z adresu URL lub wyszukaj nowy link, aby kontynuować."
+                  );
+                  // Clear referral code from sessionStorage
+                  try {
+                    sessionStorage.removeItem("referral_ref");
+                    setReferralCode(null);
+                  } catch {
+                    // ignore
+                  }
+                } else {
+                  setError(validation.error || "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
+                }
+              }
+            }).catch(() => {
+              validationInProgressRef.current = false;
+              // Silently fail - validation will happen again on form submit
+            });
+          }
         }
       } catch {
         // ignore
@@ -139,6 +197,31 @@ export default function SignUp() {
 
     setLoading(true);
     try {
+      // Validate referral code BEFORE creating Cognito account (prevents account creation if code is invalid)
+      // Skip validation if already validated successfully on page load
+      if (referralCode && !referralCodeValidated) {
+        const validation = await validateReferralCode(referralCode);
+        if (!validation.valid) {
+          setLoading(false);
+          if (validation.code === "REFERRER_ACCOUNT_REMOVED") {
+            setError(
+              "Niestety konto osoby, która poleciła Cię w tym kodzie, nie jest już aktywne. Możesz założyć konto bez kodu polecającego lub znaleźć nowy link.\n\nUsuń kod polecający z adresu URL lub wyszukaj nowy link, aby kontynuować."
+            );
+            // Clear referral code from sessionStorage so user can retry
+            try {
+              sessionStorage.removeItem("referral_ref");
+              setReferralCode(null);
+            } catch {
+              // ignore
+            }
+          } else {
+            setError(validation.error || "Nieprawidłowy kod polecający. Możesz kontynuować bez niego.");
+          }
+          return;
+        }
+        setReferralCodeValidated(true);
+      }
+
       // Persist consents for the verification flow (confirm happens later)
       const acceptedAt = new Date().toISOString();
       const consents = {
@@ -156,12 +239,6 @@ export default function SignUp() {
       }
 
       await signUp(email, password, consents);
-      // Clear referral code from sessionStorage after successful signup
-      try {
-        sessionStorage.removeItem("referral_ref");
-      } catch {
-        // ignore
-      }
       // Redirect to verification page with email
       const returnUrl = router.query.returnUrl ?? "/";
       void router.push(
@@ -254,7 +331,7 @@ export default function SignUp() {
           </p>
 
           {error && (
-            <div className="mb-5 p-4 bg-error-500/15 border border-error-700 rounded text-base text-error-400">
+            <div className="mb-5 p-4 bg-error-500/15 border border-error-700 rounded text-base text-error-400 whitespace-pre-line">
               {error}
             </div>
           )}
@@ -312,7 +389,8 @@ export default function SignUp() {
                 {referralCode && (
                   <div className="mt-3 p-3 rounded-lg border border-photographer-accent/30 bg-photographer-accent/5">
                     <p className="text-sm font-medium text-photographer-accent dark:text-photographer-accentLight">
-                      Użyty kod referencyjny: <span className="font-mono font-semibold">{referralCode}</span>
+                      Użyty kod referencyjny:{" "}
+                      <span className="font-mono font-semibold">{referralCode}</span>
                     </p>
                   </div>
                 )}

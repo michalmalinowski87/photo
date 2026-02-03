@@ -121,11 +121,6 @@ export const PlanRecommendationSection = ({
                   return formatPrice(planRecommendation.suggestedPlan.priceCents);
                 })()}
               </div>
-              {!selectionEnabled && (
-                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-md bg-green-100 dark:bg-green-900/30 text-xs font-medium text-green-700 dark:text-green-400">
-                  Zniżka 20%
-                </span>
-              )}
             </>
           ) : (
             <div className="text-3xl font-bold text-gray-400 dark:text-gray-500">-</div>

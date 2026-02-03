@@ -53,17 +53,29 @@ function stripHtmlTags(text: string): string {
 
 /**
  * Break URL for display so email clients (e.g. Gmail) do not auto-convert it to a clickable anchor.
- * Wraps the protocol (https:// or http://) in a span to break the URL pattern; the rest is escaped.
+ * Inserts zero-width spaces at strategic points to break the URL pattern while keeping it readable and copyable.
  * Text stays copyable and readable, but is not turned into a link by the client.
  */
 function breakUrlForDisplay(url: string): string {
-	const match = url.match(/^(https?:\/\/)(.*)$/);
-	if (match) {
-		const protocol = match[1];
-		const rest = match[2];
-		return '<span>' + escapeHtml(protocol) + '</span>' + escapeHtml(rest);
+	// Zero-width space to break URL pattern (invisible but prevents auto-linking)
+	const zwsp = '&#8203;';
+	const escaped = escapeHtml(url);
+	
+	// Break URL into parts: protocol, domain, path
+	const protocolMatch = escaped.match(/^(https?:\/\/)([^\/]+)(.*)$/);
+	if (protocolMatch) {
+		const protocol = protocolMatch[1];
+		const domain = protocolMatch[2];
+		const path = protocolMatch[3];
+		// Insert zero-width spaces to break the pattern:
+		// - After protocol (between https:// and domain)
+		// - Before path (between domain and /)
+		// This prevents email clients from recognizing it as a complete URL
+		return '<span>' + protocol + '</span>' + zwsp + domain + zwsp + path;
 	}
-	return escapeHtml(url);
+	
+	// Fallback: if no protocol, just escape
+	return escaped;
 }
 
 function sanitizeInlineText(text: string): string {
@@ -81,6 +93,36 @@ function createEmailWrapper(content: string): string {
 	<meta name="color-scheme" content="light">
 	<meta name="supported-color-schemes" content="light">
 	<title>PhotoCloud</title>
+	<style type="text/css">
+		/* Style auto-linked URLs to match theme (beige, no underline) */
+		/* Target all auto-linked URLs */
+		a[href^="http"] {
+			color: ${COLORS.brand.accentDark} !important;
+			text-decoration: none !important;
+			font-weight: 600 !important;
+			border-bottom: none !important;
+		}
+		/* Specific targeting for URLs in referral link sections */
+		p a[href],
+		div a[href],
+		span a[href] {
+			color: ${COLORS.brand.accentDark} !important;
+			text-decoration: none !important;
+			font-weight: 600 !important;
+			border-bottom: none !important;
+			-webkit-text-decoration: none !important;
+			-moz-text-decoration: none !important;
+		}
+		/* Override any email client specific link styles */
+		a:link,
+		a:visited,
+		a:hover,
+		a:active {
+			color: ${COLORS.brand.accentDark} !important;
+			text-decoration: none !important;
+			font-weight: 600 !important;
+		}
+	</style>
 </head>
 <body style="margin: 0; padding: 0; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: ${COLORS.surface.background};">
 	<!-- Preheader (hidden) -->
@@ -1013,7 +1055,9 @@ export function createEligibilityEmail(params: {
 			<p style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600; color: ${COLORS.text.heading}; font-family: monospace;">${escapeHtml(referralCode)}</p>
 			<p style="margin: 0 0 8px 0; font-size: 14px; color: ${COLORS.text.muted}; font-family: Outfit, Inter, sans-serif;">Twój link zaproszenia:</p>
 			<div style="background-color: ${linkBoxBg}; border: 2px solid ${linkBoxBorder}; border-radius: 12px; padding: 16px 20px; margin: 8px 0 0 0;">
-				<p style="display: block; margin: 0; font-size: 18px; font-weight: 600; color: ${linkColor}; text-decoration: none; word-break: break-all; font-family: Outfit, Inter, sans-serif; user-select: all; -webkit-user-select: all; cursor: text;">${breakUrlForDisplay(referralLink)}</p>
+				<p style="display: block; margin: 0; font-size: 18px; font-weight: 600; color: ${linkColor}; text-decoration: none; word-break: break-all; font-family: Outfit, Inter, sans-serif; user-select: all; -webkit-user-select: all; cursor: text;">
+					<span style="color: ${linkColor}; font-weight: 600; text-decoration: none;">${escapeHtml(referralLink)}</span>
+				</p>
 			</div>
 		</div>
 		${createParagraph('Udostępnij link znajomym. Gdy opłacą pierwszą galerię lub doładują portfel, otrzymasz kod rabatowy.')}

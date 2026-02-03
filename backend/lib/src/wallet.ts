@@ -3,6 +3,7 @@ import { getDocClient } from './ddb';
 
 /**
  * Credit user wallet and create ledger entry. Idempotent by refId (same refId skips credit).
+ * @param ledgerType - Type for ledger entry ('TOP_UP', 'WELCOME_BONUS', 'REFERRAL_BONUS'). Defaults to 'TOP_UP'.
  * @returns new balance in cents, or null if refId already used (idempotent skip) or on error.
  */
 export async function creditWallet(
@@ -10,7 +11,8 @@ export async function creditWallet(
 	amountCents: number,
 	refId: string,
 	walletsTable: string,
-	ledgerTable: string
+	ledgerTable: string,
+	ledgerType: 'TOP_UP' | 'WELCOME_BONUS' | 'REFERRAL_BONUS' = 'TOP_UP'
 ): Promise<number | null> {
 	const ddb = getDocClient();
 	const now = new Date().toISOString();
@@ -23,7 +25,7 @@ export async function creditWallet(
 				Item: {
 					userId,
 					txnId: refId,
-					type: 'TOP_UP',
+					type: ledgerType,
 					amountCents,
 					refId,
 					createdAt: now

@@ -19,6 +19,8 @@ interface SuggestedPlanSectionProps {
   mode?: "publish" | "limitExceeded";
   currentPlanKey?: string;
   currentPlanPriceCents?: number;
+  /** When set (10 or 15), show referral discount label. */
+  referralDiscountPercent?: 10 | 15;
 }
 
 const formatBytes = (bytes: number): string => {
@@ -38,6 +40,7 @@ export const SuggestedPlanSection = ({
   mode = "publish",
   currentPlanKey,
   currentPlanPriceCents = 0,
+  referralDiscountPercent,
 }: SuggestedPlanSectionProps) => {
   // Get selected plan details
   const selectedPlan = React.useMemo(() => {
@@ -175,8 +178,10 @@ export const SuggestedPlanSection = ({
                   <p className="text-3xl font-bold text-photographer-accent dark:text-photographer-accentLight">
                     {formatPrice(upgradePrice)}
                   </p>
-                  {!selectionEnabled && mode !== "limitExceeded" && (
-                    <p className="text-sm text-green-600 dark:text-green-400 mt-1">(zniżka 20%)</p>
+                  {mode !== "limitExceeded" && referralDiscountPercent != null && (
+                    <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                      (zniżka {referralDiscountPercent}% za link polecający)
+                    </p>
                   )}
                 </>
               );

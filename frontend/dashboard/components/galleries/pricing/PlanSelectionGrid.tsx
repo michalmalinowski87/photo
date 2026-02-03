@@ -24,6 +24,8 @@ interface PlanSelectionGridProps {
   mode?: "publish" | "limitExceeded";
   currentPlanKey?: string;
   currentPlanPriceCents?: number;
+  /** When set (10 or 15), show referral discount label. */
+  referralDiscountPercent?: 10 | 15;
 }
 
 export const PlanSelectionGrid = ({
@@ -37,6 +39,7 @@ export const PlanSelectionGrid = ({
   mode = "publish",
   currentPlanKey,
   currentPlanPriceCents = 0,
+  referralDiscountPercent,
 }: PlanSelectionGridProps) => {
   // Get all plans grouped by storage
   const allPlans = React.useMemo(() => getAllPlansGroupedByStorage(), []);
@@ -223,9 +226,9 @@ export const PlanSelectionGrid = ({
                         {formatPrice(displayPrice)}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
-                      {!selectionEnabled && (
+                      {mode !== "limitExceeded" && referralDiscountPercent != null && (
                         <div className="text-xs text-green-600 dark:text-green-400 mt-1">
-                          Zniżka 20%
+                          Zniżka {referralDiscountPercent}% za link polecający
                         </div>
                       )}
                     </>

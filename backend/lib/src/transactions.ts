@@ -3,7 +3,7 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCom
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-export type TransactionType = 'GALLERY_PLAN' | 'GALLERY_PLAN_UPGRADE' | 'WALLET_TOPUP' | 'WELCOME_BONUS' | 'REFUND';
+export type TransactionType = 'GALLERY_PLAN' | 'GALLERY_PLAN_UPGRADE' | 'WALLET_TOPUP' | 'WELCOME_BONUS' | 'REFERRAL_BONUS' | 'REFUND';
 export type TransactionStatus = 'UNPAID' | 'PAID' | 'CANCELED' | 'REFUNDED' | 'FAILED';
 export type PaymentMethod = 'WALLET' | 'STRIPE' | 'MIXED';
 

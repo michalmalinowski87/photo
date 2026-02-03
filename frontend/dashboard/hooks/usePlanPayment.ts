@@ -19,6 +19,8 @@ interface UsePlanPaymentOptions {
   selectedPlanKey?: string;
   referralCode?: string;
   earnedDiscountCodeId?: string;
+  /** Called when discount code error occurs (e.g. code already used) - allows parent to reset input field. */
+  onDiscountCodeError?: () => void;
 }
 
 interface RedirectInfo {
@@ -36,6 +38,7 @@ export const usePlanPayment = ({
   selectedPlanKey,
   referralCode,
   earnedDiscountCodeId,
+  onDiscountCodeError,
 }: UsePlanPaymentOptions) => {
   const { showToast } = useToast();
   const payGalleryMutation = usePayGallery();
@@ -182,7 +185,12 @@ export const usePlanPayment = ({
           showToast("error", "Błąd", "Nie udało się przetworzyć płatności.");
         }
       } catch (error: unknown) {
-        showToast("error", "Błąd", formatApiError(error as Error));
+        const message = formatApiError(error as Error);
+        const isCodeAlreadyUsed = /wykorzystany/i.test(message);
+        showToast("error", "Błąd", message, isCodeAlreadyUsed ? 3000 : undefined);
+        if (isCodeAlreadyUsed && onDiscountCodeError) {
+          onDiscountCodeError();
+        }
       } finally {
         setIsProcessing(false);
       }
@@ -199,6 +207,7 @@ export const usePlanPayment = ({
       selectedPlanKey,
       referralCode,
       earnedDiscountCodeId,
+      onDiscountCodeError,
     ]
   );
 

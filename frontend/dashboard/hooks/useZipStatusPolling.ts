@@ -63,6 +63,15 @@ export function useZipStatusPolling({
     },
     enabled: enabled && shouldPoll,
     refetchInterval: (rq) => {
+      // Stop polling if query failed with HTTP error (404, etc.) - won't recover
+      if (rq.state.error) {
+        const errorWithStatus = rq.state.error as { status?: number };
+        const status = errorWithStatus?.status;
+        // Stop polling on client errors (4xx) - these are permanent
+        if (status && status >= 400 && status < 500) {
+          return false;
+        }
+      }
       // Stop polling once ready - ZIP is complete
       const data = rq.state.data as ZipStatus | undefined;
       if (data?.ready) {

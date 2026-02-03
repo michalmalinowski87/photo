@@ -18,6 +18,12 @@ interface BusinessInfo {
     position: string;
     scale: number;
   };
+  referredByUserId?: string | null;
+  referredByReferralCode?: string | null;
+  /** True when user is referred and has not yet used their one-time referral discount (backend-computed). */
+  shouldApplyReferralDiscount?: boolean;
+  /** Discount percentage (10 or 15) determined at signup time based on referrer's status at that moment. Ensures first 9 referrals get 10%, 10th+ get 15%. */
+  referredDiscountPercent?: number;
 }
 
 export function useBusinessInfo(
@@ -44,7 +50,20 @@ export function useDeletionStatus(
     queryKey: queryKeys.auth.deletionStatus(),
     queryFn: () => api.auth.getDeletionStatus(),
     staleTime: 30 * 1000, // Check deletion status frequently
-    refetchInterval: 60 * 1000, // Refetch every minute when component is mounted
+    // Only poll if query is successful - stop polling on 404 or other errors
+    refetchInterval: (query) => {
+      // Stop polling if query failed with 404 (user not found) or other client errors
+      if (query.state.error) {
+        const errorWithStatus = query.state.error as { status?: number };
+        const status = errorWithStatus?.status;
+        // Don't poll if we got a 404 or other 4xx error
+        if (status && status >= 400 && status < 500) {
+          return false;
+        }
+      }
+      // Poll every minute if query is successful or has server errors (which might recover)
+      return 60 * 1000;
+    },
     ...options,
   });
 }
@@ -63,7 +82,6 @@ export interface ReferralData {
   referralCount: number;
   topInviterBadge: boolean;
   referralHistory: Array<{ date: string; rewardType: string }>;
-  referredByUserId: string | null;
 }
 
 export function useReferral(options?: Omit<UseQueryOptions<ReferralData>, "queryKey" | "queryFn">) {

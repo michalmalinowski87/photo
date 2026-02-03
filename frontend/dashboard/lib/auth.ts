@@ -473,6 +473,117 @@ export function signIn(email: string, password: string): Promise<string> {
   });
 }
 
+/**
+ * Client-side cache for failed referral code validations
+ * Key: referral code (uppercase), Value: { valid: false, error: string, code: string, timestamp: number }
+ * TTL: 1 hour (3600000 ms) - cheaper than DB query, instant response
+ */
+const REFERRAL_CODE_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const REFERRAL_CODE_CACHE_KEY_PREFIX = 'referral_code_cache_';
+
+function getCachedValidation(referralCode: string): { valid: boolean; error?: string; code?: string } | null {
+	if (typeof window === 'undefined') return null;
+	
+	try {
+		const cacheKey = `${REFERRAL_CODE_CACHE_KEY_PREFIX}${referralCode.trim().toUpperCase()}`;
+		const cached = localStorage.getItem(cacheKey);
+		if (!cached) return null;
+		
+		const parsed = JSON.parse(cached) as { valid: boolean; error?: string; code?: string; timestamp: number };
+		const now = Date.now();
+		
+		// Check if cache is still valid (within TTL)
+		if (now - parsed.timestamp < REFERRAL_CODE_CACHE_TTL) {
+			return { valid: parsed.valid, error: parsed.error, code: parsed.code };
+		}
+		
+		// Cache expired, remove it
+		localStorage.removeItem(cacheKey);
+		return null;
+	} catch {
+		// If cache read fails, return null (will make API call)
+		return null;
+	}
+}
+
+function setCachedValidation(referralCode: string, result: { valid: boolean; error?: string; code?: string }): void {
+	if (typeof window === 'undefined') return;
+	
+	try {
+		const cacheKey = `${REFERRAL_CODE_CACHE_KEY_PREFIX}${referralCode.trim().toUpperCase()}`;
+		const cacheValue = {
+			...result,
+			timestamp: Date.now()
+		};
+		localStorage.setItem(cacheKey, JSON.stringify(cacheValue));
+	} catch {
+		// If cache write fails, silently continue (non-critical)
+	}
+}
+
+function clearCachedValidation(referralCode: string): void {
+	if (typeof window === 'undefined') return;
+	
+	try {
+		const cacheKey = `${REFERRAL_CODE_CACHE_KEY_PREFIX}${referralCode.trim().toUpperCase()}`;
+		localStorage.removeItem(cacheKey);
+	} catch {
+		// Silently fail
+	}
+}
+
+/**
+ * Validate referral code before signup
+ * Uses client-side cache to avoid unnecessary API calls for recently failed codes
+ * Returns { valid: boolean, error?: string, code?: string }
+ */
+export async function validateReferralCode(referralCode: string): Promise<{ valid: boolean; error?: string; code?: string }> {
+	const normalizedCode = referralCode.trim().toUpperCase();
+	
+	// Check cache first (only for failed validations - successful ones don't need caching)
+	const cached = getCachedValidation(normalizedCode);
+	if (cached && !cached.valid) {
+		// Return cached failure immediately (no API call, no DB query, instant response)
+		return cached;
+	}
+	
+	const apiUrl = getApiBaseUrlOrThrow();
+	try {
+		const response = await fetch(`${apiUrl}/auth/public/validate-referral-code`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ referralCode: normalizedCode })
+		});
+
+		if (!response.ok) {
+			const errorData = (await response.json().catch(() => ({
+				error: 'Failed to validate referral code',
+			}))) as { error?: string; code?: string };
+			const result = {
+				valid: false,
+				error: errorData.error ?? 'Failed to validate referral code',
+				code: errorData.code
+			};
+			// Cache failed validation for 1 hour (prevents future API calls)
+			setCachedValidation(normalizedCode, result);
+			return result;
+		}
+
+		// Code is valid - clear any cached failure and return success
+		clearCachedValidation(normalizedCode);
+		return { valid: true };
+	} catch (err) {
+		const result = {
+			valid: false,
+			error: 'Failed to validate referral code. You can continue without it.',
+			code: 'VALIDATION_ERROR'
+		};
+		// Cache network errors too (they're likely to fail again)
+		setCachedValidation(normalizedCode, result);
+		return result;
+	}
+}
+
 export function signUp(
   email: string,
   password: string,
@@ -595,6 +706,24 @@ export async function confirmSignUpAndClaimSubdomain(
   if (referralCode?.trim()) {
     body.referralCode = referralCode.trim().toUpperCase();
   }
+  // #region agent log
+  fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      location: "auth.ts:confirmSignUpAndClaimSubdomain",
+      message: "confirm-signup request body",
+      data: {
+        referralCodePassed: !!referralCode,
+        referralCodeLength: referralCode?.length ?? 0,
+        hasReferralCodeInBody: !!body.referralCode,
+      },
+      timestamp: Date.now(),
+      sessionId: "debug-session",
+      hypothesisId: "H1",
+    }),
+  }).catch(() => {});
+  // #endregion
 
   const response = await fetch(`${apiUrl}/auth/public/confirm-signup`, {
     method: "POST",

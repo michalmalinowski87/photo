@@ -161,14 +161,19 @@ export function makeQueryClient(): QueryClient {
         refetchOnWindowFocus: true,
         // Don't refetch on reconnect by default (can be overridden per query)
         refetchOnReconnect: false,
-        // Retry failed requests 1 time, but NOT for 401/403 (we handle those in api-service)
+        // Retry failed requests 1 time, but NOT for client errors (4xx) - these are permanent
         retry: (failureCount, error) => {
-          // Don't retry auth errors (401/403) - api-service handles these with token refresh
           const errorWithStatus = error as { status?: number };
-          if (errorWithStatus?.status === 401 || errorWithStatus?.status === 403) {
+          const status = errorWithStatus?.status;
+          // Don't retry client errors (4xx) - these are permanent errors
+          // 401/403: api-service handles these with token refresh
+          // 404: resource not found - won't exist on retry
+          // 400: bad request - won't succeed on retry
+          // Other 4xx: client errors that won't succeed on retry
+          if (status && status >= 400 && status < 500) {
             return false;
           }
-          // Retry other errors once
+          // Retry server errors (5xx) and network errors once
           return failureCount < 1;
         },
         // Retry delay increases exponentially
@@ -178,14 +183,15 @@ export function makeQueryClient(): QueryClient {
         structuralSharing: true,
       },
       mutations: {
-        // Retry mutations once on failure, but NOT for 401/403 (we handle those in api-service)
+        // Retry mutations once on failure, but NOT for client errors (4xx) - these are permanent
         retry: (failureCount, error) => {
-          // Don't retry auth errors (401/403) - api-service handles these with token refresh
           const errorWithStatus = error as { status?: number };
-          if (errorWithStatus?.status === 401 || errorWithStatus?.status === 403) {
+          const status = errorWithStatus?.status;
+          // Don't retry client errors (4xx) - these are permanent errors
+          if (status && status >= 400 && status < 500) {
             return false;
           }
-          // Retry other errors once
+          // Retry server errors (5xx) and network errors once
           return failureCount < 1;
         },
       },

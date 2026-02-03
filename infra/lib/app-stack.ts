@@ -342,6 +342,11 @@ export class AppStack extends Stack {
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
 	});
+	// GSI to look up userId by referral code (one-to-one; used at signup and checkout)
+	users.addGlobalSecondaryIndex({
+		indexName: 'referralCode-index',
+		partitionKey: { name: 'referralCode', type: AttributeType.STRING }
+	});
 
 	// Reserved subdomains registry (enforces uniqueness for photographer tenant subdomains).
 	// Partition key is the subdomain itself (lowercased).
@@ -359,6 +364,18 @@ export class AppStack extends Stack {
 	// Enable TTL on the rate limit table to automatically clean up old entries
 	const emailCodeRateLimitCfnTable = emailCodeRateLimit.node.defaultChild as CfnTable;
 	emailCodeRateLimitCfnTable.timeToLiveSpecification = {
+		enabled: true,
+		attributeName: 'ttl'
+	};
+
+	const referralCodeValidation = new Table(this, 'ReferralCodeValidationTable', {
+		partitionKey: { name: 'clientId', type: AttributeType.STRING },
+		billingMode: BillingMode.PAY_PER_REQUEST,
+		removalPolicy: RemovalPolicy.RETAIN
+	});
+	// Enable TTL on the referral code validation table to automatically clean up shadow-banned clients (by IP)
+	const referralCodeValidationCfnTable = referralCodeValidation.node.defaultChild as CfnTable;
+	referralCodeValidationCfnTable.timeToLiveSpecification = {
 		enabled: true,
 		attributeName: 'ttl'
 	};
@@ -663,6 +680,7 @@ export class AppStack extends Stack {
 			USERS_TABLE: users.tableName,
 			SUBDOMAINS_TABLE: subdomains.tableName,
 			EMAIL_CODE_RATE_LIMIT_TABLE: emailCodeRateLimit.tableName,
+			REFERRAL_CODE_VALIDATION_TABLE: referralCodeValidation.tableName,
 			GALLERIES_TABLE: galleries.tableName,
 			PAYMENTS_TABLE: payments.tableName,
 			WALLETS_TABLE: wallet.tableName,
@@ -1205,9 +1223,13 @@ export class AppStack extends Stack {
 
 		// Grant permissions to auth Lambda
 		emailCodeRateLimit.grantReadWriteData(authFn);
+		referralCodeValidation.grantReadWriteData(authFn);
 		users.grantReadWriteData(authFn);
 		subdomains.grantReadWriteData(authFn);
-		
+		// Galleries + Orders for dev triggerUserDeletion (update delivered galleries expiry, check orders)
+		galleries.grantReadWriteData(authFn);
+		orders.grantReadData(authFn);
+
 		// Cognito permissions for auth Lambda
 		authFn.addToRolePolicy(new PolicyStatement({
 			actions: [
@@ -1291,6 +1313,7 @@ export class AppStack extends Stack {
 		notifications.grantReadWriteData(apiFn);
 		users.grantReadWriteData(apiFn);
 		emailCodeRateLimit.grantReadWriteData(apiFn);
+		referralCodeValidation.grantReadWriteData(apiFn);
 
 		// S3 bucket
 		galleriesBucket.grantReadWrite(apiFn);
@@ -2080,13 +2103,19 @@ export class AppStack extends Stack {
 			actions: ['iam:PassRole'],
 			resources: [userDeletionSchedulerRole.roleArn]
 		}));
-		// Grant API Lambda permission to invoke PerformUserDeletion Lambda (for dev endpoints)
+		// Grant API and Auth Lambdas permission to invoke PerformUserDeletion Lambda (for dev endpoints)
 		performUserDeletionFn.grantInvoke(apiFn);
+		performUserDeletionFn.grantInvoke(authFn);
 		// Update API Lambda environment with user deletion function name (for dev endpoints)
 		apiFn.addEnvironment('USER_DELETION_FN_NAME', performUserDeletionFn.functionName);
 		apiFn.addEnvironment('USER_DELETION_LAMBDA_ARN', performUserDeletionFn.functionArn);
 		apiFn.addEnvironment('USER_DELETION_SCHEDULE_ROLE_ARN', userDeletionSchedulerRole.roleArn);
 		apiFn.addEnvironment('USER_DELETION_DLQ_ARN', userDeletionDLQ.queueArn);
+		// Auth Lambda serves auth routes including dev triggerUserDeletion — same env for SSM fallback
+		authFn.addEnvironment('USER_DELETION_FN_NAME', performUserDeletionFn.functionName);
+		authFn.addEnvironment('USER_DELETION_LAMBDA_ARN', performUserDeletionFn.functionArn);
+		authFn.addEnvironment('USER_DELETION_SCHEDULE_ROLE_ARN', userDeletionSchedulerRole.roleArn);
+		authFn.addEnvironment('USER_DELETION_DLQ_ARN', userDeletionDLQ.queueArn);
 
 		// Create SSM Parameters for user deletion configuration
 		// These are read at runtime by Lambda functions

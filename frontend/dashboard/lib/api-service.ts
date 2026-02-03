@@ -2356,12 +2356,16 @@ class ApiService {
         position: string;
         scale: number;
       };
+      referredByUserId?: string | null;
+      referredByReferralCode?: string | null;
+      shouldApplyReferralDiscount?: boolean;
     }> => {
       return await this._request("/auth/business-info");
     },
 
     /**
-     * Get referral / discount codes (referralCode, referralLink, earnedDiscountCodes, referralCount, topInviterBadge, referralHistory)
+     * Get referral / discount codes (referralCode, referralLink, earnedDiscountCodes, referralCount, topInviterBadge, referralHistory).
+     * For "invited with" info use getBusinessInfo (referredByUserId, referredByReferralCode).
      */
     getReferral: async (): Promise<{
       referralCode: string | null;
@@ -2377,7 +2381,6 @@ class ApiService {
       referralCount: number;
       topInviterBadge: boolean;
       referralHistory: Array<{ date: string; rewardType: string }>;
-      referredByUserId: string | null;
     }> => {
       return await this._request("/auth/referral");
     },

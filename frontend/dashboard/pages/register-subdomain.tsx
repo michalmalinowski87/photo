@@ -214,9 +214,26 @@ export default function RegisterSubdomain() {
 
       // Re-verify with subdomain (this will claim the subdomain); pass referral code if user came via invite link
       const referralCode =
-        typeof window !== "undefined"
-          ? sessionStorage.getItem("referral_ref")
-          : null;
+        typeof window !== "undefined" ? sessionStorage.getItem("referral_ref") : null;
+      // #region agent log
+      if (typeof window !== "undefined") {
+        fetch("http://127.0.0.1:7243/ingest/50d01496-c9df-4121-8d58-8b499aed9e39", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            location: "register-subdomain.tsx:before confirmSignUp",
+            message: "referral from storage before API call",
+            data: {
+              referralCodeFromStorage: !!referralCode,
+              referralCodeLength: referralCode?.length ?? 0,
+            },
+            timestamp: Date.now(),
+            sessionId: "debug-session",
+            hypothesisId: "H1",
+          }),
+        }).catch(() => {});
+      }
+      // #endregion
       const result = await confirmSignUpAndClaimSubdomain(
         email,
         code,
@@ -226,6 +243,12 @@ export default function RegisterSubdomain() {
       );
       if (typeof window !== "undefined") {
         localStorage.removeItem("pendingConsents");
+        // Clear referral code after confirm-signup + claim subdomain succeeds
+        try {
+          sessionStorage.removeItem("referral_ref");
+        } catch {
+          // ignore
+        }
       }
       setSuccess(true);
       if (result.subdomainClaimed && result.subdomain) {
@@ -247,6 +270,18 @@ export default function RegisterSubdomain() {
     } catch (err) {
       const error = err as CognitoError;
       setLoading(false);
+      // Referrer account removed or referral code invalid – invite user to continue without referral
+      if (error.code === "REFERRER_ACCOUNT_REMOVED") {
+        try {
+          sessionStorage.removeItem("referral_ref");
+        } catch {
+          // ignore
+        }
+        setError(
+          "Niestety konto osoby, która poleciła Cię w tym kodzie, nie jest już aktywne. Możesz założyć konto bez kodu polecającego lub znaleźć nowy link.\n\nKliknij ponownie „Zarezerwuj subdomenę”, aby kontynuować."
+        );
+        return;
+      }
       if (error.message) {
         // Check if user is already confirmed (409 status)
         const errorMsg = error.message.toLowerCase();
@@ -303,19 +338,32 @@ export default function RegisterSubdomain() {
                 Konto zweryfikowane!
               </h2>
               {subdomainHint && (
-                <p className="text-base text-photographer-text dark:text-gray-300 mb-2">{subdomainHint}</p>
+                <p className="text-base text-photographer-text dark:text-gray-300 mb-2">
+                  {subdomainHint}
+                </p>
               )}
               <p className="text-base text-photographer-mutedText dark:text-gray-400">
-                {isTestMode ? "Tryb testowy - przekierowanie wyłączone" : "Przekierowywanie do strony logowania..."}
+                {isTestMode
+                  ? "Tryb testowy - przekierowanie wyłączone"
+                  : "Przekierowywanie do strony logowania..."}
               </p>
             </div>
 
             {/* Loading indicator */}
             <div className="flex justify-center pt-4">
               <div className="flex gap-2">
-                <div className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                <div className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                <div className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                <div
+                  className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce"
+                  style={{ animationDelay: "0ms" }}
+                ></div>
+                <div
+                  className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce"
+                  style={{ animationDelay: "150ms" }}
+                ></div>
+                <div
+                  className="w-2 h-2 bg-photographer-accent dark:bg-photographer-accentLight rounded-full animate-bounce"
+                  style={{ animationDelay: "300ms" }}
+                ></div>
               </div>
             </div>
           </div>
@@ -338,7 +386,7 @@ export default function RegisterSubdomain() {
         </div>
 
         {error && (
-          <div className="mx-auto max-w-md p-4 bg-error-500/15 border border-error-700 rounded-lg text-base text-error-400">
+          <div className="mx-auto max-w-md p-4 bg-error-500/15 border border-error-700 rounded-lg text-base text-error-400 whitespace-pre-line">
             {error}
           </div>
         )}

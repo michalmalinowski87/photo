@@ -3,7 +3,7 @@
  * Eligible plans: 1 GB and 3 GB, 1m or 3m only (no 12m, no 10 GB).
  */
 
-import { GetCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { PlanKey } from './pricing';
 import { getDocClient } from './ddb';
 import { getPlan } from './pricing';
@@ -46,7 +46,9 @@ export function isPlanEligibleForReferralDiscount(planKey: string): boolean {
 }
 
 /**
- * Discount for the referred user (buyer): 10% or 15% off.
+ * Discount for the referred user on their first paid gallery (rewards table).
+ * - 1 or 3 paid invitations by referrer → 10% off for referred.
+ * - 10+ paid invitations (Top Inviter) → 15% off for referred.
  * @param planKey – selected plan
  * @param isTopInviter – true if referrer has 10+ successful referrals (15% off)
  * @returns discount amount in cents (rounded down)
@@ -211,19 +213,24 @@ export async function getEmailForUser(userId: string): Promise<string | null> {
 	return typeof email === 'string' && email.trim() ? email.trim() : null;
 }
 
+const REFERRAL_CODE_INDEX = 'referralCode-index';
+
 /**
- * Find userId by referral code (Scan with filter; prefer GSI referralCode-index in production).
+ * Find userId by referral code. Uses GSI referralCode-index only (Query, Limit 1).
+ * No Scan: table is keyed by userId; lookup by referralCode requires the GSI. Scale-safe.
  */
 export async function findUserIdByReferralCode(referralCode: string): Promise<string | null> {
 	const envProc = (globalThis as any).process || process;
 	const usersTable = envProc?.env?.USERS_TABLE as string;
 	if (!usersTable || !referralCode) return null;
 	const ddb = getDocClient();
-	const result = await ddb.send(new ScanCommand({
+	const code = referralCode.trim().toUpperCase();
+	const result = await ddb.send(new QueryCommand({
 		TableName: usersTable,
-		FilterExpression: '#rc = :code',
+		IndexName: REFERRAL_CODE_INDEX,
+		KeyConditionExpression: '#rc = :code',
 		ExpressionAttributeNames: { '#rc': 'referralCode' },
-		ExpressionAttributeValues: { ':code': referralCode.trim().toUpperCase() },
+		ExpressionAttributeValues: { ':code': code },
 		ProjectionExpression: 'userId',
 		Limit: 1
 	}));
@@ -282,6 +289,7 @@ export async function getUserReferralFields(userId: string): Promise<{
 	earnedDiscountCodes?: EarnedDiscountCode[];
 	referralSuccessCount?: number;
 	topInviterBadge?: boolean;
+	referralDiscountUsedAt?: string;
 }> {
 	const envProc = (globalThis as any).process || process;
 	const usersTable = envProc?.env?.USERS_TABLE as string;
@@ -290,18 +298,39 @@ export async function getUserReferralFields(userId: string): Promise<{
 	const res = await ddb.send(new GetCommand({
 		TableName: usersTable,
 		Key: { userId },
-		ProjectionExpression: 'earnedDiscountCodes, referralSuccessCount, topInviterBadge'
+		ProjectionExpression: 'earnedDiscountCodes, referralSuccessCount, topInviterBadge, referralDiscountUsedAt'
 	}));
 	const item = (res.Item as {
 		earnedDiscountCodes?: EarnedDiscountCode[];
 		referralSuccessCount?: number;
 		topInviterBadge?: boolean;
+		referralDiscountUsedAt?: string;
 	} | undefined);
 	return {
 		earnedDiscountCodes: item?.earnedDiscountCodes,
 		referralSuccessCount: item?.referralSuccessCount,
-		topInviterBadge: item?.topInviterBadge
+		topInviterBadge: item?.topInviterBadge,
+		referralDiscountUsedAt: item?.referralDiscountUsedAt
 	};
+}
+
+/**
+ * Mark that the user has used a referral discount (referred or earned code).
+ * Call this once when a PAID transaction with referral metadata is finalized.
+ * Ensures referral discount can only be used once per user, without relying on transaction list limits.
+ */
+export async function markUserReferralDiscountUsed(userId: string): Promise<void> {
+	const envProc = (globalThis as any).process || process;
+	const usersTable = envProc?.env?.USERS_TABLE as string;
+	if (!usersTable) throw new Error('USERS_TABLE is not set');
+	const ddb = getDocClient();
+	const now = new Date().toISOString();
+	await ddb.send(new UpdateCommand({
+		TableName: usersTable,
+		Key: { userId },
+		UpdateExpression: 'SET referralDiscountUsedAt = :t, updatedAt = :u',
+		ExpressionAttributeValues: { ':t': now, ':u': now }
+	}));
 }
 
 /** PAID transaction is Stripe-backed if it has stripeSessionId or paymentMethod STRIPE/MIXED. */
@@ -330,16 +359,13 @@ export async function isReferrerEligible(userId: string): Promise<boolean> {
 }
 
 /**
- * Buyer's first gallery purchase = no prior PAID GALLERY_PLAN with amountCents > 0.
+ * Buyer's first gallery purchase = user has not yet used a referral discount.
+ * Uses user.referralDiscountUsedAt (set when a PAID transaction with referral metadata is finalized).
+ * No transaction list limit – reliable regardless of transaction count.
  */
 export async function isBuyerFirstGalleryPurchase(buyerUserId: string): Promise<boolean> {
-	const { transactions } = await listTransactionsByUser(buyerUserId, {
-		type: 'GALLERY_PLAN',
-		status: 'PAID',
-		limit: 100
-	});
-	const paidWithMoney = transactions.filter((t: { amountCents?: number }) => (t.amountCents ?? 0) > 0);
-	return paidWithMoney.length === 0;
+	const { referralDiscountUsedAt } = await getUserReferralFields(buyerUserId);
+	return !referralDiscountUsedAt;
 }
 
 /**
@@ -411,6 +437,7 @@ export async function validateReferralCodeForCheckout(
 
 /**
  * Validate linked referrer (user.referredByUserId) for checkout. Same rules as code path; used when buyer signed up via invite link.
+ * Uses stored referredDiscountPercent from buyer's user record (set at signup time) to ensure correct discount even if referrer account is deleted.
  */
 export async function validateReferrerUserIdForCheckout(
 	buyerUserId: string,
@@ -423,9 +450,22 @@ export async function validateReferrerUserIdForCheckout(
 	if (!isPlanEligibleForReferralDiscount(planKey)) {
 		return { valid: false, errorMessage: ERR_REFERRAL_PLAN };
 	}
-	const [referrerEligible, firstPurchase] = await Promise.all([
+	const [referrerEligible, firstPurchase, buyerUser] = await Promise.all([
 		isReferrerEligible(referrerUserId),
-		isBuyerFirstGalleryPurchase(buyerUserId)
+		isBuyerFirstGalleryPurchase(buyerUserId),
+		// Get buyer's user record to check stored referredDiscountPercent
+		(async () => {
+			const envProc = (globalThis as any).process || process;
+			const usersTable = envProc?.env?.USERS_TABLE as string;
+			if (!usersTable) return null;
+			const ddb = getDocClient();
+			const res = await ddb.send(new GetCommand({
+				TableName: usersTable,
+				Key: { userId: buyerUserId },
+				ProjectionExpression: 'referredDiscountPercent'
+			}));
+			return res.Item as { referredDiscountPercent?: number } | null;
+		})()
 	]);
 	if (!referrerEligible) {
 		return { valid: false, errorMessage: ERR_REFERRAL_INVALID };
@@ -433,8 +473,19 @@ export async function validateReferrerUserIdForCheckout(
 	if (!firstPurchase) {
 		return { valid: false, errorMessage: ERR_REFERRAL_NOT_FIRST };
 	}
-	const { topInviterBadge, referralSuccessCount } = await getUserReferralFields(referrerUserId);
-	const isTopInviter = !!topInviterBadge || (referralSuccessCount ?? 0) >= 10;
+	
+	// Use stored discount percent if available (set at signup time), otherwise check referrer's current status (for legacy users)
+	let isTopInviter = false;
+	const storedDiscountPercent = buyerUser?.referredDiscountPercent;
+	if (storedDiscountPercent !== undefined) {
+		// Use stored discount percent (determined at signup time)
+		isTopInviter = storedDiscountPercent === 15;
+	} else {
+		// Legacy user: check referrer's current status
+		const { topInviterBadge, referralSuccessCount } = await getUserReferralFields(referrerUserId);
+		isTopInviter = !!topInviterBadge || (referralSuccessCount ?? 0) >= 10;
+	}
+	
 	const discountCents = getReferralDiscountForReferred(planKey, isTopInviter);
 	return { valid: true, referrerUserId, discountCents, isTopInviter };
 }
@@ -481,14 +532,17 @@ export async function markEarnedCodeUsed(userId: string, codeId: string, gallery
 }
 
 /**
- * Grant referrer reward for a successful referred purchase. Idempotent by galleryId.
+ * Grant referrer reward for a successful referred purchase.
+ * referralSuccessCount increases only once per referred user (after their first successful Stripe/wallet payment).
+ * Idempotent by galleryId; idempotent by referredUserId (same referred user paying again does not increment count).
  * 1st/3rd: earned code (10% / free small). 10+: 20 PLN wallet credit + Top Inviter badge (no code).
+ * @param referredUserId – the buyer (referred user) who made the purchase; used to count at most one success per referred user.
  */
-export async function grantReferrerRewardForPurchase(referrerUserId: string, galleryId: string): Promise<{
-	granted: boolean;
-	rewardType?: EarnedDiscountType | 'wallet_20pln';
-	walletCreditCents?: number;
-}> {
+export async function grantReferrerRewardForPurchase(
+	referrerUserId: string,
+	galleryId: string,
+	referredUserId: string
+): Promise<{ granted: boolean; rewardType?: EarnedDiscountType | 'wallet_20pln'; walletCreditCents?: number }> {
 	const envProc = (globalThis as any).process || process;
 	const usersTable = envProc?.env?.USERS_TABLE as string;
 	if (!usersTable) return { granted: false };
@@ -496,36 +550,76 @@ export async function grantReferrerRewardForPurchase(referrerUserId: string, gal
 	const res = await ddb.send(new GetCommand({
 		TableName: usersTable,
 		Key: { userId: referrerUserId },
-		ProjectionExpression: 'referralSuccessCount, #ids, referralHistory, topInviterBadge',
-		ExpressionAttributeNames: { '#ids': 'referralGalleryIds' }
+		ProjectionExpression: 'referralSuccessCount, #ids, #refIds, referralHistory, topInviterBadge',
+		ExpressionAttributeNames: { '#ids': 'referralGalleryIds', '#refIds': 'referralReferredUserIds' }
 	}));
 	const item = res.Item as {
 		referralSuccessCount?: number;
 		referralGalleryIds?: string[];
+		referralReferredUserIds?: string[];
 		referralHistory?: ReferralHistoryEntry[];
 		topInviterBadge?: boolean;
 	} | undefined;
 	const referralGalleryIds = item?.referralGalleryIds || [];
+	const referralReferredUserIds = item?.referralReferredUserIds || [];
+
+	// Idempotency: already processed this gallery (e.g. webhook retry)
 	if (referralGalleryIds.includes(galleryId)) {
 		return { granted: false };
 	}
-	const count = (item?.referralSuccessCount ?? 0) + 1;
-	const is10Plus = count >= 10;
-	const rewardType = is10Plus ? 'wallet_20pln' : getRewardTypeForReferralCount(count);
-	const newEntry: ReferralHistoryEntry = { date: new Date().toISOString(), rewardType };
-	const now = new Date().toISOString();
-	const newIds = [...referralGalleryIds, galleryId];
-	const newHistory = [...(item?.referralHistory || []), newEntry];
-	const setBadge = is10Plus;
 
-	if (is10Plus) {
+	// Already counted this referred user (their first purchase was earlier); only append galleryId for idempotency
+	if (referralReferredUserIds.includes(referredUserId)) {
+		const newIds = [...referralGalleryIds, galleryId];
 		await ddb.send(new UpdateCommand({
 			TableName: usersTable,
 			Key: { userId: referrerUserId },
-			UpdateExpression: 'SET referralSuccessCount = :c, referralGalleryIds = :ids, referralHistory = :hist, updatedAt = :u' + (setBadge ? ', topInviterBadge = :badge' : ''),
+			UpdateExpression: 'SET referralGalleryIds = :ids, updatedAt = :u',
+			ExpressionAttributeValues: { ':ids': newIds, ':u': new Date().toISOString() }
+		}));
+		return { granted: false };
+	}
+
+	const count = (item?.referralSuccessCount ?? 0) + 1;
+	const now = new Date().toISOString();
+	const newIds = [...referralGalleryIds, galleryId];
+	const newRefIds = [...referralReferredUserIds, referredUserId];
+	
+	// Rewards are only granted at milestones: 1st, 3rd, and 10th referrals (one-time only)
+	const isMilestone = count === 1 || count === 3 || count === 10;
+	
+	if (!isMilestone) {
+		// Not a milestone - just update the count and tracking arrays, no reward
+		await ddb.send(new UpdateCommand({
+			TableName: usersTable,
+			Key: { userId: referrerUserId },
+			UpdateExpression: 'SET referralSuccessCount = :c, referralGalleryIds = :ids, referralReferredUserIds = :refIds, updatedAt = :u',
 			ExpressionAttributeValues: {
 				':c': count,
 				':ids': newIds,
+				':refIds': newRefIds,
+				':u': now
+			}
+		}));
+		return { granted: false };
+	}
+	
+	// This is a milestone - grant the appropriate reward
+	const is10th = count === 10;
+	const rewardType = is10th ? 'wallet_20pln' : getRewardTypeForReferralCount(count);
+	const newEntry: ReferralHistoryEntry = { date: now, rewardType };
+	const newHistory = [...(item?.referralHistory || []), newEntry];
+	const setBadge = is10th;
+
+	if (is10th) {
+		await ddb.send(new UpdateCommand({
+			TableName: usersTable,
+			Key: { userId: referrerUserId },
+			UpdateExpression: 'SET referralSuccessCount = :c, referralGalleryIds = :ids, referralReferredUserIds = :refIds, referralHistory = :hist, updatedAt = :u' + (setBadge ? ', topInviterBadge = :badge' : ''),
+			ExpressionAttributeValues: {
+				':c': count,
+				':ids': newIds,
+				':refIds': newRefIds,
 				':hist': newHistory,
 				':u': now,
 				...(setBadge ? { ':badge': true } : {})
@@ -538,10 +632,11 @@ export async function grantReferrerRewardForPurchase(referrerUserId: string, gal
 	await ddb.send(new UpdateCommand({
 		TableName: usersTable,
 		Key: { userId: referrerUserId },
-		UpdateExpression: 'SET referralSuccessCount = :c, referralGalleryIds = :ids, referralHistory = :hist, earnedDiscountCodes = list_append(if_not_exists(earnedDiscountCodes, :empty), :code), updatedAt = :u',
+		UpdateExpression: 'SET referralSuccessCount = :c, referralGalleryIds = :ids, referralReferredUserIds = :refIds, referralHistory = :hist, earnedDiscountCodes = list_append(if_not_exists(earnedDiscountCodes, :empty), :code), updatedAt = :u',
 		ExpressionAttributeValues: {
 			':c': count,
 			':ids': newIds,
+			':refIds': newRefIds,
 			':hist': newHistory,
 			':empty': [],
 			':code': [earnedEntry],

@@ -130,20 +130,17 @@ export function getPlanKeysByDuration(duration: Duration): PlanKey[] {
 }
 
 /**
- * Calculate price with discount for non-selection galleries (20% discount)
+ * Plan price in cents. Selection and non-selection galleries are priced the same (no discount for galeria bez wyboru).
  */
-export function calculatePriceWithDiscount(planKey: PlanKey, isSelectionGallery: boolean): number {
+export function calculatePriceWithDiscount(
+  planKey: PlanKey,
+  _isSelectionGallery?: boolean
+): number {
   const plan = getPlan(planKey);
   if (!plan) {
     return 0;
   }
-
-  if (isSelectionGallery) {
-    return plan.priceCents;
-  }
-
-  // Non-selection galleries get 20% discount
-  return Math.round(plan.priceCents * 0.8);
+  return plan.priceCents;
 }
 
 /**

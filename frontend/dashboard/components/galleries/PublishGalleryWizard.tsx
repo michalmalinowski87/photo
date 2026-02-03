@@ -8,7 +8,7 @@ import { useCreateCheckout } from "../../hooks/mutations/useWalletMutations";
 import { useGallery } from "../../hooks/queries/useGalleries";
 import { useOrders, useOrderFinalImages } from "../../hooks/queries/useOrders";
 import { useWalletBalance } from "../../hooks/queries/useWallet";
-import { useReferral } from "../../hooks/queries/useAuth";
+import { useBusinessInfo, useReferral } from "../../hooks/queries/useAuth";
 import { usePlanPayment } from "../../hooks/usePlanPayment";
 import { useToast } from "../../hooks/useToast";
 import { formatApiError } from "../../lib/api-service";
@@ -74,6 +74,7 @@ export const PublishGalleryWizard = ({
   const router = useRouter();
   const { data: walletData } = useWalletBalance();
   const walletBalanceCents = walletData?.balanceCents ?? 0;
+  const { data: businessInfo } = useBusinessInfo();
   const { data: referralData } = useReferral();
   const { refetch: refetchOrders, data: galleryOrders = [] } = useOrders(galleryId);
   const { isNonSelectionGallery } = useGalleryType();
@@ -162,6 +163,7 @@ export const PublishGalleryWizard = ({
     selectedPlanKey: selectedPlanKey ?? undefined,
     referralCode,
     earnedDiscountCodeId,
+    onDiscountCodeError: () => setDiscountCode(""),
   });
 
   // Pre-fill referral code from sessionStorage (set when user came from invite link → sign-up?ref=CODE)
@@ -230,7 +232,11 @@ export const PublishGalleryWizard = ({
   useEffect(() => {
     if (pricingError) {
       const errorMsg = formatApiError(pricingError);
-      showToast("error", "Błąd", errorMsg);
+      const isCodeAlreadyUsed = /wykorzystany/i.test(errorMsg);
+      showToast("error", "Błąd", errorMsg, isCodeAlreadyUsed ? 3000 : undefined);
+      if (isCodeAlreadyUsed) {
+        setDiscountCode("");
+      }
     }
   }, [pricingError, showToast]);
 
@@ -431,25 +437,27 @@ export const PublishGalleryWizard = ({
     if (!selectedPlan?.planKey) return false;
     const planKey = selectedPlan.planKey;
     return (
-      planKey === "1GB-1m" ||
-      planKey === "1GB-3m" ||
-      planKey === "3GB-1m" ||
-      planKey === "3GB-3m"
+      planKey === "1GB-1m" || planKey === "1GB-3m" || planKey === "3GB-1m" || planKey === "3GB-3m"
     );
   }, [selectedPlan?.planKey]);
 
-  // Check if user is referred and meets conditions for automatic discount message
-  const isReferred = !!referralData?.referredByUserId;
   const WELCOME_BONUS_CENTS = 700; // 7 PLN welcome bonus
   const willUseStripe = selectedPlan && priceToCheck > walletBalance;
   const hasToppedUpWallet = walletBalanceCents > WELCOME_BONUS_CENTS;
-  
-  // Show automatic discount message ONLY if user is referred AND meets conditions
+
+  // Backend returns shouldApplyReferralDiscount; combine with wizard context (plan, mode, payment path)
   const meetsReferralDiscountConditions =
-    isReferred &&
+    !!businessInfo?.shouldApplyReferralDiscount &&
     isPlanEligibleForReferral &&
     mode !== "limitExceeded" &&
     (hasToppedUpWallet || willUseStripe);
+  
+  // Use stored discount percentage (determined at signup time) to ensure correct discount even if referrer account is deleted
+  // This ensures: 1) First 9 referrals get 10%, 10th+ get 15% (not all get 15% if referrer becomes Top Inviter later)
+  // 2) If referrer account is deleted, user still gets the discount they were promised
+  const referralDiscountPercent: 10 | 15 | undefined = meetsReferralDiscountConditions
+    ? (businessInfo?.referredDiscountPercent === 15 ? 15 : 10) // Default to 10% for legacy users without stored value
+    : undefined;
 
   // Hide discount code input if user has only welcome bonus and won't use Stripe
   // This applies REGARDLESS of referral status (referred or not)
@@ -459,10 +467,7 @@ export const PublishGalleryWizard = ({
   // - User has topped up wallet (balance > 7 PLN), OR
   // - User will use Stripe (price > wallet balance)
   const shouldShowDiscountInput =
-    !isPlanEligibleForReferral ||
-    mode === "limitExceeded" ||
-    hasToppedUpWallet ||
-    willUseStripe;
+    !isPlanEligibleForReferral || mode === "limitExceeded" || hasToppedUpWallet || willUseStripe;
 
   const handlePublish = () => {
     if (!selectedPlan) {
@@ -695,6 +700,7 @@ export const PublishGalleryWizard = ({
                 mode={mode}
                 currentPlanKey={typeof gallery?.plan === "string" ? gallery.plan : undefined}
                 currentPlanPriceCents={currentPlanPriceCents}
+                referralDiscountPercent={referralDiscountPercent}
                 onDurationChange={(duration) => {
                   // Always update duration when clicking in SuggestedPlanSection
                   // This ensures PlanSelectionGrid duration selector stays in sync
@@ -727,6 +733,7 @@ export const PublishGalleryWizard = ({
                 mode={mode}
                 currentPlanKey={typeof gallery?.plan === "string" ? gallery.plan : undefined}
                 currentPlanPriceCents={currentPlanPriceCents}
+                referralDiscountPercent={referralDiscountPercent}
                 disabledPlanSizes={
                   mode === "limitExceeded" && currentPlanStorage ? [currentPlanStorage] : []
                 }
@@ -767,9 +774,9 @@ export const PublishGalleryWizard = ({
         </Button>
         <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
           {meetsReferralDiscountConditions ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-photographer-accent/10 dark:bg-photographer-accent/20 border border-photographer-accent/30 dark:border-photographer-accent/40">
+            <div className="flex items-center h-12 px-3 rounded-lg bg-photographer-accent/10 dark:bg-photographer-accent/20 border border-photographer-accent/30 dark:border-photographer-accent/40">
               <span className="text-sm font-medium text-photographer-accent dark:text-photographer-accent">
-                🎁 Zniżka za link polecający naliczy się automatycznie
+                Zniżka za link polecający naliczy się automatycznie
               </span>
             </div>
           ) : shouldShowDiscountInput ? (

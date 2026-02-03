@@ -15,8 +15,10 @@ import {
 	validateReferrerUserIdForCheckout,
 	getReferredByUserId,
 	markEarnedCodeUsed,
+	markUserReferralDiscountUsed,
 	grantReferrerRewardForPurchase,
-	getEmailForUser
+	getEmailForUser,
+	isBuyerFirstGalleryPurchase
 } from '../../lib/src/referral';
 import { createReferrerRewardEmail } from '../../lib/src/email';
 import { sendRawEmailWithAttachments } from '../../lib/src/raw-email';
@@ -1140,9 +1142,54 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 
 	// Use transaction as source of truth - override calculated values with transaction values
 	const transactionId = existingTransaction.transactionId;
+	const fullPriceCents = totalAmountCents; // full price before applying any existing-transaction amount
 	totalAmountCents = existingTransaction.amountCents;
 	plan = existingTransaction.metadata?.plan || plan;
-	
+
+	// Re-validate referral discount on existing transaction: if this transaction has referral metadata
+	// but the user has already used their one-time discount (referralDiscountUsedAt set), charge full price
+	// and update the transaction record so we don't grant discount twice.
+	const existingMeta = existingTransaction.metadata || {};
+	if ((existingMeta.referredByUserId || existingMeta.earnedDiscountCodeId) && !isUpgrade) {
+		const stillFirstPurchase = await isBuyerFirstGalleryPurchase(ownerId);
+		if (!stillFirstPurchase) {
+			totalAmountCents = fullPriceCents;
+			logger.info('Existing transaction had referral discount but user already used it; charging full price', {
+				galleryId,
+				transactionId,
+				fullPriceCents,
+				previousAmountCents: existingTransaction.amountCents
+			});
+			const metaWithoutReferral: Record<string, unknown> = { ...existingMeta };
+			delete metaWithoutReferral.referredByUserId;
+			delete metaWithoutReferral.referralDiscountCents;
+			delete metaWithoutReferral.referredDiscountType;
+			delete metaWithoutReferral.earnedDiscountCodeId;
+			delete metaWithoutReferral.discountCents;
+			delete metaWithoutReferral.discountType;
+			if (transactionsTable) {
+				try {
+					await ddb.send(new UpdateCommand({
+						TableName: transactionsTable,
+						Key: { userId: ownerId, transactionId },
+						UpdateExpression: 'SET amountCents = :amt, #meta = :meta, updatedAt = :u',
+						ExpressionAttributeNames: { '#meta': 'metadata' },
+						ExpressionAttributeValues: {
+							':amt': fullPriceCents,
+							':meta': metaWithoutReferral,
+							':u': new Date().toISOString()
+						}
+					}));
+				} catch (updateErr: any) {
+					logger.warn('Failed to strip referral metadata from transaction', { transactionId, error: updateErr?.message });
+				}
+			}
+			// Update in-memory transaction so rest of handler does not grant referrer reward or mark discount used
+			existingTransaction.amountCents = fullPriceCents;
+			existingTransaction.metadata = metaWithoutReferral;
+		}
+	}
+
 	// Get plan metadata for expiry calculation
 	const planMetadata = PRICING_PLANS[plan as keyof typeof PRICING_PLANS] || PRICING_PLANS['1GB-1m'];
 	const expiryDays = planMetadata.expiryDays;
@@ -1228,7 +1275,17 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					}));
 					logger.info('Transaction updated to PAID', { galleryId, transactionId });
 				}
-				
+				// Mark user as having used referral discount (once per user, no transaction list limit)
+				const meta = existingTransaction.metadata || {};
+				if (meta.referredByUserId || meta.earnedDiscountCodeId) {
+					try {
+						await markUserReferralDiscountUsed(ownerId);
+						logger.info('User marked as referral discount used (wallet path)', { ownerId, galleryId });
+					} catch (refErr: any) {
+						logger.warn('Failed to mark user referral discount used (wallet path)', { ownerId, error: refErr?.message });
+					}
+				}
+
 				// Set normal expiry and update gallery state to PAID_ACTIVE
 				// CRITICAL: This MUST happen after transaction update to maintain consistency
 				const now = new Date().toISOString();
@@ -1433,14 +1490,40 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				let referrerRewardGranted: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
 				if (txnMeta.referredByUserId) {
 					try {
-						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(txnMeta.referredByUserId, galleryId);
+						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(txnMeta.referredByUserId, galleryId, ownerId);
 						if (granted) {
 							logger.info('Granted referrer reward (wallet path)', { galleryId, referrerUserId: txnMeta.referredByUserId });
 							if (rewardType) referrerRewardGranted = { rewardType };
 							if (walletCreditCents && walletsTable && ledgerTable) {
 								const refId = `referral_bonus_${txnMeta.referredByUserId}_${galleryId}`;
+								const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 								try {
-									const newBalance = await creditWalletLib(txnMeta.referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable);
+									// Create transaction entry for referral bonus
+									if (transactionsTable) {
+										try {
+											const txnId = await createTransaction(txnMeta.referredByUserId, 'REFERRAL_BONUS', walletCreditCents, {
+												walletAmountCents: walletCreditCents,
+												stripeAmountCents: 0,
+												paymentMethod: 'WALLET',
+												refId,
+												metadata: {
+													bonusType: '10TH_REFERRAL',
+													referredUserId: ownerId,
+													galleryId
+												},
+												composites: ['10th Referral Bonus - 20 PLN']
+											});
+											
+											// Mark transaction as PAID immediately
+											await updateTransactionStatus(txnMeta.referredByUserId, txnId, 'PAID');
+											logger.info('Referral bonus transaction created (wallet path)', { referrerUserId: txnMeta.referredByUserId, transactionId: txnId, amountCents: walletCreditCents });
+										} catch (txnErr: any) {
+											logger.warn('Failed to create referral bonus transaction (wallet path)', { referrerUserId: txnMeta.referredByUserId, error: txnErr?.message });
+											// Continue to credit wallet even if transaction creation fails
+										}
+									}
+									
+									const newBalance = await creditWalletLib(txnMeta.referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable, 'REFERRAL_BONUS');
 									if (newBalance != null) {
 										logger.info('Referrer 10+ wallet credit applied (wallet path)', { referrerUserId: txnMeta.referredByUserId, amountCents: walletCreditCents, newBalance });
 									}

@@ -5,4 +5,3 @@ import DiscountCodesSettings from "../components/settings/DiscountCodesSettings"
 export default function RewardsPage() {
   return <DiscountCodesSettings />;
 }
-

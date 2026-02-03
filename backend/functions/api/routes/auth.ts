@@ -115,6 +115,66 @@ router.get('/business-info', async (req: Request, res: Response) => {
 			}
 		}
 		
+		// Handle legacy users: if referredByUserId exists but referredByReferralCode is missing, look it up
+		let referredByUserId = userData.referredByUserId ?? null;
+		let referredByReferralCode = userData.referredByReferralCode ?? null;
+		// Use stored discount percent if available (set at signup time), otherwise check referrer status (for legacy users)
+		let referredDiscountPercent = userData.referredDiscountPercent as number | undefined;
+		if (referredByUserId && !referredByReferralCode) {
+			try {
+				const referrerResult = await ddb.send(new GetCommand({
+					TableName: usersTable,
+					Key: { userId: referredByUserId },
+					ProjectionExpression: 'referralCode, topInviterBadge, referralSuccessCount'
+				}));
+				const referrerCode = (referrerResult.Item as { referralCode?: string } | undefined)?.referralCode;
+				if (referrerCode && typeof referrerCode === 'string') {
+					referredByReferralCode = referrerCode;
+					// Optionally backfill: update user record with the code (non-blocking)
+					try {
+						await ddb.send(new UpdateCommand({
+							TableName: usersTable,
+							Key: { userId },
+							UpdateExpression: 'SET referredByReferralCode = :code',
+							ExpressionAttributeValues: { ':code': referrerCode }
+						}));
+					} catch {
+						// Ignore backfill errors - non-critical
+					}
+				}
+				// If referredDiscountPercent not stored, determine it from referrer status (legacy users)
+				if (referredDiscountPercent === undefined) {
+					const referrerTopInviterBadge = (referrerResult.Item as { topInviterBadge?: boolean } | undefined)?.topInviterBadge === true;
+					const referrerSuccessCount = (referrerResult.Item as { referralSuccessCount?: number } | undefined)?.referralSuccessCount ?? 0;
+					const isTopInviter = referrerTopInviterBadge || referrerSuccessCount >= 10;
+					referredDiscountPercent = isTopInviter ? 15 : 10;
+				}
+			} catch {
+				// Ignore lookup errors - referrer may have been deleted
+				// If referrer deleted but user has stored discount percent, use that; otherwise default to 10%
+				if (referredDiscountPercent === undefined) {
+					referredDiscountPercent = 10;
+				}
+			}
+		} else if (referredByUserId && referredDiscountPercent === undefined) {
+			// Legacy user: check referrer status if discount percent not stored
+			try {
+				const referrerResult = await ddb.send(new GetCommand({
+					TableName: usersTable,
+					Key: { userId: referredByUserId },
+					ProjectionExpression: 'topInviterBadge, referralSuccessCount'
+				}));
+				const referrerTopInviterBadge = (referrerResult.Item as { topInviterBadge?: boolean } | undefined)?.topInviterBadge === true;
+				const referrerSuccessCount = (referrerResult.Item as { referralSuccessCount?: number } | undefined)?.referralSuccessCount ?? 0;
+				const isTopInviter = referrerTopInviterBadge || referrerSuccessCount >= 10;
+				referredDiscountPercent = isTopInviter ? 15 : 10;
+			} catch {
+				// Ignore lookup errors - referrer may have been deleted
+				// Default to 10% if we can't determine
+				referredDiscountPercent = 10;
+			}
+		}
+		
 		const businessInfo = {
 			businessName: userData.businessName || '',
 			email: userData.email || '',
@@ -126,7 +186,13 @@ router.get('/business-info', async (req: Request, res: Response) => {
 			tutorialClientSendDisabled: userData.tutorialClientSendDisabled === true,
 			defaultWatermarkUrl,
 			defaultWatermarkPosition: userData.defaultWatermarkPosition || undefined,
-			defaultWatermarkThumbnails: userData.defaultWatermarkThumbnails === true
+			defaultWatermarkThumbnails: userData.defaultWatermarkThumbnails === true,
+			referredByUserId,
+			referredByReferralCode,
+			/** True when user is referred and has not yet used their one-time referral discount; frontend uses this to show/hide "zniżka za link polecający". */
+			shouldApplyReferralDiscount: !!(referredByUserId && !userData.referralDiscountUsedAt),
+			/** Discount percentage (10 or 15) determined at signup time based on referrer's status at that moment. Ensures first 9 referrals get 10%, 10th+ get 15%. */
+			referredDiscountPercent: referredDiscountPercent
 		};
 
 		return res.json(businessInfo);
@@ -160,14 +226,13 @@ router.get('/referral', async (req: Request, res: Response) => {
 		const userGet = await ddb.send(new GetCommand({
 			TableName: usersTable,
 			Key: { userId },
-			ProjectionExpression: 'referralCode, earnedDiscountCodes, referralSuccessCount, topInviterBadge, referralHistory, referredByUserId'
+			ProjectionExpression: 'referralCode, earnedDiscountCodes, referralSuccessCount, topInviterBadge, referralHistory'
 		}));
 		let referralCode = (userGet.Item as { referralCode?: string } | undefined)?.referralCode;
 		let earnedDiscountCodes = ((userGet.Item as { earnedDiscountCodes?: EarnedDiscountCode[] } | undefined)?.earnedDiscountCodes) || [];
 		const referralSuccessCount = (userGet.Item as { referralSuccessCount?: number } | undefined)?.referralSuccessCount ?? 0;
 		const topInviterBadge = (userGet.Item as { topInviterBadge?: boolean } | undefined)?.topInviterBadge === true;
 		let referralHistory = ((userGet.Item as { referralHistory?: { date: string; rewardType: string }[] } | undefined)?.referralHistory) || [];
-		const referredByUserId = (userGet.Item as { referredByUserId?: string } | undefined)?.referredByUserId || null;
 
 		if (!referralCode) {
 			try {
@@ -209,8 +274,7 @@ router.get('/referral', async (req: Request, res: Response) => {
 			earnedDiscountCodes: earnedWithStatus,
 			referralCount: referralSuccessCount,
 			topInviterBadge,
-			referralHistory,
-			referredByUserId
+			referralHistory
 		});
 	} catch (error: any) {
 		logger?.error('Get referral failed', {

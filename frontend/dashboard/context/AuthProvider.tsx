@@ -1,7 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useState, useMemo, ReactNode } from "react";
 
 import { getUserIdentitySync, type UserIdentity } from "../hooks/useUserIdentity";
 import { initAuth, getIdToken } from "../lib/auth";
+import api from "../lib/api-service";
+import { queryKeys } from "../lib/react-query";
 import { setupDashboardAuthStatusListener } from "../lib/dashboard-auth-status";
 import { setupTokenSharingListener, requestTokensFromOtherDomains } from "../lib/token-sharing";
 import { useAuthStore } from "../store";
@@ -43,6 +46,7 @@ const getInitialAuthState = (): {
 };
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
+  const queryClient = useQueryClient();
   // Initialize state synchronously from localStorage to prevent loading flicker
   const initialState = getInitialAuthState();
   const [isAuthenticated, setIsAuthenticated] = useState(initialState.isAuthenticated);
@@ -53,6 +57,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const isSessionExpired = useAuthStore((state) => state.isSessionExpired);
   const returnUrl = useAuthStore((state) => state.returnUrl);
   const setSessionExpired = useAuthStore((state) => state.setSessionExpired);
+
+  // Prefetch business info when authenticated (includes referredByReferralCode for rewards/publish)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void queryClient
+      .prefetchQuery({
+        queryKey: queryKeys.auth.businessInfo(),
+        queryFn: () => api.auth.getBusinessInfo(),
+        staleTime: 60 * 1000,
+      })
+      .catch((err) => console.warn("Failed to prefetch business info:", err));
+  }, [isAuthenticated, queryClient]);
 
   // Check auth state synchronously from localStorage first (fast path)
   const checkAuthStateSync = (): boolean => {

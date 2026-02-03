@@ -2,16 +2,16 @@ import React, { useState, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 
 /** Themed three-dots loading indicator (used in FullPageLoading, ContentAreaLoadingOverlay, etc.) */
-export const ThreeDotsIndicator = ({ 
+export const ThreeDotsIndicator = ({
   className = "",
-  size = "md"
-}: { 
+  size = "md",
+}: {
   className?: string;
   size?: "sm" | "md" | "lg";
 }) => {
   const dotSize = size === "sm" ? "w-1.5 h-1.5" : size === "lg" ? "w-2.5 h-2.5" : "w-2 h-2";
   const gap = size === "sm" ? "gap-1" : size === "lg" ? "gap-2.5" : "gap-2";
-  
+
   return (
     <div
       className={`flex items-center justify-center ${gap} ${className}`}

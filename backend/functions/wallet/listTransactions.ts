@@ -174,6 +174,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					transactionType = 'WALLET_TOPUP';
 				} else if (item.type === 'WELCOME_BONUS') {
 					transactionType = 'WELCOME_BONUS';
+				} else if (item.type === 'REFERRAL_BONUS') {
+					transactionType = 'REFERRAL_BONUS';
 				} else {
 					transactionType = 'WALLET_DEBIT';
 				}

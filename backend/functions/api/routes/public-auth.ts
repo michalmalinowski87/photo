@@ -302,6 +302,223 @@ router.post('/signup', async (req: Request, res: Response) => {
 });
 
 /**
+ * Extract client identifier (IP address) from request
+ * Falls back to 'unknown' if IP is not available
+ */
+function getClientId(req: Request): string {
+	const ip = req.ip || (req as any).requestContext?.identity?.sourceIp || '';
+	return ip || 'unknown';
+}
+
+/**
+ * Check if a client (by IP) is shadow-banned (too many failed validation attempts)
+ * Returns { shadowBanned: boolean, ttl?: number }
+ */
+async function checkClientShadowBan(clientId: string, validationTable: string): Promise<{ shadowBanned: boolean; ttl?: number }> {
+	const now = Date.now();
+	const nowInSeconds = Math.floor(now / 1000);
+
+	try {
+		const result = await ddb.send(new GetCommand({
+			TableName: validationTable,
+			Key: { clientId }
+		}));
+
+		if (!result.Item) {
+			return { shadowBanned: false };
+		}
+
+		const record = result.Item;
+		
+		// Check if TTL has elapsed
+		if (record.ttl && record.ttl < nowInSeconds) {
+			// TTL expired, delete and allow validation
+			try {
+				await ddb.send(new DeleteCommand({
+					TableName: validationTable,
+					Key: { clientId }
+				}));
+			} catch (deleteError: any) {
+				// Log but continue - record will be cleaned up by DynamoDB eventually
+				// Note: logger not available in helper function, errors will be logged at call site
+			}
+			return { shadowBanned: false };
+		}
+
+		// Check the actual shadowBanned flag - only shadow-ban if explicitly set to true
+		const isShadowBanned = record.shadowBanned === true;
+		return { shadowBanned: isShadowBanned, ttl: record.ttl };
+	} catch (error: any) {
+		// On error, log but allow validation (fail open) - errors logged at call site
+		return { shadowBanned: false };
+	}
+}
+
+/**
+ * Record a failed referral code validation attempt for a client (by IP)
+ * If this is the Nth failure in 24h, shadow-ban the client for 24h
+ * Only tracks failures to avoid shadow-banning legitimate users on shared IPs (e.g., public computers)
+ */
+async function recordClientValidationFailure(clientId: string, validationTable: string): Promise<void> {
+	const now = Date.now();
+	const nowInSeconds = Math.floor(now / 1000);
+	const SHADOW_BAN_THRESHOLD = 5; // Shadow-ban after 5 failed attempts
+	const SHADOW_BAN_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+	const WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+	if (!validationTable) {
+		throw new Error(`Validation table name is missing. clientId: ${clientId}`);
+	}
+
+	if (!clientId || clientId === 'unknown') {
+		throw new Error(`Invalid clientId: ${clientId}. Cannot record validation failure.`);
+	}
+
+	try {
+		const getResult = await ddb.send(new GetCommand({
+			TableName: validationTable,
+			Key: { clientId }
+		}));
+
+		const existingRecord = getResult.Item;
+		const windowStart = now - WINDOW_MS;
+
+		// Filter out failures outside the current window
+		const recentFailures = (existingRecord?.failures || []).filter((timestamp: number) => timestamp > windowStart);
+		const updatedFailures = [...recentFailures, now];
+
+		// Check if we should shadow-ban (threshold reached)
+		const shouldShadowBan = updatedFailures.length >= SHADOW_BAN_THRESHOLD;
+		const ttl = shouldShadowBan ? nowInSeconds + SHADOW_BAN_TTL_SECONDS : (existingRecord?.ttl || nowInSeconds + SHADOW_BAN_TTL_SECONDS);
+
+		const putItem = {
+			clientId,
+			failures: updatedFailures,
+			ttl: ttl,
+			shadowBanned: shouldShadowBan,
+			lastFailure: new Date(now).toISOString()
+		};
+
+		const putResult = await ddb.send(new PutCommand({
+			TableName: validationTable,
+			Item: putItem
+		}));
+
+		// Verify write succeeded (PutCommand doesn't throw on success, but we can check for errors)
+		if (!putResult) {
+			throw new Error('PutCommand returned undefined result');
+		}
+
+		if (shouldShadowBan) {
+			// Log shadow-ban at call site, but also log here for debugging
+			const logger = (globalThis as any).process?.env?.STAGE ? undefined : console;
+			logger?.warn('Client shadow-banned', { clientId, failureCount: updatedFailures.length });
+		}
+	} catch (error: any) {
+		// Re-throw error with more context so call site can log it properly
+		const enhancedError = new Error(`Failed to record validation failure: ${error?.message || 'Unknown error'}. Table: ${validationTable}, ClientId: ${clientId}`);
+		(enhancedError as any).originalError = error;
+		(enhancedError as any).errorName = error?.name;
+		(enhancedError as any).errorCode = error?.code;
+		throw enhancedError;
+	}
+}
+
+/**
+ * Public endpoint to validate referral code before signup
+ * Prevents creating Cognito account if referral code is invalid
+ * Implements shadow-banning for clients (by IP) after 5 failed validation attempts
+ * Only tracks failures to avoid shadow-banning legitimate users on shared IPs (e.g., public computers)
+ */
+router.post('/validate-referral-code', async (req: Request, res: Response) => {
+	const logger = (req as any).logger;
+	const envProc = (globalThis as any).process || process;
+	const validationTable = envProc?.env?.REFERRAL_CODE_VALIDATION_TABLE as string;
+
+	if (!validationTable) {
+		return res.status(500).json({ error: 'Missing referral code validation table configuration' });
+	}
+
+	const { referralCode: referralCodeBody } = req.body ?? {};
+	const referralCode = typeof referralCodeBody === 'string' ? referralCodeBody.trim().toUpperCase() : undefined;
+
+	if (!referralCode) {
+		return res.status(400).json({ error: 'Referral code is required' });
+	}
+
+	const clientId = getClientId(req);
+	
+	// Log table and client info for debugging
+	logger?.debug('Validation request received', { 
+		clientId, 
+		validationTable, 
+		referralCode: referralCode.slice(0, 8),
+		tableConfigured: !!validationTable,
+		clientIdValid: !!(clientId && clientId !== 'unknown')
+	});
+
+	// Check if client (by IP) is shadow-banned and validate referral code in parallel for better performance
+	const [shadowBanCheck, referrerUserId] = await Promise.all([
+		checkClientShadowBan(clientId, validationTable).catch((err) => {
+			logger?.warn('Shadow-ban check failed, allowing validation', { clientId, error: err?.message });
+			return { shadowBanned: false };
+		}),
+		findUserIdByReferralCode(referralCode).catch(() => null) // Catch errors and return null
+	]);
+
+	if (shadowBanCheck.shadowBanned) {
+		logger?.info('Referral code validation rejected (client shadow-banned)', { clientId, referralCode: referralCode.slice(0, 8) });
+		return res.status(400).json({
+			error: 'The referral code is no longer valid. The referrer account may have been removed.',
+			code: 'REFERRER_ACCOUNT_REMOVED'
+		});
+	}
+
+	// Validate referral code result
+	if (referrerUserId === null) {
+		logger?.warn('Referral code validation failed (not found)', { clientId, referralCode: referralCode.slice(0, 8), validationTable });
+		// Record failure and shadow-ban if threshold reached
+		try {
+			logger?.info('Attempting to record validation failure', { 
+				clientId, 
+				validationTable, 
+				referralCode: referralCode.slice(0, 8),
+				tableExists: !!validationTable,
+				clientIdValid: !!(clientId && clientId !== 'unknown')
+			});
+			await recordClientValidationFailure(clientId, validationTable);
+			logger?.info('Validation failure recorded successfully', { 
+				clientId, 
+				referralCode: referralCode.slice(0, 8),
+				validationTable
+			});
+		} catch (recordErr: any) {
+			// Log detailed error - this is critical for debugging
+			logger?.error('CRITICAL: Failed to record validation failure', { 
+				clientId, 
+				validationTable,
+				error: recordErr?.message, 
+				errorName: recordErr?.name,
+				errorCode: recordErr?.code,
+				awsErrorCode: recordErr?.$metadata?.httpStatusCode,
+				stack: recordErr?.stack,
+				originalError: recordErr?.originalError,
+				referralCode: referralCode.slice(0, 8)
+			});
+			// Don't fail the request - user should still get error response
+		}
+		return res.status(400).json({
+			error: 'The referral code is no longer valid. The referrer account may have been removed.',
+			code: 'REFERRER_ACCOUNT_REMOVED'
+		});
+	}
+
+	// Code is valid - don't record as failure (allows legitimate users on shared IPs)
+	logger?.info('Referral code validated successfully', { clientId, referralCode: referralCode.slice(0, 8) });
+	return res.json({ valid: true, message: 'Referral code is valid' });
+});
+
+/**
  * Public endpoint for resending verification code with rate limiting
  */
 router.post('/resend-verification-code', async (req: Request, res: Response) => {
@@ -763,6 +980,21 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 		return res.status(400).json({ error: 'Legal consents are required' });
 	}
 
+	// 0) If user sent a referral code, resolve it (validation was done at signup time, but we still need to resolve for storage)
+	let resolvedReferrerUserId: string | null = null;
+	if (referralCode) {
+		try {
+			resolvedReferrerUserId = await findUserIdByReferralCode(referralCode);
+			// Note: If null, we continue without referral (validation was done earlier at signup)
+			if (resolvedReferrerUserId) {
+				logger?.info('Referral code resolved at confirm-signup', { referralCode: referralCode.slice(0, 8) });
+			}
+		} catch (refErr: any) {
+			logger?.warn('Could not resolve referral code at confirm-signup', { referralCode: referralCode?.slice(0, 8), error: refErr?.message });
+			// Continue without referral - validation was done at signup time
+		}
+	}
+
 	// 1) Confirm signup in Cognito
 	try {
 		await cognito.send(new ConfirmSignUpCommand({
@@ -795,18 +1027,37 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 	}
 
 	// 2.5) Upsert user record with legal consents and optional referral link (always, regardless of subdomain)
-	let referredByUserId: string | undefined;
-	if (referralCode) {
+	const referredByUserId =
+		referralCode && resolvedReferrerUserId && resolvedReferrerUserId !== userId
+			? resolvedReferrerUserId
+			: undefined;
+	if (referredByUserId && referralCode) {
+		logger?.info('Referral link stored for new user', { userId, referredByUserId });
+	}
+	
+	// Determine referral discount percentage at signup time (based on referrer's status at that moment)
+	// This ensures: 1) First 9 referrals get 10%, 10th+ get 15% (not all get 15% if referrer becomes Top Inviter later)
+	// 2) If referrer account is deleted, user still gets the discount they were promised
+	let referredDiscountPercent: number | undefined = undefined;
+	if (referredByUserId) {
 		try {
-			const resolved = await findUserIdByReferralCode(referralCode);
-			if (resolved && resolved !== userId) {
-				referredByUserId = resolved;
-				logger?.info('Referral link stored for new user', { userId, referredByUserId });
-			}
+			const referrerResult = await ddb.send(new GetCommand({
+				TableName: usersTable,
+				Key: { userId: referredByUserId },
+				ProjectionExpression: 'topInviterBadge, referralSuccessCount'
+			}));
+			const referrerTopInviterBadge = (referrerResult.Item as { topInviterBadge?: boolean } | undefined)?.topInviterBadge === true;
+			const referrerSuccessCount = (referrerResult.Item as { referralSuccessCount?: number } | undefined)?.referralSuccessCount ?? 0;
+			const isTopInviter = referrerTopInviterBadge || referrerSuccessCount >= 10;
+			referredDiscountPercent = isTopInviter ? 15 : 10;
+			logger?.info('Referral discount percent determined at signup', { userId, referredByUserId, referredDiscountPercent, referrerSuccessCount });
 		} catch (refErr: any) {
-			logger?.warn('Could not resolve referral code at signup', { referralCode: referralCode?.slice(0, 8), error: refErr?.message });
+			logger?.warn('Could not determine referral discount percent at signup', { userId, referredByUserId, error: refErr?.message });
+			// Default to 10% if we can't determine (referrer may have been deleted, but user should still get discount)
+			referredDiscountPercent = 10;
 		}
 	}
+	
 	try {
 		const now = new Date().toISOString();
 		const setParts = ['email = :e', 'updatedAt = :u', 'createdAt = if_not_exists(createdAt, :u)', '#legal = :legal'];
@@ -815,9 +1066,14 @@ router.post('/confirm-signup', async (req: Request, res: Response) => {
 			':u': now,
 			':legal': { terms: consents.terms, privacy: consents.privacy }
 		};
-		if (referredByUserId) {
-			setParts.push('referredByUserId = :ref');
+		if (referredByUserId && referralCode) {
+			setParts.push('referredByUserId = :ref', 'referredByReferralCode = :refCode');
 			values[':ref'] = referredByUserId;
+			values[':refCode'] = referralCode;
+			if (referredDiscountPercent !== undefined) {
+				setParts.push('referredDiscountPercent = :refDiscount');
+				values[':refDiscount'] = referredDiscountPercent;
+			}
 		}
 		await ddb.send(new UpdateCommand({
 			TableName: usersTable,

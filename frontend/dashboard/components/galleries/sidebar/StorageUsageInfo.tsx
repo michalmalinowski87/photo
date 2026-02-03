@@ -73,9 +73,7 @@ export const StorageUsageInfo = ({ orderId }: StorageUsageInfoProps) => {
           {originalsLimit !== undefined && (
             <span className="text-gray-500"> / {formatBytes(originalsLimit)}</span>
           )}
-          {isUpdating && (
-            <ThreeDotsIndicator size="sm" className="ml-1" />
-          )}
+          {isUpdating && <ThreeDotsIndicator size="sm" className="ml-1" />}
         </div>
       )}
       <div className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-1">

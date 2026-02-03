@@ -3,12 +3,13 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const Stripe = require('stripe');
-import { getTransaction, updateTransactionStatus } from '../../lib/src/transactions';
+import { getTransaction, updateTransactionStatus, createTransaction } from '../../lib/src/transactions';
 import { PRICING_PLANS } from '../../lib/src/pricing';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
 import { getStripeSecretKey } from '../../lib/src/stripe-config';
 import {
 	markEarnedCodeUsed,
+	markUserReferralDiscountUsed,
 	grantReferrerRewardForPurchase,
 	ensureUserReferralCode,
 	getEmailForUser,
@@ -79,6 +80,16 @@ async function processCheckoutSession(
 					stripePaymentIntentId: session.payment_intent as string
 				});
 				logger.info('Transaction status updated to PAID', { transactionId, userId, sessionId: session.id });
+				// Mark user as having used referral discount (once per user, no transaction list limit)
+				const meta = (transaction.metadata || {}) as Record<string, unknown>;
+				if (meta.referredByUserId || meta.earnedDiscountCodeId) {
+					try {
+						await markUserReferralDiscountUsed(userId);
+						logger.info('User marked as referral discount used (Stripe webhook)', { userId, transactionId });
+					} catch (refErr: any) {
+						logger.warn('Failed to mark user referral discount used (Stripe webhook)', { userId, error: refErr?.message });
+					}
+				}
 			}
 		} catch (txnErr: any) {
 			logger.error('Failed to update transaction status', {
@@ -177,13 +188,39 @@ async function processCheckoutSession(
 				if (referredByUserId && transactionId) {
 					try {
 						const sourceId = `wallet_topup_${transactionId}`;
-						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserId, sourceId);
+						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserId, sourceId, userId);
 						if (granted) {
 							logger.info('Granted referrer reward (webhook wallet top-up)', { referrerUserId: referredByUserId, sourceId });
 							if (rewardType === 'wallet_20pln' && walletCreditCents && walletsTable && ledgerTable) {
 								const refId = `referral_bonus_${referredByUserId}_${sourceId}`;
+								const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 								try {
-									const newBalance = await creditWalletLib(referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable);
+									// Create transaction entry for referral bonus
+									if (transactionsTable) {
+										try {
+											const txnId = await createTransaction(referredByUserId, 'REFERRAL_BONUS', walletCreditCents, {
+												walletAmountCents: walletCreditCents,
+												stripeAmountCents: 0,
+												paymentMethod: 'WALLET',
+												refId,
+												metadata: {
+													bonusType: '10TH_REFERRAL',
+													referredUserId: userId,
+													sourceTransactionId: transactionId
+												},
+												composites: ['10th Referral Bonus - 20 PLN']
+											});
+											
+											// Mark transaction as PAID immediately
+											await updateTransactionStatus(referredByUserId, txnId, 'PAID');
+											logger.info('Referral bonus transaction created (webhook wallet top-up)', { referrerUserId: referredByUserId, transactionId: txnId, amountCents: walletCreditCents });
+										} catch (txnErr: any) {
+											logger.warn('Failed to create referral bonus transaction (webhook wallet top-up)', { referrerUserId: referredByUserId, error: txnErr?.message });
+											// Continue to credit wallet even if transaction creation fails
+										}
+									}
+									
+									const newBalance = await creditWalletLib(referredByUserId, walletCreditCents, refId, walletsTable, ledgerTable, 'REFERRAL_BONUS');
 									logger.info('Referrer 10+ wallet credit applied (webhook wallet top-up)', { referrerUserId: referredByUserId, amountCents: walletCreditCents, newBalance });
 								} catch (walletErr: any) {
 									logger.warn('Failed to credit referrer wallet (webhook wallet top-up)', { referrerUserId: referredByUserId, error: walletErr?.message });
@@ -366,14 +403,40 @@ async function processCheckoutSession(
 				let referrerRewardGranted: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
 				if (referredByUserIdGallery) {
 					try {
-						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserIdGallery, galleryId);
+						const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserIdGallery, galleryId, userId);
 						if (granted) {
 							logger.info('Granted referrer reward (webhook)', { galleryId, referrerUserId: referredByUserIdGallery });
 							if (rewardType) referrerRewardGranted = { rewardType };
 							if (walletCreditCents && walletsTable && ledgerTable) {
 								const refId = `referral_bonus_${referredByUserIdGallery}_${galleryId}`;
+								const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 								try {
-									const newBalance = await creditWalletLib(referredByUserIdGallery, walletCreditCents, refId, walletsTable, ledgerTable);
+									// Create transaction entry for referral bonus
+									if (transactionsTable) {
+										try {
+											const txnId = await createTransaction(referredByUserIdGallery, 'REFERRAL_BONUS', walletCreditCents, {
+												walletAmountCents: walletCreditCents,
+												stripeAmountCents: 0,
+												paymentMethod: 'WALLET',
+												refId,
+												metadata: {
+													bonusType: '10TH_REFERRAL',
+													referredUserId: userId,
+													galleryId
+												},
+												composites: ['10th Referral Bonus - 20 PLN']
+											});
+											
+											// Mark transaction as PAID immediately
+											await updateTransactionStatus(referredByUserIdGallery, txnId, 'PAID');
+											logger.info('Referral bonus transaction created (webhook)', { referrerUserId: referredByUserIdGallery, transactionId: txnId, amountCents: walletCreditCents });
+										} catch (txnErr: any) {
+											logger.warn('Failed to create referral bonus transaction (webhook)', { referrerUserId: referredByUserIdGallery, error: txnErr?.message });
+											// Continue to credit wallet even if transaction creation fails
+										}
+									}
+									
+									const newBalance = await creditWalletLib(referredByUserIdGallery, walletCreditCents, refId, walletsTable, ledgerTable, 'REFERRAL_BONUS');
 									if (newBalance != null) {
 										logger.info('Referrer 10+ wallet credit applied (webhook)', { referrerUserId: referredByUserIdGallery, amountCents: walletCreditCents, newBalance });
 									}
@@ -577,14 +640,40 @@ async function processCheckoutSession(
 						let referrerRewardGrantedUpgrade: { rewardType: '10_percent' | 'free_small' | '15_percent' | 'wallet_20pln' } | null = null;
 						if (referredByUserIdUpgrade) {
 							try {
-								const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserIdUpgrade, galleryId);
+								const { granted, rewardType, walletCreditCents } = await grantReferrerRewardForPurchase(referredByUserIdUpgrade, galleryId, userId);
 								if (granted) {
 									logger.info('Granted referrer reward (webhook upgrade)', { galleryId, referrerUserId: referredByUserIdUpgrade });
 									if (rewardType) referrerRewardGrantedUpgrade = { rewardType };
 									if (walletCreditCents && walletsTable && ledgerTable) {
 										const refId = `referral_bonus_${referredByUserIdUpgrade}_${galleryId}`;
+										const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 										try {
-											const newBalance = await creditWalletLib(referredByUserIdUpgrade, walletCreditCents, refId, walletsTable, ledgerTable);
+											// Create transaction entry for referral bonus
+											if (transactionsTable) {
+												try {
+													const txnId = await createTransaction(referredByUserIdUpgrade, 'REFERRAL_BONUS', walletCreditCents, {
+														walletAmountCents: walletCreditCents,
+														stripeAmountCents: 0,
+														paymentMethod: 'WALLET',
+														refId,
+														metadata: {
+															bonusType: '10TH_REFERRAL',
+															referredUserId: userId,
+															galleryId
+														},
+														composites: ['10th Referral Bonus - 20 PLN']
+													});
+													
+													// Mark transaction as PAID immediately
+													await updateTransactionStatus(referredByUserIdUpgrade, txnId, 'PAID');
+													logger.info('Referral bonus transaction created (webhook upgrade)', { referrerUserId: referredByUserIdUpgrade, transactionId: txnId, amountCents: walletCreditCents });
+												} catch (txnErr: any) {
+													logger.warn('Failed to create referral bonus transaction (webhook upgrade)', { referrerUserId: referredByUserIdUpgrade, error: txnErr?.message });
+													// Continue to credit wallet even if transaction creation fails
+												}
+											}
+											
+											const newBalance = await creditWalletLib(referredByUserIdUpgrade, walletCreditCents, refId, walletsTable, ledgerTable, 'REFERRAL_BONUS');
 											if (newBalance != null) {
 												logger.info('Referrer 10+ wallet credit applied (webhook upgrade)', { referrerUserId: referredByUserIdUpgrade, amountCents: walletCreditCents, newBalance });
 											}

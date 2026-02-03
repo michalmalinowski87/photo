@@ -27,6 +27,8 @@ interface BusinessInfo {
     scale?: number;
     position?: string;
   };
+  referredByUserId?: string | null;
+  referredByReferralCode?: string | null;
 }
 
 export function useChangePassword() {

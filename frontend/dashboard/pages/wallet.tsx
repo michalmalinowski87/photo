@@ -120,6 +120,7 @@ export default function Wallet() {
     const typeMap: Record<string, string> = {
       WALLET_TOPUP: "Doładowanie portfela",
       WELCOME_BONUS: "Bonus powitalny",
+      REFERRAL_BONUS: "10th Referral Bonus",
       GALLERY_PLAN: "Plan galerii",
       REFUND: "Zwrot",
       STRIPE_CHECKOUT: "Płatność kartą",
@@ -243,7 +244,7 @@ export default function Wallet() {
                   </TableHeader>
                   <TableBody>
                     {transactions.map((tx) => {
-                      const isCredit = tx.type === "WALLET_TOPUP";
+                      const isCredit = tx.type === "WALLET_TOPUP" || tx.type === "WELCOME_BONUS" || tx.type === "REFERRAL_BONUS";
                       const amount =
                         tx.amountCents ??
                         (tx.amount !== null && tx.amount !== undefined ? tx.amount * 100 : 0);
