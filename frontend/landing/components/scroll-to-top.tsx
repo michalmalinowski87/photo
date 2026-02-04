@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { PostHogActions } from "@photocloud/posthog-types";
 
 export default function ScrollToTop() {
   const [isVisible, setIsVisible] = useState(false);
@@ -26,6 +27,8 @@ export default function ScrollToTop() {
       top: 0,
       behavior: 'smooth',
     });
+    // TODO: Track scroll to top click when PostHog is installed
+    // posthog.capture(PostHogActions.landing.scrollToTopClick);
   };
 
   return (
@@ -38,6 +41,7 @@ export default function ScrollToTop() {
             e.preventDefault();
             scrollToTop();
           }}
+          data-ph-action={PostHogActions.landing.scrollToTopClick}
         >
           <i className="lni lni-chevron-up"></i>
         </a>

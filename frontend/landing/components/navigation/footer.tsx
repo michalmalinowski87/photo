@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { AnimationContainer } from "@/components"
 import { TextHoverEffect } from "@/components/ui/text-hover-effect"
+import { PostHogActions } from "@photocloud/posthog-types";
 
 const Footer = () => {
   return (
@@ -20,17 +21,32 @@ const Footer = () => {
                 </h3>
                 <ul className="mt-4 text-sm text-muted-foreground">
                   <li className="mt-2">
-                    <Link href="/#funkcje" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/#funkcje" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Funkcje"
+                    >
                       Funkcje
                     </Link>
                   </li>
                   <li className="mt-2">
-                    <Link href="/pricing" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/pricing" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Cennik"
+                    >
                       Cennik
                     </Link>
                   </li>
                   <li className="mt-2">
-                    <Link href="/#funkcje" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/#funkcje" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Opinie"
+                    >
                       Opinie
                     </Link>
                   </li>
@@ -44,22 +60,42 @@ const Footer = () => {
                 </h3>
                 <ul className="mt-4 text-sm text-muted-foreground">
                   <li className="">
-                    <Link href="/features/password-protection" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/features/password-protection" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Ochrona hasłem"
+                    >
                       Ochrona hasłem
                     </Link>
                   </li>
                   <li className="mt-2">
-                    <Link href="/features/cost-efficient" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/features/cost-efficient" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Opłacalność"
+                    >
                       Opłacalność
                     </Link>
                   </li>
                   <li className="mt-2">
-                    <Link href="/features/flexible-pricing" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/features/flexible-pricing" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Elastyczne ceny"
+                    >
                       Elastyczne ceny
                     </Link>
                   </li>
                   <li className="mt-2">
-                    <Link href="/features/client-selection" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/features/client-selection" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Wybór przez klienta"
+                    >
                       Wybór przez klienta
                     </Link>
                   </li>
@@ -75,7 +111,12 @@ const Footer = () => {
                 </h3>
                 <ul className="mt-4 text-sm text-muted-foreground">
                   <li className="mt-2">
-                    <Link href="/resources/help" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/resources/help" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Pomoc"
+                    >
                       Pomoc
                     </Link>
                   </li>
@@ -89,17 +130,32 @@ const Footer = () => {
                 </h3>
                 <ul className="mt-4 text-sm text-muted-foreground">
                   <li className="">
-                    <Link href="/resources/help" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/resources/help" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="O nas"
+                    >
                       O nas
                     </Link>
                   </li>
                   <li className="mt-2">
-                    <Link href="/privacy" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/privacy" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Polityka prywatności"
+                    >
                       Polityka prywatności
                     </Link>
                   </li>
                   <li className="mt-2">
-                    <Link href="/terms" className="hover:text-foreground transition-all duration-300">
+                    <Link 
+                      href="/terms" 
+                      className="hover:text-foreground transition-all duration-300"
+                      data-ph-action={PostHogActions.landing.footerLinkClick}
+                      data-ph-property-landing_footer_link="Warunki korzystania"
+                    >
                       Warunki korzystania
                     </Link>
                   </li>

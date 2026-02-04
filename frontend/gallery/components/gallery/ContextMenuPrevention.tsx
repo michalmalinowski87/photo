@@ -27,6 +27,12 @@ export function ContextMenuPrevention() {
     const preventContextMenu = (e: MouseEvent | TouchEvent) => {
       if (e.cancelable) {
         e.preventDefault();
+        // TODO: Add PostHog tracking for rightClickAttempt when PostHog is installed
+        // if (e instanceof MouseEvent && e.button === 2) {
+        //   posthog.capture('gallery_app:right_click_attempt', {
+        //     download_method: "right_click",
+        //   });
+        // }
       }
     };
 
@@ -52,6 +58,10 @@ export function ContextMenuPrevention() {
       // Set timeout to mark as long press after 300ms
       state.timeoutId = setTimeout(() => {
         state.isLongPress = true;
+        // TODO: Add PostHog tracking for longPressAttempt when PostHog is installed
+        // posthog.capture('gallery_app:long_press_attempt', {
+        //   download_method: "long_press",
+        // });
       }, 300);
     };
 

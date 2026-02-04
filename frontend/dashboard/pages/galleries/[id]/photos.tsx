@@ -2105,7 +2105,10 @@ export default function GalleryPhotos() {
                             images={orderImages}
                             layout={layout}
                             renderImageItem={(img, idx, all) =>
-                              renderImageItem(img, idx, all, layout, order)
+                              renderImageItem(img, idx, all, layout, {
+                                photoBookKeys: (order as { photoBookKeys?: string[] | string }).photoBookKeys,
+                                photoPrintKeys: (order as { photoPrintKeys?: string[] | string }).photoPrintKeys,
+                              })
                             }
                             hasNextPage={hasNextPage}
                             onLoadMore={fetchNextPage}

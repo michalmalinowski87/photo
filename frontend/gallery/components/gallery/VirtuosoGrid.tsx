@@ -8,6 +8,7 @@ import type { ImageData } from "@/types/gallery";
 import { EmptyState } from "./EmptyState";
 import { LazyRetryableImage } from "../ui/LazyRetryableImage";
 import { ThreeDotsIndicator } from "../ui/Loading";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 
 export type GridLayout = "square" | "standard" | "marble" | "carousel";
@@ -291,6 +292,8 @@ export function VirtuosoGridComponent({
       (entries) => {
         if (entries[0].isIntersecting && hasNextPage && onLoadMore && !isFetchingNextPage && !isLoading) {
           isLoading = true;
+          // TODO: Add PostHog tracking for infiniteScrollLoadMore when PostHog is installed
+          // posthog.capture('gallery_app:infinite_scroll_load_more');
           onLoadMore();
           // Reset guard after a short delay
           setTimeout(() => {
@@ -477,6 +480,12 @@ export function VirtuosoGridComponent({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
+                              // TODO: Add PostHog tracking for photoBookToggle when PostHog is installed
+                              // posthog.capture('gallery_app:photo_book_toggle', {
+                              //   image_key: image.key,
+                              //   photo_book_count: photoBookKeys.length + (inBook ? -1 : 1),
+                              //   is_adding: !inBook,
+                              // });
                               onTogglePhotoBook(image.key);
                             }}
                             className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation shadow border-0 ${
@@ -486,6 +495,7 @@ export function VirtuosoGridComponent({
                             }`}
                             aria-label={inBook ? "Usuń z albumu" : "Dodaj do albumu"}
                             style={{ minWidth: "44px", minHeight: "44px" }}
+                            data-ph-action={PostHogActions.galleryApp.photoBookToggle}
                           >
                             {inBook ? (
                               <BookOpenCheck className="w-6 h-6" strokeWidth={2} />
@@ -508,6 +518,12 @@ export function VirtuosoGridComponent({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
+                              // TODO: Add PostHog tracking for photoPrintToggle when PostHog is installed
+                              // posthog.capture('gallery_app:photo_print_toggle', {
+                              //   image_key: image.key,
+                              //   photo_print_count: photoPrintKeys.length + (inPrint ? -1 : 1),
+                              //   is_adding: !inPrint,
+                              // });
                               onTogglePhotoPrint(image.key);
                             }}
                             className={`w-11 h-11 rounded-full flex items-center justify-center transition-all touch-manipulation shadow border-0 ${
@@ -517,6 +533,7 @@ export function VirtuosoGridComponent({
                             }`}
                             aria-label={inPrint ? "Usuń z druku" : "Dodaj do druku"}
                             style={{ minWidth: "44px", minHeight: "44px" }}
+                            data-ph-action={PostHogActions.galleryApp.photoPrintToggle}
                           >
                             {inPrint ? (
                               <ImageIcon className="w-6 h-6" strokeWidth={2} />
@@ -605,7 +622,13 @@ export function VirtuosoGridComponent({
         })}
       </div>
       {/* Observer target for infinite scroll - only show if there are more pages */}
-      {hasNextPage && <div ref={observerTarget} className="h-4" />}
+      {hasNextPage && (
+        <div 
+          ref={observerTarget} 
+          className="h-4"
+          data-ph-action={PostHogActions.galleryApp.infiniteScrollLoadMore}
+        />
+      )}
       {isFetchingNextPage && (
         <div className="flex flex-col items-center justify-center gap-3 py-10">
           <ThreeDotsIndicator />

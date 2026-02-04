@@ -49,8 +49,10 @@ export function getWatermarkConfig(
       : undefined;
 
   // Resolve watermarkThumbnails: gallery overrides user default
-  const watermarkThumbnails =
-    gallery?.watermarkThumbnails ?? user?.defaultWatermarkThumbnails ?? false;
+  const watermarkThumbnails: boolean = 
+    (typeof gallery?.watermarkThumbnails === "boolean" ? gallery.watermarkThumbnails : undefined) ??
+    (typeof user?.defaultWatermarkThumbnails === "boolean" ? user.defaultWatermarkThumbnails : undefined) ??
+    false;
 
   // Priority 1: Gallery-specific watermark
   if (gallery?.watermarkUrl) {

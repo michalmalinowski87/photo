@@ -386,6 +386,12 @@ export function LightGalleryWrapper({
         // Track gallery open/close state
         const handleGalleryOpen = () => {
           isGalleryOpenRef.current = true;
+          // TODO: Add PostHog tracking for lightGalleryOpen when PostHog is installed
+          // const currentIndex = galleryInstanceRef.current?.index ?? 0;
+          // posthog.capture('gallery_app:light_gallery_open', {
+          //   light_gallery_action: "open",
+          //   image_index: currentIndex,
+          // });
           setTimeout(() => {
             const toolbar = document.querySelector('.lg-toolbar');
             if (canSelectRef.current && toolbar) {
@@ -417,6 +423,10 @@ export function LightGalleryWrapper({
         
         const handleGalleryClose = () => {
           isGalleryOpenRef.current = false;
+          // TODO: Add PostHog tracking for lightGalleryClose when PostHog is installed
+          // posthog.capture('gallery_app:light_gallery_close', {
+          //   light_gallery_action: "close",
+          // });
           setToolbarElRef.current?.(null);
           if (onGalleryCloseRef.current) {
             onGalleryCloseRef.current();
@@ -475,6 +485,14 @@ export function LightGalleryWrapper({
           
           const handleSlideChange = (event: any) => {
             const currentIndex = event.detail?.index ?? galleryInstance?.index ?? 0;
+            // TODO: Add PostHog tracking for lightGalleryNavigate when PostHog is installed
+            // const prevIndex = currentGalleryIndexRef.current ?? 0;
+            // const direction = currentIndex > prevIndex ? "next" : "prev";
+            // posthog.capture('gallery_app:light_gallery_navigate', {
+            //   light_gallery_action: direction,
+            //   image_index: currentIndex,
+            //   previous_index: prevIndex,
+            // });
             currentGalleryIndexRef.current = currentIndex;
             setCurrentGalleryIndexRef.current?.(currentIndex);
             const totalImages = imagesRef.current.length;

@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/react-query";
 import { useAuth } from "@/providers/AuthProvider";
 import { defaultLoginPageConfig } from "@/config/login-page";
 import { getPublicLandingUrl } from "@/lib/public-env";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 export const LoginFormPane = memo(function LoginFormPane({
   galleryId,
@@ -56,6 +57,10 @@ export const LoginFormPane = memo(function LoginFormPane({
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
     try {
+      // TODO: Add PostHog tracking for clientLoginSubmit when PostHog is installed
+      // posthog.capture('gallery_app:client_login_submit', {
+      //   gallery_id: galleryId,
+      // });
       const { data } = await apiFetch(`${apiUrl}/galleries/${galleryId}/client-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -209,6 +214,7 @@ export const LoginFormPane = memo(function LoginFormPane({
             type="submit"
             disabled={loading || !password}
             className="btn-primary w-full touch-manipulation"
+            data-ph-action={PostHogActions.galleryApp.clientLoginSubmit}
           >
             {loading ? defaultLoginPageConfig.submitLoadingLabel : defaultLoginPageConfig.submitLabel}
           </button>

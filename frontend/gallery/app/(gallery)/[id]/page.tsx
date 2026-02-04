@@ -23,6 +23,7 @@ import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { ApiError } from "@/lib/api";
 import { formatApiError } from "@/lib/api";
 import { DeliveredOrderCard } from "@/components/gallery/DeliveredOrderCard";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 // Lazy load heavy components that are conditionally rendered
 const LightGalleryWrapper = lazy(() => import("@/components/gallery/LightGalleryWrapper").then(m => ({ default: m.LightGalleryWrapper })));
@@ -407,6 +408,11 @@ export default function GalleryPage() {
 
       // If deselecting, always allow
       if (isSelected) {
+        // TODO: Add PostHog tracking for imageDeselect when PostHog is installed
+        // posthog.capture('gallery_app:image_deselect', {
+        //   image_key: key,
+        //   selection_count: currentSelectedKeys.length - 1,
+        // });
         selectionActions.toggleSelection.mutate({ key, isSelected: false });
         return;
       }
@@ -414,6 +420,11 @@ export default function GalleryPage() {
       // If selecting, check limits
       const canAddMore = extraPriceCents > 0 || currentSelectedKeys.length < baseLimit;
             if (canAddMore) {
+              // TODO: Add PostHog tracking for imageSelect when PostHog is installed
+              // posthog.capture('gallery_app:image_select', {
+              //   image_key: key,
+              //   selection_count: currentSelectedKeys.length + 1,
+              // });
               selectionActions.toggleSelection.mutate({ key, isSelected: true });
             }
     },
@@ -435,13 +446,20 @@ export default function GalleryPage() {
       if (Array.isArray(selectionState.photoBookKeys)) payload.photoBookKeys = selectionState.photoBookKeys;
       if (Array.isArray(selectionState.photoPrintKeys)) payload.photoPrintKeys = selectionState.photoPrintKeys;
       await selectionActions.approveSelection.mutateAsync(payload);
+      // TODO: Add PostHog tracking for approveSelectionSuccess when PostHog is installed
+      // posthog.capture('gallery_app:approve_selection_success', {
+      //   selection_count: keysArray.length,
+      //   photo_book_count: selectionState.photoBookKeys?.length || 0,
+      //   photo_print_count: selectionState.photoPrintKeys?.length || 0,
+      //   gallery_app_section: shouldShowUnselected ? "unselected" : "selecting",
+      // });
       // Selection state will update via query invalidation
     } catch (error) {
       console.error("Failed to approve selection:", error);
     } finally {
       setIsActionLoading(false);
     }
-  }, [selectionState?.selectedKeys, selectionState?.photoBookKeys, selectionState?.photoPrintKeys, selectionActions]);
+  }, [selectionState?.selectedKeys, selectionState?.photoBookKeys, selectionState?.photoPrintKeys, selectionActions, shouldShowUnselected]);
 
   // Request changes
   const handleRequestChanges = useCallback(async () => {
@@ -450,6 +468,8 @@ export default function GalleryPage() {
     setIsActionLoading(true);
     try {
       await selectionActions.requestChanges.mutateAsync();
+      // TODO: Add PostHog tracking for requestChangesSuccess when PostHog is installed
+      // posthog.capture('gallery_app:request_changes_success');
       // Smooth UX: keep loading overlay up, then show confirmation overlay, then hide loading.
       // Also ensure we don't have stale confirmation overlays visible.
       setShowChangeRequestCanceledOverlay(false);
@@ -587,6 +607,14 @@ export default function GalleryPage() {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        
+        // TODO: Add PostHog tracking for zipDownloadSuccess when PostHog is installed
+        // posthog.capture('gallery_app:zip_download_success', {
+        //   download_type: "zip",
+        //   download_method: "button",
+        //   order_id: orderId,
+        //   gallery_id: galleryId,
+        // });
       } else {
         throw new Error("No download URL in response");
       }
@@ -597,6 +625,13 @@ export default function GalleryPage() {
       }, 300);
     } catch (error) {
       console.error("Failed to download ZIP:", error);
+      // TODO: Add PostHog tracking for zipDownloadError when PostHog is installed
+      // posthog.capture('gallery_app:zip_download_error', {
+      //   download_type: "zip",
+      //   download_method: "button",
+      //   order_id: orderId,
+      //   gallery_id: galleryId,
+      // });
       setZipDownloadState({ showOverlay: true, isError: true });
     }
   }, [isOwnerPreview, galleryId, selectedOrderId, singleOrder, zipStatus, queryClient]);
@@ -654,6 +689,8 @@ export default function GalleryPage() {
       // Buying more is locked when CLIENT_APPROVED order exists
       return;
     }
+    // TODO: Add PostHog tracking for buyMoreClick when PostHog is installed
+    // posthog.capture('gallery_app:buy_more_click');
     setShowDeliveredView(false);
     setShowBoughtView(false);
     setShowUnselectedView(true);

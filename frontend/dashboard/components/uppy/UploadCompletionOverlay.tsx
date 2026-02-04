@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import React from "react";
 import { createPortal } from "react-dom";
@@ -51,7 +52,10 @@ export const UploadCompletionOverlay = ({
   }
 
   const overlayContent = (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm"
+      data-ph-action={PostHogActions.upload.completionView}
+    >
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-2xl w-full mx-4 border border-gray-400 dark:border-gray-800">
         {/* Header with prominent button placement */}
         <div className="px-10 pt-10 pb-6">
@@ -98,6 +102,7 @@ export const UploadCompletionOverlay = ({
                 startIcon={
                   isFinalizing ? <Loader2 size={18} className="animate-spin" /> : undefined
                 }
+                data-ph-action={PostHogActions.upload.dismissClick}
               >
                 {isFinalizing ? "Przetwarzanie..." : "OK"}
               </Button>

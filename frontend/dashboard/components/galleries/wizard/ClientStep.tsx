@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { Plus, Check, X, Save, ArrowLeft } from "lucide-react";
 import React, { useState, useMemo, useEffect } from "react";
 
@@ -443,6 +444,7 @@ export const ClientStep = ({
                 errorMessage={fieldErrors.clientEmail}
                 required
                 autoFocus
+                data-ph-action={PostHogActions.client.emailInput}
               />
             </div>
 
@@ -503,12 +505,14 @@ export const ClientStep = ({
               </button>
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
                   onDataChange({
                     isCompany: true,
                     isVatRegistered,
-                  })
-                }
+                  });
+                }}
+                data-ph-action={PostHogActions.client.companyToggle}
+                data-ph-property-is_company="true"
                 className={`text-base font-medium transition-colors border-b-2 pb-2 ${
                   isCompany
                     ? "border-gray-900 dark:border-gray-300 text-gray-900 dark:text-white"
@@ -656,6 +660,7 @@ export const ClientStep = ({
                     ? "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:hover:text-blue-600 dark:disabled:hover:text-blue-400"
                     : "text-photographer-accentDark dark:text-green-500 hover:text-photographer-accentDark dark:hover:text-green-400 disabled:hover:text-photographer-accentDark dark:disabled:hover:text-green-500"
                 }`}
+                data-ph-action={PostHogActions.client.saveButtonClick}
               >
                 {saving ? (
                   <>

@@ -1,4 +1,5 @@
-import { Metadata } from "next";
+"use client";
+
 import { AnimationContainer, MaxWidthWrapper } from "@/components";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,16 +7,10 @@ import Link from "next/link";
 import { getPublicDashboardUrl } from "@/lib/public-env";
 import MagicBadge from "@/components/ui/magic-badge";
 import { Lock, DollarSign, Settings, Users } from "lucide-react";
-import { generateMetadata as baseGenerateMetadata } from '@/utils/functions/metadata';
+import { PostHogActions } from "@photocloud/posthog-types";
 
-// ISR: Revalidate every hour (3600 seconds)
-export const revalidate = 3600;
-
-// Page-specific metadata
-export const metadata: Metadata = baseGenerateMetadata({
-  title: "Funkcje - PhotoCloud",
-  description: "Odkryj wszystkie narzędzia PhotoCloud, które pomogą Ci profesjonalnie zarządzać zdjęciami i klientami. Od galerii chronionych hasłem po elastyczne ceny.",
-});
+// Note: revalidate cannot be exported from client components
+// ISR is handled at the layout level for this route group
 
 const featuresList = [
   {
@@ -46,6 +41,11 @@ const featuresList = [
 
 export default function FeaturesPage() {
   const dashboardUrl = getPublicDashboardUrl();
+
+  // TODO: Track page view when PostHog is installed
+  // useEffect(() => {
+  //   posthog.capture(PostHogActions.landing.featuresPageView);
+  // }, []);
 
   return (
     <MaxWidthWrapper className="py-20">
@@ -79,7 +79,11 @@ export default function FeaturesPage() {
                   </CardHeader>
                   <CardContent>
                     <Button asChild variant="outline" className="w-full">
-                      <Link href={feature.href}>
+                      <Link 
+                        href={feature.href}
+                        data-ph-action={PostHogActions.landing.featureCardClick}
+                        data-ph-property-landing_feature_page={feature.href.replace('/features/', '')}
+                      >
                         Dowiedz się więcej
                       </Link>
                     </Button>
@@ -100,7 +104,10 @@ export default function FeaturesPage() {
             Rozpocznij z 1 darmową galerią i odkryj wszystkie funkcje PhotoCloud.
           </p>
           <Button asChild size="lg">
-            <Link href={`${dashboardUrl}/sign-up`}>
+            <Link 
+              href={`${dashboardUrl}/sign-up`}
+              data-ph-action={PostHogActions.landing.featurePageCtaClick}
+            >
               Rozpocznij za darmo
             </Link>
           </Button>

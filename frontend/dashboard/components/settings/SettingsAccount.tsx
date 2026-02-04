@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { useState, useEffect } from "react";
 
 import { useAuth } from "../../context/AuthProvider";
@@ -243,7 +244,11 @@ export default function SettingsAccount() {
         <p className="text-base text-gray-600 dark:text-gray-400 mb-4">
           Usunięcie konta jest operacją nieodwracalną. Wszystkie dane zostaną trwale usunięte.
         </p>
-        <Button variant="danger" onClick={() => setShowDeleteModal(true)}>
+        <Button
+          variant="danger"
+          onClick={() => setShowDeleteModal(true)}
+          data-ph-action={PostHogActions.settings.accountDeleteClick}
+        >
           Usuń konto
         </Button>
       </div>

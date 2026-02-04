@@ -141,6 +141,15 @@ export function useImageDownload() {
         link.click();
         document.body.removeChild(link);
         
+        // TODO: Add PostHog tracking for singlePhotoDownloadSuccess when PostHog is installed
+        // posthog.capture('gallery_app:single_photo_download_success', {
+        //   download_type: "single",
+        //   download_method: "button",
+        //   image_key: options.imageKey,
+        //   order_id: options.orderId,
+        //   image_type: options.type || "original",
+        // });
+        
         // Close overlay shortly after triggering download (browser handles the rest)
         setTimeout(() => {
           setDownloadState({ showOverlay: false, isError: false });
@@ -148,6 +157,14 @@ export function useImageDownload() {
         }, 200);
       } catch (error) {
         console.error("Download error:", error);
+        // TODO: Add PostHog tracking for singlePhotoDownloadError when PostHog is installed
+        // posthog.capture('gallery_app:single_photo_download_error', {
+        //   download_type: "single",
+        //   download_method: "button",
+        //   image_key: options.imageKey,
+        //   order_id: options.orderId,
+        //   image_type: options.type || "original",
+        // });
         // Don't expose actual error message for security reasons
         setDownloadState({
           showOverlay: true,
@@ -158,6 +175,7 @@ export function useImageDownload() {
     },
     onError: (error) => {
       console.error("Download error:", formatApiError(error));
+      // Track download error (note: imageKey not available in onError, will be tracked in download function)
       // Don't expose actual error message for security reasons
       setDownloadState({
         showOverlay: true,
@@ -168,6 +186,15 @@ export function useImageDownload() {
   });
 
   const download = async (options: DownloadOptions) => {
+    // TODO: Add PostHog tracking for singlePhotoDownloadClick when PostHog is installed
+    // posthog.capture('gallery_app:single_photo_download_click', {
+    //   download_type: "single",
+    //   download_method: "button",
+    //   image_key: options.imageKey,
+    //   order_id: options.orderId,
+    //   image_type: options.type || "original",
+    // });
+
     // Cancel any existing download
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();

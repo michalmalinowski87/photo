@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useRouter } from "next/router";
@@ -299,18 +300,6 @@ export const PublishGalleryWizard = ({
     return 0;
   }, [mode, gallery?.plan, gallery?.selectionEnabled, limitExceededData]);
 
-  // Determine selection enabled status for price calculations
-  const _isSelectionGalleryForPricing = useMemo(() => {
-    if (mode === "limitExceeded" && limitExceededData) {
-      return limitExceededData.isSelectionGallery !== false;
-    }
-    if (gallery?.selectionEnabled !== undefined) {
-      return gallery.selectionEnabled !== false;
-    }
-    return pricingData?.selectionEnabled !== false;
-  }, [mode, limitExceededData, gallery?.selectionEnabled, pricingData?.selectionEnabled]);
-
-
   // Calculate referral discount percent for a given plan key
   // This is calculated independently to avoid circular dependencies
   const getReferralDiscountForPlan = useCallback((planKey: PlanKey | null): 10 | 15 | undefined => {
@@ -459,31 +448,35 @@ export const PublishGalleryWizard = ({
     );
   }, [selectedPlan?.planKey]);
 
-  const WELCOME_BONUS_CENTS = 700; // 7 PLN welcome bonus
+  const WELCOME_BONUS_CENTS = 800; // 8 PLN welcome bonus
   const willUseStripe = selectedPlan && priceToCheck > walletBalance;
   const hasToppedUpWallet = walletBalanceCents > WELCOME_BONUS_CENTS;
 
   // Backend returns shouldApplyReferralDiscount; combine with wizard context (plan, mode, payment path)
+  // Show referral discount when: user is referred, plan is eligible, not upgrade mode, and (topped up OR using Stripe OR using welcome bonus)
   const meetsReferralDiscountConditions =
     !!businessInfo?.shouldApplyReferralDiscount &&
     isPlanEligibleForReferral &&
     mode !== "limitExceeded" &&
     (hasToppedUpWallet || willUseStripe);
   
-  // Calculate referral discount percent (only for eligible users)
+  // Calculate referral discount percent for display (show even when using welcome bonus to inform user)
   // Use stored discount percentage (determined at signup time) to ensure correct discount even if referrer account is deleted
   // This ensures: 1) First 9 referrals get 10%, 10th+ get 15% (not all get 15% if referrer becomes Top Inviter later)
   // 2) If referrer account is deleted, user still gets the discount they were promised
-  const referralDiscountPercent: 10 | 15 | undefined = meetsReferralDiscountConditions
-    ? (businessInfo?.referredDiscountPercent === 15 ? 15 : 10) // Default to 10% for legacy users without stored value
-    : undefined;
+  const referralDiscountPercent: 10 | 15 | undefined =
+    !!businessInfo?.shouldApplyReferralDiscount &&
+    isPlanEligibleForReferral &&
+    mode !== "limitExceeded"
+      ? (businessInfo?.referredDiscountPercent === 15 ? 15 : 10) // Default to 10% for legacy users without stored value
+      : undefined;
 
   // Hide discount code input if user has only welcome bonus and won't use Stripe
   // This applies REGARDLESS of referral status (referred or not)
   // Show discount code input if:
   // - Plan is not eligible for referral discount, OR
   // - Mode is "limitExceeded" (upgrade), OR
-  // - User has topped up wallet (balance > 7 PLN), OR
+  // - User has topped up wallet (balance > 8 PLN), OR
   // - User will use Stripe (price > wallet balance)
   const shouldShowDiscountInput =
     !isPlanEligibleForReferral || mode === "limitExceeded" || hasToppedUpWallet || willUseStripe;
@@ -825,6 +818,7 @@ export const PublishGalleryWizard = ({
               isProcessing || pricingLoading || !selectedPlan || (mode === "publish" && !hasPhotos)
             }
             className="flex-1 min-w-0 max-w-[280px]"
+            data-ph-action={PostHogActions.gallery.publishButtonClick}
           >
             {isProcessing
               ? "Przetwarzanie..."

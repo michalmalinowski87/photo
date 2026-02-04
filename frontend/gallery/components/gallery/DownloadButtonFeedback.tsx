@@ -28,6 +28,10 @@ export function DownloadButtonFeedback() {
           longPressTimeoutRef.current = setTimeout(() => {
             // Trigger heartbeat effect
             downloadButton.classList.add('heartbeat');
+            // TODO: Add PostHog tracking for downloadButtonRightClick (long_press) when PostHog is installed
+            // posthog.capture('gallery_app:download_button_right_click', {
+            //   download_method: "long_press",
+            // });
             // Remove after animation completes
             setTimeout(() => {
               downloadButton.classList.remove('heartbeat');
@@ -71,6 +75,10 @@ export function DownloadButtonFeedback() {
       if (downloadButton) {
         // Trigger heartbeat effect on right-click attempt
         downloadButton.classList.add('heartbeat');
+        // TODO: Add PostHog tracking for downloadButtonRightClick (right_click) when PostHog is installed
+        // posthog.capture('gallery_app:download_button_right_click', {
+        //   download_method: "right_click",
+        // });
         setTimeout(() => {
           downloadButton.classList.remove('heartbeat');
         }, 600);

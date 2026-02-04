@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { CheckCircle2, Image as ImageIcon, Check } from "lucide-react";
 import React from "react";
 
@@ -31,6 +32,8 @@ export const GalleryTypeStep = ({
               ? "border-photographer-accent bg-photographer-accentLight/50 dark:bg-photographer-accent/10 shadow-lg scale-105"
               : "border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-400 dark:hover:border-gray-600"
           }`}
+          data-ph-action={PostHogActions.gallery.typeSelect}
+          data-ph-property-gallery_type="selection"
         >
           <div className="flex flex-col items-center space-y-4">
             <div
@@ -72,6 +75,8 @@ export const GalleryTypeStep = ({
               ? "border-photographer-accent bg-photographer-accentLight/50 dark:bg-photographer-accent/10 shadow-lg scale-105"
               : "border-gray-400 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:border-gray-400 dark:hover:border-gray-600"
           }`}
+          data-ph-action={PostHogActions.gallery.typeSelect}
+          data-ph-property-gallery_type="non-selection"
         >
           <div className="flex flex-col items-center space-y-4">
             <div

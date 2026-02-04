@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { Check, X } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useState, useEffect } from "react";
@@ -391,7 +392,11 @@ export default function RegisterSubdomain() {
           </div>
         )}
 
-        <form onSubmit={handleCompleteSubdomain} className="w-full space-y-6">
+        <form
+          onSubmit={handleCompleteSubdomain}
+          className="w-full space-y-6"
+          data-ph-action={PostHogActions.auth.subdomainFormSubmit}
+        >
           <div className="space-y-3 relative">
             <Label htmlFor="subdomain">Subdomena (opcjonalnie)</Label>
             <div className="relative">
@@ -408,6 +413,7 @@ export default function RegisterSubdomain() {
                   inputMode="text"
                   className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground/50 min-w-0"
                   style={{ minWidth: "120px" }}
+                  data-ph-action={PostHogActions.auth.subdomainInputChange}
                 />
                 <span className="text-muted-foreground select-none">
                   .{hostname ? getBaseDomainFromHostname(hostname) : "lvh.me"}
@@ -659,7 +665,13 @@ export default function RegisterSubdomain() {
             )}
           </div>
 
-          <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full"
+            disabled={loading}
+            data-ph-action={PostHogActions.auth.subdomainButtonClick}
+          >
             {loading ? "Zapisywanie..." : "Zakończ rejestrację"}
           </Button>
         </form>

@@ -1,6 +1,7 @@
 "use client";
 
 import { hapticFeedback } from "@/utils/hapticFeedback";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 interface ZipStatus {
   status?: "ready" | "generating" | "not_started" | "error";
@@ -87,6 +88,7 @@ export function OrderZipButton({
         letterSpacing: "0.05em",
       }}
       aria-label={zipCtaAriaLabel}
+      data-ph-action={PostHogActions.galleryApp.zipDownloadClick}
     >
       {hasError ? (
         <svg

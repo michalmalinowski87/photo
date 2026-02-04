@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { X, Check } from "lucide-react";
 import React, { useState, useEffect } from "react";
 
@@ -106,6 +107,7 @@ function SubmitButton({
       type="submit"
       disabled={disabled}
       className="px-6 h-14 w-full bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-base font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+      data-ph-action={PostHogActions.gallery.wizardSubmitClick}
     >
       {disabled ? "Przetwarzanie..." : "Utwórz galerię"}
     </button>
@@ -855,7 +857,7 @@ const CreateGalleryWizard = ({
         {/* Footer - Always rendered to prevent layout shift, buttons hidden on step 1 - Fixed height to prevent layout shifts */}
         <div className="flex items-center gap-4 px-6 py-6 bg-photographer-background dark:bg-gray-dark flex-shrink-0 min-h-[88px]">
           {/* Step 1: Show Anuluj button, and Next Step only if gallery type is selected */}
-          {currentStep === 1 && (
+              {currentStep === 1 && (
             <>
               <button
                 onClick={onClose}
@@ -869,6 +871,7 @@ const CreateGalleryWizard = ({
                   onClick={handleNext}
                   disabled={loading}
                   className="flex-1 px-6 h-14 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-base font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  data-ph-action={PostHogActions.gallery.wizardNextClick}
                 >
                   {loading ? "Przetwarzanie..." : "Następny Krok"}
                 </button>
@@ -882,6 +885,7 @@ const CreateGalleryWizard = ({
                 onClick={handleBack}
                 disabled={loading}
                 className="w-40 px-8 h-14 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 border border-gray-400 dark:border-gray-700 rounded-lg transition-colors active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed bg-transparent hover:bg-photographer-elevated dark:hover:bg-gray-800 flex items-center justify-center"
+                data-ph-action={PostHogActions.gallery.wizardBackClick}
               >
                 Wstecz
               </button>
@@ -894,6 +898,7 @@ const CreateGalleryWizard = ({
                   onClick={handleNext}
                   disabled={loading}
                   className="flex-1 px-6 h-14 bg-photographer-accent hover:bg-photographer-accentHover text-white rounded-lg text-base font-medium transition-colors active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  data-ph-action={PostHogActions.gallery.wizardNextClick}
                 >
                   {loading ? "Przetwarzanie..." : "Następny Krok"}
                 </button>

@@ -6,11 +6,11 @@ import { createTransaction } from '../../lib/src/transactions';
 
 	const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-/** Welcome bonus amount: 7 PLN (700 cents) - fixed gift for new users */
-const WELCOME_BONUS_CENTS = 700;
+/** Welcome bonus amount: 8 PLN (800 cents) - fixed gift for new users */
+const WELCOME_BONUS_CENTS = 800;
 
 /**
- * Credit welcome bonus to new users (700 cents = 7 PLN)
+ * Credit welcome bonus to new users (800 cents = 8 PLN)
  * This is our customer acquisition cost (CAC) - allows users to try the service for free
  *
  * SECURITY: Multiple safeguards prevent abuse:
@@ -99,7 +99,7 @@ async function creditWelcomeBonus(
 				planEquivalent: null,
 				planPriceCents: welcomeBonusCents
 			},
-			composites: ['Welcome Bonus - 7 PLN']
+			composites: ['Welcome Bonus - 8 PLN']
 		});
 		
 		// Mark transaction as PAID immediately (it's a bonus, not a payment)

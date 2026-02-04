@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import React from "react";
 
 import { formatPrice } from "../../../lib/format-price";
@@ -137,6 +138,8 @@ export const SuggestedPlanSection = ({
                     }
                   }}
                   disabled={isDisabled}
+                  data-ph-action={PostHogActions.payment.durationSelect}
+                  data-ph-property-duration={duration}
                   className={`px-4 py-2 rounded-lg transition-all font-medium ${
                     isDisabled
                       ? "opacity-50 cursor-not-allowed outline-2 outline-gray-300 dark:outline-gray-600 outline bg-photographer-elevated dark:bg-gray-800 text-gray-500 dark:text-gray-400"
@@ -175,10 +178,13 @@ export const SuggestedPlanSection = ({
 
               return (
                 <>
-                  <p className="text-3xl font-bold text-photographer-accent dark:text-photographer-accentLight">
+                  <p
+                    className="text-3xl font-bold text-photographer-accent dark:text-photographer-accentLight"
+                    data-ph-action={PostHogActions.payment.planPriceView}
+                  >
                     {formatPrice(upgradePrice)}
                   </p>
-                  {mode !== "limitExceeded" && referralDiscountPercent !== null && (
+                  {mode !== "limitExceeded" && referralDiscountPercent !== undefined && (
                     <p className="text-sm text-green-600 dark:text-green-400 mt-1">
                       (zniżka {referralDiscountPercent}% za link polecający)
                     </p>

@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { Plus, ArrowLeft, Save } from "lucide-react";
 import React, { useState, useMemo, useEffect } from "react";
 
@@ -313,6 +314,7 @@ export const PackageStep = ({
                 emptyMessage="Nie znaleziono pakietów"
                 error={!!fieldErrors.selectedPackageId}
                 className="[&_button]:text-2xl [&_button]:pb-3 [&_input]:text-2xl [&_input]:pb-3 [&_button]:pt-2 [&_input]:pt-2"
+                data-ph-action={PostHogActions.gallery.packageSelect}
               />
               {fieldErrors.selectedPackageId && (
                 <p className="mt-2 text-sm text-red-600 dark:text-red-400">

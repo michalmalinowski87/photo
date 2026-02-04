@@ -1,4 +1,5 @@
 import { LEGAL_DOC_VERSIONS } from "@photocloud/legal";
+import { PostHogActions } from "@photocloud/posthog-types";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
@@ -336,7 +337,11 @@ export default function SignUp() {
             </div>
           )}
 
-          <form onSubmit={handleSignUp} className="w-full space-y-5 md:space-y-6 relative">
+          <form
+            onSubmit={handleSignUp}
+            className="w-full space-y-5 md:space-y-6 relative"
+            data-ph-action={PostHogActions.auth.signupFormSubmit}
+          >
             <div className="space-y-3">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -347,6 +352,7 @@ export default function SignUp() {
                 placeholder="twoj@email.com"
                 required
                 autoComplete="email"
+                data-ph-action={PostHogActions.auth.signupEmailInput}
               />
             </div>
 
@@ -365,6 +371,7 @@ export default function SignUp() {
                 required
                 autoComplete="new-password"
                 minLength={8}
+                data-ph-action={PostHogActions.auth.signupPasswordInput}
               />
 
               <div className="space-y-2">
@@ -387,7 +394,10 @@ export default function SignUp() {
                   <p className="text-sm text-green-500 mt-2">Hasła są identyczne</p>
                 )}
                 {referralCode && (
-                  <div className="mt-3 p-3 rounded-lg border border-photographer-accent/30 bg-photographer-accent/5">
+                  <div
+                    className="mt-3 p-3 rounded-lg border border-photographer-accent/30 bg-photographer-accent/5"
+                    data-ph-action={PostHogActions.auth.signupReferralCodeView}
+                  >
                     <p className="text-sm font-medium text-photographer-accent dark:text-photographer-accentLight">
                       Użyty kod referencyjny:{" "}
                       <span className="font-mono font-semibold">{referralCode}</span>
@@ -430,6 +440,7 @@ export default function SignUp() {
                         setTermsAccepted(e.target.checked);
                         setError("");
                       }}
+                      data-ph-action={PostHogActions.auth.signupTermsAccept}
                     />
                     <span className="text-sm text-foreground leading-relaxed">
                       Akceptuję{" "}
@@ -454,6 +465,7 @@ export default function SignUp() {
                         setPrivacyAccepted(e.target.checked);
                         setError("");
                       }}
+                      data-ph-action={PostHogActions.auth.signupPrivacyAccept}
                     />
                     <span className="text-sm text-foreground leading-relaxed">
                       Przeczytałem/am i akceptuję{" "}
@@ -478,6 +490,7 @@ export default function SignUp() {
                         setPrivacyAccepted(true);
                         setError("");
                       }}
+                      data-ph-action={PostHogActions.auth.signupAcceptAllClick}
                     >
                       Wyrażam wszystkie zgody
                     </button>
@@ -493,6 +506,7 @@ export default function SignUp() {
               disabled={
                 loading || !passwordStrength?.meetsMinimum || !termsAccepted || !privacyAccepted
               }
+              data-ph-action={PostHogActions.auth.signupButtonClick}
             >
               {loading ? "Tworzenie konta..." : "Rozpocznij za darmo"}
             </Button>
@@ -506,7 +520,11 @@ export default function SignUp() {
         <div className="flex items-start mt-auto border-t border-border/80 py-8 w-full">
           <p className="text-base text-muted-foreground">
             Masz już konto?{" "}
-            <Link href="/login" className="text-primary font-bold">
+            <Link
+              href="/login"
+              className="text-primary font-bold"
+              data-ph-action={PostHogActions.auth.loginButtonClick}
+            >
               Zaloguj się
             </Link>
           </p>

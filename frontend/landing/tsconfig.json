@@ -29,6 +29,9 @@
       ],
       "@shared-auth/*": [
         "../shared-auth/*"
+      ],
+      "@photocloud/posthog-types": [
+        "../../packages/posthog-types/src"
       ]
     }
   },

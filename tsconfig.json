@@ -6,6 +6,7 @@
     "paths": {
       "@photocloud/logger": ["packages/logger/src"],
       "@photocloud/config": ["packages/config/src"],
+      "@photocloud/posthog-types": ["packages/posthog-types/src"],
       "@photocloud/backend-lib/*": ["backend/lib/src/*"]
     }
   },
@@ -13,6 +14,7 @@
     { "path": "packages/tsconfig" },
     { "path": "packages/config" },
     { "path": "packages/logger" },
+    { "path": "packages/posthog-types" },
     { "path": "backend/lib" }
   ]
 }

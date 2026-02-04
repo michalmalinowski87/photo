@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { useState, useEffect } from "react";
 
 import { useAuth } from "../../context/AuthProvider";
@@ -90,7 +91,10 @@ export default function SettingsSecurity() {
           Zmiana hasła
         </h2>
 
-        <form onSubmit={handlePasswordChange}>
+        <form
+          onSubmit={handlePasswordChange}
+          data-ph-action={PostHogActions.settings.passwordChangeSubmit}
+        >
           <div className="mb-1.5">
             <label className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Obecne hasło *

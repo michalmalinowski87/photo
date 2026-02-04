@@ -7,6 +7,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { SelectionState } from "@/types/gallery";
 import { OrderZipButton } from "./OrderZipButton";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 interface ZipStatus {
   status?: "ready" | "generating" | "not_started" | "error";
@@ -487,6 +488,7 @@ export function SecondaryMenu({
                   letterSpacing: "0.05em",
                 }}
                 aria-label={isUnselectedViewActive ? "Kup więcej zdjęć" : "Zatwierdź wybór"}
+                data-ph-action={PostHogActions.galleryApp.approveSelectionClick}
               >
                 {isUnselectedViewActive ? "KUP WIĘCEJ ZDJĘĆ" : "ZATWIERDŹ WYBÓR"}
               </button>
@@ -517,6 +519,7 @@ export function SecondaryMenu({
                   letterSpacing: "0.05em",
                 }}
                 aria-label="Poproś o zmiany"
+                data-ph-action={PostHogActions.galleryApp.requestChangesClick}
               >
                 POPROŚ O ZMIANY
               </button>
@@ -542,6 +545,7 @@ export function SecondaryMenu({
                   letterSpacing: "0.05em",
                 }}
                 aria-label="Anuluj prośbę o zmiany"
+                data-ph-action={PostHogActions.galleryApp.cancelChangeRequestClick}
               >
                 ANULUJ PROŚBĘ
               </button>
@@ -597,6 +601,7 @@ export function SecondaryMenu({
                     : "500",
                   letterSpacing: "0.05em",
                 }}
+                data-ph-action={PostHogActions.galleryApp.buyMoreClick}
                 aria-label="Kup więcej zdjęć"
               >
                 KUP WIĘCEJ ZDJĘĆ

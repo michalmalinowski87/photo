@@ -1,3 +1,4 @@
+import { PostHogActions, type PostHogActionName } from "@photocloud/posthog-types";
 import "@uppy/core/css/style.min.css";
 import ThumbnailGenerator from "@uppy/thumbnail-generator";
 import {
@@ -947,6 +948,7 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
         className="w-[70vw] max-w-[90vw] max-h-[90vh]"
         showCloseButton={true}
         closeOnClickOutside={false}
+        data-ph-action={PostHogActions.upload.modalOpen}
       >
         <div
           onDragOver={handleDragOver}
@@ -1183,7 +1185,11 @@ function UppyUploadModalContent({ isOpen, onClose, config }: UppyUploadModalProp
                       </Button>
                     )}
                     {files.length > 0 && !uploading && (
-                      <Button onClick={startUpload} variant="primary">
+                      <Button
+                        onClick={startUpload}
+                        variant="primary"
+                        data-ph-action={PostHogActions.upload.start as PostHogActionName}
+                      >
                         Prześlij {files.length} {files.length === 1 ? "plik" : "plików"}
                       </Button>
                     )}

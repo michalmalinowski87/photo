@@ -19,6 +19,7 @@ import MobileNavbar from "./mobile-navbar";
 import AnimationContainer from "../global/animation-container";
 import { useAuth } from "@/hooks/use-auth";
 import { getPublicDashboardUrl } from "@/lib/public-env";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 const Navbar = () => {
   const [scroll, setScroll] = useState(false);
@@ -48,7 +49,10 @@ const Navbar = () => {
       <AnimationContainer reverse delay={0.1} className="size-full">
         <MaxWidthWrapper className="flex items-center justify-between">
           <div className="flex items-center space-x-12">
-            <Link href="/#home">
+            <Link 
+              href="/#home"
+              data-ph-action={PostHogActions.landing.logoClick}
+            >
               <span className="text-lg font-bold font-heading !leading-none text-foreground">
                 PhotoCloud
               </span>
@@ -73,6 +77,8 @@ const Navbar = () => {
                                   <Link
                                     href="/features"
                                     className="flex h-full w-full select-none flex-col justify-end rounded-lg bg-gradient-to-b from-muted/50 to-muted p-4 no-underline outline-none focus:shadow-md"
+                                    data-ph-action={PostHogActions.landing.navDropdownItemClick}
+                                    data-ph-property-landing_nav_item={link.title}
                                   >
                                     <h6 className="mb-2 mt-4 text-lg font-medium text-foreground">
                                       Wszystkie funkcje
@@ -99,7 +105,12 @@ const Navbar = () => {
                       </>
                     ) : (
                       <NavigationMenuLink asChild>
-                        <Link href={link.href} className={navigationMenuTriggerStyle()}>
+                        <Link 
+                          href={link.href} 
+                          className={navigationMenuTriggerStyle()}
+                          data-ph-action={PostHogActions.landing.navMenuItemClick}
+                          data-ph-property-landing_nav_item={link.title}
+                        >
                           {link.title}
                         </Link>
                       </NavigationMenuLink>
@@ -118,10 +129,18 @@ const Navbar = () => {
               </Link>
             ) : (
               <>
-                <Link href={`${dashboardUrl}/login`} className={buttonVariants({ size: "sm", variant: "ghost" })}>
+                <Link 
+                  href={`${dashboardUrl}/login`} 
+                  className={buttonVariants({ size: "sm", variant: "ghost" })}
+                  data-ph-action={PostHogActions.landing.navLoginClick}
+                >
                   Zaloguj się
                 </Link>
-                <Link href={`${dashboardUrl}/sign-up`} className={buttonVariants({ size: "sm" })}>
+                <Link 
+                  href={`${dashboardUrl}/sign-up`} 
+                  className={buttonVariants({ size: "sm" })}
+                  data-ph-action={PostHogActions.landing.navSignupClick}
+                >
                   Rozpocznij za darmo
                 </Link>
               </>
@@ -150,6 +169,8 @@ const ListItem = React.forwardRef<
             "block select-none space-y-1 rounded-lg p-3 leading-none no-underline outline-none transition-all duration-100 ease-out hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
             className
           )}
+          data-ph-action={PostHogActions.landing.navDropdownItemClick}
+          data-ph-property-landing_nav_item={title}
           {...props}
         >
           <div className="flex items-center space-x-2 text-neutral-300">

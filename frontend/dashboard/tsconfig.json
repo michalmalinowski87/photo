@@ -32,7 +32,8 @@
     "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@photocloud/posthog-types": ["../../packages/posthog-types/src"]
     },
     "plugins": [
       {

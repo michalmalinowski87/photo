@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { SelectionState } from "@/types/gallery";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 interface HelpOverlayProps {
   isVisible: boolean;
@@ -11,6 +12,13 @@ interface HelpOverlayProps {
 }
 
 export function HelpOverlay({ isVisible, onClose, selectionState }: HelpOverlayProps) {
+  // TODO: Add PostHog tracking for helpOverlayOpen when PostHog is installed
+  // useEffect(() => {
+  //   if (isVisible) {
+  //     posthog.capture('gallery_app:help_overlay_open');
+  //   }
+  // }, [isVisible]);
+  
   if (!isVisible) return null;
 
   // Determine current state
@@ -149,10 +157,15 @@ export function HelpOverlay({ isVisible, onClose, selectionState }: HelpOverlayP
             </h2>
             {/* Keep small X for convenience, but the primary CTA is the OK button */}
             <button
-              onClick={onClose}
+              onClick={() => {
+                // TODO: Add PostHog tracking for helpOverlayClose when PostHog is installed
+                // posthog.capture('gallery_app:help_overlay_close');
+                onClose();
+              }}
               className="h-11 w-11 rounded transition-colors flex items-center justify-center border-0 touch-manipulation bg-transparent text-gray-400 hover:text-gray-600"
               aria-label="Zamknij"
               title="Zamknij"
+              data-ph-action={PostHogActions.galleryApp.helpOverlayClose}
             >
               <X className="w-5 h-5" />
             </button>
@@ -170,14 +183,17 @@ export function HelpOverlay({ isVisible, onClose, selectionState }: HelpOverlayP
         </div>
 
         <div className="mt-8 flex justify-end">
-          <button
-            onClick={() => {
-              hapticFeedback("light");
-              onClose();
-            }}
-            className="btn-primary touch-manipulation min-h-[44px]"
-            aria-label="OK"
-          >
+            <button
+              onClick={() => {
+                hapticFeedback("light");
+                // TODO: Add PostHog tracking for helpOverlayClose when PostHog is installed
+                // posthog.capture('gallery_app:help_overlay_close');
+                onClose();
+              }}
+              className="btn-primary touch-manipulation min-h-[44px]"
+              aria-label="OK"
+              data-ph-action={PostHogActions.galleryApp.helpOverlayClose}
+            >
             OK
           </button>
         </div>

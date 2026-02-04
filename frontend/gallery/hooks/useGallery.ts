@@ -22,6 +22,7 @@ interface GalleryImagesApiResponse {
     thumbUrlFallback?: string;
     /** Original URL — never sent to gallery app (clients); only dashboard/owners receive it */
     url?: string;
+    finalUrl?: string;
     size?: number;
     lastModified?: string;
     width?: number;

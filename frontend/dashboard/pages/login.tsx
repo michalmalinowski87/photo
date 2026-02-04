@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import React, { useState, useEffect, useRef } from "react";
@@ -237,7 +238,11 @@ export default function Login() {
             </div>
           )}
 
-          <form onSubmit={handleSignIn} className="w-full space-y-5 md:space-y-6">
+          <form
+            onSubmit={handleSignIn}
+            className="w-full space-y-5 md:space-y-6"
+            data-ph-action={PostHogActions.auth.loginFormSubmit}
+          >
             <div className="space-y-3">
               <label
                 htmlFor="email"
@@ -254,6 +259,7 @@ export default function Login() {
                 placeholder="twoj@email.com"
                 autoComplete="email"
                 className="w-full"
+                data-ph-action={PostHogActions.auth.loginEmailInput}
               />
             </div>
 
@@ -268,6 +274,7 @@ export default function Login() {
                 <Link
                   href={`/forgot-password${router.query.returnUrl ? `?returnUrl=${encodeURIComponent(typeof router.query.returnUrl === "string" ? router.query.returnUrl : router.query.returnUrl[0])}` : ""}`}
                   className="text-base text-primary font-medium hover:opacity-70 transition-opacity"
+                  data-ph-action={PostHogActions.auth.forgotPasswordLinkClick}
                 >
                   Zapomniałeś hasła?
                 </Link>
@@ -281,10 +288,17 @@ export default function Login() {
                 placeholder="Wprowadź hasło"
                 autoComplete="current-password"
                 className="w-full"
+                data-ph-action={PostHogActions.auth.loginPasswordInput}
               />
             </div>
 
-            <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              variant="primary"
+              className="w-full"
+              disabled={loading}
+              data-ph-action={PostHogActions.auth.loginButtonClick}
+            >
               {loading ? "Logowanie..." : "Zaloguj się"}
             </Button>
           </form>
@@ -316,7 +330,11 @@ export default function Login() {
         <div className="flex items-start mt-auto border-t border-border/80 py-8 w-full">
           <p className="text-base text-muted-foreground">
             Nie masz konta?{" "}
-            <Link href="/sign-up" className="text-primary font-bold">
+            <Link
+              href="/sign-up"
+              className="text-primary font-bold"
+              data-ph-action={PostHogActions.auth.signupLinkClick}
+            >
               Zarejestruj się
             </Link>
           </p>

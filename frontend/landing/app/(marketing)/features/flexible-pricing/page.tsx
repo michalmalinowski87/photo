@@ -1,3 +1,5 @@
+"use client";
+
 import { AnimationContainer, MaxWidthWrapper } from "@/components";
 import { Button } from "@/components/ui/button";
 import { LampContainer } from "@/components/ui/lamp";
@@ -5,12 +7,16 @@ import MagicBadge from "@/components/ui/magic-badge";
 import { ArrowRightIcon } from "lucide-react";
 import Link from "next/link";
 import { getPublicDashboardUrl } from "@/lib/public-env";
+import { PostHogActions } from "@photocloud/posthog-types";
 
-// ISR: Revalidate every hour (3600 seconds)
-export const revalidate = 3600;
+// Note: revalidate cannot be exported from client components
+// ISR is handled at the layout level for this route group
 
 const FlexiblePricingPage = () => {
   const dashboardUrl = getPublicDashboardUrl();
+
+  // TODO: Track page view when PostHog is installed
+  // posthog.capture(PostHogActions.landing.featurePageView, { landing_feature_page: "flexible-pricing" });
 
   return (
     <>
@@ -26,12 +32,20 @@ const FlexiblePricingPage = () => {
             </p>
             <div className="flex items-center justify-center gap-x-4 mt-8">
               <Button size="sm" asChild>
-                <Link href={`${dashboardUrl}/sign-up`}>
+                <Link 
+                  href={`${dashboardUrl}/sign-up`}
+                  data-ph-action={PostHogActions.landing.featurePageCtaClick}
+                  data-ph-property-landing_feature_page="flexible-pricing"
+                >
                   Rozpocznij za darmo
                 </Link>
               </Button>
               <Button size="sm" variant="outline" asChild>
-                <Link href="/pricing">
+                <Link 
+                  href="/pricing"
+                  data-ph-action={PostHogActions.landing.featurePageCtaClick}
+                  data-ph-property-landing_feature_page="flexible-pricing"
+                >
                   Zobacz cennik
                 </Link>
               </Button>
@@ -58,7 +72,12 @@ const FlexiblePricingPage = () => {
               </p>
               <div className="mt-6">
                 <Button asChild>
-                  <Link href={`${dashboardUrl}/sign-up`} className="flex items-center">
+                  <Link 
+                    href={`${dashboardUrl}/sign-up`} 
+                    className="flex items-center"
+                    data-ph-action={PostHogActions.landing.featurePageCtaClick}
+                    data-ph-property-landing_feature_page="flexible-pricing"
+                  >
                     Rozpocznij za darmo
                     <ArrowRightIcon className="w-4 h-4 ml-2" />
                   </Link>

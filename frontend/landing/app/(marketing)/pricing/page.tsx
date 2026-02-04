@@ -1,3 +1,5 @@
+"use client";
+
 import { AnimationContainer, MaxWidthWrapper, PricingCards } from "@/components";
 import {
   Accordion,
@@ -6,9 +8,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import MagicBadge from "@/components/ui/magic-badge";
+import { PostHogActions } from "@photocloud/posthog-types";
 
-// ISR: Revalidate every hour (3600 seconds)
-export const revalidate = 3600;
+// Note: revalidate cannot be exported from client components
+// ISR is handled at the layout level for this route group
 
 const FAQ = [
   {
@@ -44,6 +47,9 @@ const FAQ = [
 ];
 
 const PricingPage = () => {
+  // TODO: Track page view when PostHog is installed
+  // posthog.capture(PostHogActions.landing.pricingPageView);
+
   return (
     <MaxWidthWrapper className="mb-40">
       <AnimationContainer delay={0.1}>
@@ -80,7 +86,10 @@ const PricingPage = () => {
                       {FAQ.map((faq) => (
                         <div key={faq.id} className="col-lg-6 mb-4">
                           <AccordionItem value={faq.id} className="faq-accordion-item h-full">
-                            <AccordionTrigger className="text-left">
+                            <AccordionTrigger 
+                              className="text-left"
+                              data-ph-action={PostHogActions.landing.pricingPageFaqOpen}
+                            >
                               {faq.question}
                             </AccordionTrigger>
                             <AccordionContent className="accordion-content">

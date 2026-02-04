@@ -1,3 +1,4 @@
+import type { PostHogActionName } from "@photocloud/posthog-types";
 import { ReactNode } from "react";
 
 interface ButtonProps {
@@ -10,6 +11,7 @@ interface ButtonProps {
   disabled?: boolean; // Disabled state
   className?: string; // Disabled state
   type?: "button" | "submit" | "reset";
+  "data-ph-action"?: PostHogActionName; // PostHog action name for tracking
 }
 
 const Button = ({
@@ -22,6 +24,7 @@ const Button = ({
   className = "",
   disabled = false,
   type = "button",
+  "data-ph-action": dataPhAction,
 }: ButtonProps) => {
   // Size Classes
   const sizeClasses = {
@@ -49,6 +52,7 @@ const Button = ({
       } ${variantClasses[variant]} ${disabled ? "cursor-not-allowed opacity-50" : ""} ${className}`}
       onClick={onClick}
       disabled={disabled}
+      {...(dataPhAction ? { "data-ph-action": dataPhAction } : {})}
     >
       {startIcon && <span className="flex items-center">{startIcon}</span>}
       {children}

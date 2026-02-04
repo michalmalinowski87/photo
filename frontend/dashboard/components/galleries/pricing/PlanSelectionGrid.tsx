@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { CheckCircle2, Check, Info } from "lucide-react";
 import React from "react";
 
@@ -91,6 +92,8 @@ export const PlanSelectionGrid = ({
                 }
               }}
               disabled={isDisabled}
+              data-ph-action={PostHogActions.payment.durationSelect}
+              data-ph-property-duration={duration}
               className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 isDisabled
                   ? "opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-600"
@@ -156,6 +159,8 @@ export const PlanSelectionGrid = ({
                   // since we only show plans for the selected duration
                   onPlanKeyChange(planKey);
                 }}
+                data-ph-action={PostHogActions.payment.planCardClick}
+                data-ph-property-plan_key={planKey}
                 className={`relative rounded-lg border-2 p-5 transition-all ${
                   isDisabled
                     ? "opacity-50 cursor-not-allowed border-gray-400 dark:border-gray-600 bg-photographer-background dark:bg-gray-900"
@@ -226,7 +231,7 @@ export const PlanSelectionGrid = ({
                         {formatPrice(displayPrice)}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">/ miesiąc</div>
-                      {mode !== "limitExceeded" && referralDiscountPercent !== null && (
+                      {mode !== "limitExceeded" && referralDiscountPercent !== undefined && (
                         <div className="text-xs text-green-600 dark:text-green-400 mt-1">
                           Zniżka {referralDiscountPercent}% za link polecający
                         </div>

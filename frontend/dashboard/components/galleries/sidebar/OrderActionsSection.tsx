@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import { Home, CheckCircle2, XCircle, Check, Send } from "lucide-react";
 import { useRouter } from "next/router";
 import React, { useCallback, useState, useRef, useEffect } from "react";
@@ -261,6 +262,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
               onClick={handleApproveChangeRequest}
               className="w-full justify-start bg-green-600 hover:bg-green-700 text-white"
               startIcon={<CheckCircle2 size={20} strokeWidth={2} />}
+              data-ph-action={PostHogActions.order.approveButtonClick}
             >
               Zatwierdź prośbę o zmiany
             </Button>
@@ -270,6 +272,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
               onClick={handleDenyChangeRequest}
               className="w-full !text-orange-500 hover:!text-orange-600 hover:bg-orange-50 dark:!text-orange-400 dark:hover:!text-orange-300 dark:hover:bg-orange-500/10 !ring-orange-500 dark:!ring-orange-400"
               startIcon={<XCircle size={20} strokeWidth={2} />}
+              data-ph-action={PostHogActions.order.requestChangesClick}
             >
               Odrzuć prośbę o zmiany
             </Button>
@@ -285,6 +288,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
             disabled={markPaidLoading}
             className="w-full justify-start"
             startIcon={<Check size={20} />}
+            data-ph-action={PostHogActions.order.markDeliveredClick}
           >
             Oznacz jako opłacone
           </Button>
@@ -299,6 +303,7 @@ export const OrderActionsSection = ({ orderId }: OrderActionsSectionProps) => {
             className="w-full justify-start"
             disabled={order.deliveryStatus === "DELIVERED" || sendFinalsLoading}
             startIcon={<Send size={20} strokeWidth={2} />}
+            data-ph-action={PostHogActions.order.sendButtonClick}
           >
             {order.deliveryStatus === "DELIVERED"
               ? "Zdjęcia finalne wysłane"

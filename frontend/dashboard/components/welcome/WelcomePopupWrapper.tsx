@@ -18,7 +18,7 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
   const { refetch: refetchBalance } = useWalletBalance();
   const updateBusinessInfoMutation = useUpdateBusinessInfo();
   const [showPopup, setShowPopup] = useState(false);
-  const [welcomeBonusCents, setWelcomeBonusCents] = useState(700); // Default to 7 PLN (700 cents)
+  const [welcomeBonusCents, setWelcomeBonusCents] = useState(800); // Default to 8 PLN (800 cents)
   const [checking, setChecking] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [hasBeenClosed, setHasBeenClosed] = useState(false);
@@ -114,7 +114,7 @@ export const WelcomePopupWrapper = ({ onCreateGallery }: WelcomePopupWrapperProp
 
             const bonusAmount =
               retryWelcomeBonus.amountCents ??
-              (typeof retryWelcomeBonus.amount === "number" ? retryWelcomeBonus.amount * 100 : 700);
+              (typeof retryWelcomeBonus.amount === "number" ? retryWelcomeBonus.amount * 100 : 800);
             if (typeof bonusAmount === "number") {
               setWelcomeBonusCents(bonusAmount);
             }

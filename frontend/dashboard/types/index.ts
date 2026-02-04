@@ -48,9 +48,11 @@ export interface Gallery {
   };
   watermarkUrl?: string;
   watermarkPosition?: {
-    position: string;
-    scale: number;
+    position?: string;
+    pattern?: string;
+    scale?: number;
     opacity?: number;
+    [key: string]: unknown;
   };
   [key: string]: unknown;
 }

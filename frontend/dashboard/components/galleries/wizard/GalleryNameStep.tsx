@@ -1,3 +1,4 @@
+import { PostHogActions } from "@photocloud/posthog-types";
 import React from "react";
 
 import TypeformInput from "../../ui/input/TypeformInput";
@@ -37,6 +38,7 @@ export const GalleryNameStep = ({
         errorMessage={error}
         autoFocus
         maxLength={100}
+        data-ph-action={PostHogActions.gallery.nameInput}
       />
     </div>
   );

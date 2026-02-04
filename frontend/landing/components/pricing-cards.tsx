@@ -10,6 +10,7 @@ import { CheckCircleIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from 'react';
 import { getPublicDashboardUrl } from "@/lib/public-env";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 type Tab = "1m" | "3m" | "12m";
 
@@ -28,12 +29,18 @@ const PricingCards = () => {
   };
 
   return (
-    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Tab)} className="w-full flex flex-col items-center justify-center">
+    <Tabs value={activeTab} onValueChange={(v) => {
+      setActiveTab(v as Tab);
+      // TODO: Track duration tab change when PostHog is installed
+      // posthog.capture(PostHogActions.landing.pricingPageDurationTabChange, { landing_duration: v as Tab });
+    }} className="w-full flex flex-col items-center justify-center">
       <TabsList>
         <MotionTabTrigger
           value="1m"
           onClick={() => setActiveTab("1m")}
           className="relative"
+          data-ph-action={PostHogActions.landing.pricingPageDurationTabChange}
+          data-ph-property-landing_duration="1m"
         >
           {activeTab === "1m" && (
             <motion.div
@@ -51,6 +58,8 @@ const PricingCards = () => {
           value="3m"
           onClick={() => setActiveTab("3m")}
           className="relative"
+          data-ph-action={PostHogActions.landing.pricingPageDurationTabChange}
+          data-ph-property-landing_duration="3m"
         >
           {activeTab === "3m" && (
             <motion.div
@@ -68,6 +77,8 @@ const PricingCards = () => {
           value="12m"
           onClick={() => setActiveTab("12m")}
           className="relative"
+          data-ph-action={PostHogActions.landing.pricingPageDurationTabChange}
+          data-ph-property-landing_duration="12m"
         >
           {activeTab === "12m" && (
             <motion.div
@@ -89,13 +100,24 @@ const PricingCards = () => {
           return (
             <Card
               key={plan.name}
-              onMouseEnter={() => setHoveredPlan(plan.name)}
+              onMouseEnter={() => {
+                setHoveredPlan(plan.name);
+                // TODO: Track plan card hover when PostHog is installed
+                // posthog.capture(PostHogActions.landing.pricingPagePlanCardHover, { landing_plan_name: plan.name });
+              }}
               onMouseLeave={() => setHoveredPlan(null)}
+              onClick={() => {
+                // TODO: Track plan card click when PostHog is installed
+                // posthog.capture(PostHogActions.landing.pricingPagePlanCardClick, { landing_plan_name: plan.name, landing_duration: "3m" });
+              }}
               className={cn(
                 "flex flex-col w-full rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300",
                 "border-2",
                 isHovered ? "border-theme-primary" : "border-transparent"
               )}
+              data-ph-action={PostHogActions.landing.pricingPagePlanCardClick}
+              data-ph-property-landing_plan_name={plan.name}
+              data-ph-property-landing_duration="3m"
             >
               <CardHeader className={cn(
                 "border-b border-border/50 transition-colors duration-300",
@@ -174,6 +196,9 @@ const PricingCards = () => {
                         : "!bg-black !border !border-white text-white hover:!bg-white/90 hover:!text-black"
                     )
                   })}
+                  data-ph-action={PostHogActions.landing.pricingPageCtaClick}
+                  data-ph-property-landing_plan_name={plan.name}
+                  data-ph-property-landing_duration="1m"
                 >
                   {plan.btn.text}
                 </Link>
@@ -189,13 +214,24 @@ const PricingCards = () => {
           return (
             <Card
               key={plan.name}
-              onMouseEnter={() => setHoveredPlan(plan.name)}
+              onMouseEnter={() => {
+                setHoveredPlan(plan.name);
+                // TODO: Track plan card hover when PostHog is installed
+                // posthog.capture(PostHogActions.landing.pricingPagePlanCardHover, { landing_plan_name: plan.name });
+              }}
               onMouseLeave={() => setHoveredPlan(null)}
+              onClick={() => {
+                // TODO: Track plan card click when PostHog is installed
+                // posthog.capture(PostHogActions.landing.pricingPagePlanCardClick, { landing_plan_name: plan.name, landing_duration: "3m" });
+              }}
               className={cn(
                 "flex flex-col w-full rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300",
                 "border-2",
                 isHovered ? "border-theme-primary" : "border-transparent"
               )}
+              data-ph-action={PostHogActions.landing.pricingPagePlanCardClick}
+              data-ph-property-landing_plan_name={plan.name}
+              data-ph-property-landing_duration="3m"
             >
               <CardHeader className={cn(
                 "border-b border-border/50 transition-colors duration-300",
@@ -273,6 +309,9 @@ const PricingCards = () => {
                         : "bg-white text-foreground hover:bg-white/90"
                     )
                   })}
+                  data-ph-action={PostHogActions.landing.pricingPageCtaClick}
+                  data-ph-property-landing_plan_name={plan.name}
+                  data-ph-property-landing_duration="3m"
                 >
                   {plan.btn.text}
                 </Link>
@@ -288,13 +327,24 @@ const PricingCards = () => {
           return (
             <Card
               key={plan.name}
-              onMouseEnter={() => setHoveredPlan(plan.name)}
+              onMouseEnter={() => {
+                setHoveredPlan(plan.name);
+                // TODO: Track plan card hover when PostHog is installed
+                // posthog.capture(PostHogActions.landing.pricingPagePlanCardHover, { landing_plan_name: plan.name });
+              }}
               onMouseLeave={() => setHoveredPlan(null)}
+              onClick={() => {
+                // TODO: Track plan card click when PostHog is installed
+                // posthog.capture(PostHogActions.landing.pricingPagePlanCardClick, { landing_plan_name: plan.name, landing_duration: "12m" });
+              }}
               className={cn(
                 "flex flex-col w-full rounded-xl bg-card/50 backdrop-blur-sm transition-all duration-300",
                 "border-2",
                 isHovered ? "border-theme-primary" : "border-transparent"
               )}
+              data-ph-action={PostHogActions.landing.pricingPagePlanCardClick}
+              data-ph-property-landing_plan_name={plan.name}
+              data-ph-property-landing_duration="12m"
             >
               <CardHeader className={cn(
                 "border-b border-border/50 transition-colors duration-300",
@@ -372,6 +422,9 @@ const PricingCards = () => {
                         : "bg-white text-foreground hover:bg-white/90"
                     )
                   })}
+                  data-ph-action={PostHogActions.landing.pricingPageCtaClick}
+                  data-ph-property-landing_plan_name={plan.name}
+                  data-ph-property-landing_duration="12m"
                 >
                   {plan.btn.text}
                 </Link>

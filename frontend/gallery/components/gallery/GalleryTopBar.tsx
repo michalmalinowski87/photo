@@ -15,6 +15,7 @@ import { useGalleryStatus } from "@/hooks/useGallery";
 import { hapticFeedback } from "@/utils/hapticFeedback";
 import type { GridLayout } from "./VirtuosoGrid";
 import { OwnerPreviewInfoOverlay } from "./OwnerPreviewInfoOverlay";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 interface GalleryTopBarProps {
   onHelpClick?: () => void;
@@ -124,6 +125,8 @@ export function GalleryTopBar({
                 }`}
                 title="Układ standardowy"
                 aria-label="Układ standardowy"
+                data-ph-action={PostHogActions.galleryApp.layoutChange}
+                data-ph-property-gallery_app_layout="standard"
               >
                 <Grid3x3 className="w-5 h-5" />
               </button>
@@ -139,6 +142,8 @@ export function GalleryTopBar({
                 }`}
                 title="Układ kwadratowy"
                 aria-label="Układ kwadratowy"
+                data-ph-action={PostHogActions.galleryApp.layoutChange}
+                data-ph-property-gallery_app_layout="square"
               >
                 <LayoutGrid className="w-5 h-5" />
               </button>
@@ -154,6 +159,8 @@ export function GalleryTopBar({
                 }`}
                 title="Układ mozaikowy"
                 aria-label="Układ mozaikowy"
+                data-ph-action={PostHogActions.galleryApp.layoutChange}
+                data-ph-property-gallery_app_layout="marble"
               >
                 <LayoutDashboard className="w-5 h-5" />
               </button>
@@ -169,6 +176,8 @@ export function GalleryTopBar({
                 }`}
                 title="Otwórz galerię"
                 aria-label="Otwórz galerię"
+                data-ph-action={PostHogActions.galleryApp.layoutChange}
+                data-ph-property-gallery_app_layout="carousel"
               >
                 <LayoutPanelTop className="w-5 h-5" />
               </button>
@@ -185,6 +194,7 @@ export function GalleryTopBar({
               className="h-11 w-11 sm:h-9 sm:w-9 rounded transition-all flex items-center justify-center border-0 touch-manipulation bg-transparent text-gray-400 hover:text-gray-600"
               title="Pomoc"
               aria-label="Pomoc"
+              data-ph-action={PostHogActions.galleryApp.helpOverlayOpen}
             >
               <HelpCircle className="w-5 h-5" />
             </button>
@@ -204,6 +214,7 @@ export function GalleryTopBar({
                   ? "Wylogowanie jest wyłączone w trybie podglądu"
                   : "Wyloguj"
               }
+              data-ph-action={PostHogActions.galleryApp.clientLogoutClick}
             >
               Wyloguj
             </button>
@@ -219,6 +230,7 @@ export function GalleryTopBar({
                   : "Wyloguj"
               }
               aria-label="Wyloguj"
+              data-ph-action={PostHogActions.galleryApp.clientLogoutClick}
             >
               <LogOut className="w-5 h-5" />
             </button>

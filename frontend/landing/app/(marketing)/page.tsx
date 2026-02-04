@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { PLANS } from '@/utils/constants/pricing';
 import { getPublicDashboardUrl } from '@/lib/public-env';
+import { PostHogActions } from '@photocloud/posthog-types';
 
 // Note: revalidate cannot be exported from client components
 // ISR is handled at the layout level for this route group
@@ -15,6 +16,26 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState('who');
   const [selectedDuration, setSelectedDuration] = useState<Duration>('1m');
   const dashboardUrl = getPublicDashboardUrl();
+
+  // TODO: Track page view when PostHog is installed
+  // posthog.capture(PostHogActions.landing.homePageView);
+
+  // TODO: Track section views when PostHog is installed
+  // Use IntersectionObserver to track when sections enter viewport:
+  // - heroSectionView: when #hero-area enters viewport
+  // - aboutSectionView: when #about enters viewport
+  // - servicesSectionView: when #services enters viewport
+  // - pricingSectionView: when #pricing enters viewport
+  // - ctaSectionView: when #call-action enters viewport
+  // - testimonialsSectionView: when #clients enters viewport
+  // - footerSectionView: when footer enters viewport
+
+  // TODO: Track scroll depth when PostHog is installed
+  // Track scroll depth milestones (25%, 50%, 75%, 100%) using scroll event listener
+  // posthog.capture(PostHogActions.landing.scrollDepth25, { landing_scroll_depth: 25 });
+  // posthog.capture(PostHogActions.landing.scrollDepth50, { landing_scroll_depth: 50 });
+  // posthog.capture(PostHogActions.landing.scrollDepth75, { landing_scroll_depth: 75 });
+  // posthog.capture(PostHogActions.landing.scrollDepth100, { landing_scroll_depth: 100 });
 
   return (
     <>
@@ -31,7 +52,11 @@ export default function HomePage() {
                   dzięki intuicyjnym narzędziom, które dostosowują się do Twojego tempa.
                 </p>
                 <div className="button">
-                  <Link href={`${dashboardUrl}/sign-up`} className="btn primary-btn">
+                  <Link 
+                    href={`${dashboardUrl}/sign-up`} 
+                    className="btn primary-btn"
+                    data-ph-action={PostHogActions.landing.heroCtaClick}
+                  >
                     Rozpocznij za darmo
                   </Link>
                 </div>
@@ -83,6 +108,8 @@ export default function HomePage() {
                         className={`nav-link ${activeTab === "who" ? "active" : ""}`}
                         onClick={() => setActiveTab("who")}
                         type="button"
+                        data-ph-action={PostHogActions.landing.aboutTabClick}
+                        data-ph-property-landing_tab="who"
                       >
                         Kim Jesteśmy
                       </button>
@@ -90,6 +117,8 @@ export default function HomePage() {
                         className={`nav-link ${activeTab === "vision" ? "active" : ""}`}
                         onClick={() => setActiveTab("vision")}
                         type="button"
+                        data-ph-action={PostHogActions.landing.aboutTabClick}
+                        data-ph-property-landing_tab="vision"
                       >
                         Nasza Wizja
                       </button>
@@ -97,6 +126,8 @@ export default function HomePage() {
                         className={`nav-link ${activeTab === "history" ? "active" : ""}`}
                         onClick={() => setActiveTab("history")}
                         type="button"
+                        data-ph-action={PostHogActions.landing.aboutTabClick}
+                        data-ph-property-landing_tab="history"
                       >
                         Nasza Historia
                       </button>
@@ -253,6 +284,8 @@ export default function HomePage() {
                       onClick={() => setSelectedDuration(duration)}
                       type="button"
                       className={`btn duration-btn ${isSelected ? "primary-btn" : "primary-btn-outline"}`}
+                      data-ph-action={PostHogActions.landing.pricingDurationSelect}
+                      data-ph-property-landing_duration={duration}
                     >
                       {duration === "1m"
                         ? "1 MIESIĄC"
@@ -288,6 +321,9 @@ export default function HomePage() {
                       <Link
                         href={`${dashboardUrl}/sign-up`}
                         className={`btn pricing-btn ${isMiddle ? "primary-btn" : "primary-btn-outline"}`}
+                        data-ph-action={PostHogActions.landing.pricingCtaClick}
+                        data-ph-property-landing_plan_name={plan.name}
+                        data-ph-property-landing_duration={selectedDuration}
                       >
                         {index === 0 ? "Rozpocznij za darmo" : "Wybierz plan"}
                       </Link>
@@ -331,7 +367,11 @@ export default function HomePage() {
                   dalszej pracy.
                 </p>
                 <div className="light-rounded-buttons">
-                  <Link href={`${dashboardUrl}/sign-up`} className="btn primary-btn-outline">
+                  <Link 
+                    href={`${dashboardUrl}/sign-up`} 
+                    className="btn primary-btn-outline"
+                    data-ph-action={PostHogActions.landing.ctaButtonClick}
+                  >
                     Rozpocznij za darmo
                   </Link>
                 </div>

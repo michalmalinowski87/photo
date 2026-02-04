@@ -2,6 +2,7 @@
 
 import { OrderZipButtonWithStatus } from "./OrderZipButtonWithStatus";
 import type { DeliveredOrder } from "@/types/gallery";
+import { PostHogActions } from "@photocloud/posthog-types";
 
 interface DeliveredOrderCardProps {
   order: DeliveredOrder;
@@ -28,16 +29,29 @@ export function DeliveredOrderCard({
       <div className="flex items-center justify-between gap-4">
         <div
           className="flex-1 cursor-pointer"
-          onClick={() => onViewClick(order.orderId)}
+          onClick={() => {
+            // TODO: Add PostHog tracking for orderSelect when PostHog is installed
+            // posthog.capture('gallery_app:order_select', {
+            //   order_id: order.orderId,
+            //   order_number: order.orderNumber,
+            // });
+            onViewClick(order.orderId);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
+              // TODO: Add PostHog tracking for orderSelect when PostHog is installed
+              // posthog.capture('gallery_app:order_select', {
+              //   order_id: order.orderId,
+              //   order_number: order.orderNumber,
+              // });
               onViewClick(order.orderId);
             }
           }}
           tabIndex={0}
           role="button"
           aria-label={`Zobacz zamówienie ${order.orderNumber || order.orderId.slice(0, 8)}`}
+          data-ph-action={PostHogActions.galleryApp.orderSelect}
         >
           <p className="font-semibold">
             Zamówienie #{order.orderNumber || order.orderId.slice(0, 8)}
@@ -61,10 +75,16 @@ export function DeliveredOrderCard({
           <button
             onClick={(e) => {
               e.stopPropagation();
+              // TODO: Add PostHog tracking for orderSelect when PostHog is installed
+              // posthog.capture('gallery_app:order_select', {
+              //   order_id: order.orderId,
+              //   order_number: order.orderNumber,
+              // });
               onViewClick(order.orderId);
             }}
             className="btn-primary touch-manipulation min-h-[44px]"
             aria-label={`Zobacz zamówienie ${order.orderNumber || order.orderId.slice(0, 8)}`}
+            data-ph-action={PostHogActions.galleryApp.orderSelect}
           >
             Zobacz
           </button>
