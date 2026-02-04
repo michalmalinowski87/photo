@@ -54,7 +54,7 @@ const AppHeader = ({ onCreateGallery }: AppHeaderProps) => {
 
           <Link href="/" className="lg:hidden">
             <span className="text-xl font-bold text-photographer-accent dark:text-white">
-              PhotoCloud
+              PixiProof
             </span>
           </Link>
 

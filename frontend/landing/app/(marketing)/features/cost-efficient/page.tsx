@@ -65,7 +65,7 @@ const CostEfficientPage = () => {
           <LampContainer className="max-w-2xl mx-auto">
             <div className="flex flex-col items-center justify-center relative w-full text-center">
               <h2 className="bg-gradient-to-br from-neutral-300 to-neutral-500 py-4 bg-clip-text text-center text-4xl font-semibold font-heading tracking-tight text-transparent md:text-7xl mt-8">
-                Oszczędzaj z PhotoCloud
+                Oszczędzaj z PixiProof
               </h2>
               <p className="text-muted-foreground mt-6 max-w-lg mx-auto text-base md:text-lg">
                 Najlepszy stosunek jakości do ceny. Płać tylko za to, czego potrzebujesz, bez ukrytych kosztów.

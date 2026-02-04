@@ -137,7 +137,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						product_data: {
 							name: type === 'wallet_topup' ? 'Wallet Top-up' : `Gallery Payment`,
 							description: type === 'wallet_topup' 
-								? `Top up your PhotoCloud wallet` 
+								? `Top up your PixiProof wallet` 
 								: `Payment for gallery ${galleryId}`
 						},
 						unit_amount: amountCents

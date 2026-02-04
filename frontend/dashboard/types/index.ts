@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for the PhotoCloud dashboard
+ * Shared type definitions for the PixiProof dashboard
  * These types are used across multiple components and should be imported from here
  * instead of being redeclared in individual files.
  */

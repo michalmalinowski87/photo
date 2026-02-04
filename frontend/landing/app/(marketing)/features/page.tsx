@@ -53,7 +53,7 @@ export default function FeaturesPage() {
         <div className="flex flex-col items-center justify-center w-full py-8 max-w-xl mx-auto">
           <MagicBadge title="Funkcje" />
           <h1 className="text-center text-3xl md:text-5xl !leading-[1.1] font-medium font-heading text-foreground mt-6">
-            Wszystkie funkcje PhotoCloud
+            Wszystkie funkcje PixiProof
           </h1>
           <p className="mt-4 text-center text-lg text-muted-foreground max-w-lg">
             Odkryj wszystkie narzędzia, które pomogą Ci profesjonalnie zarządzać zdjęciami i klientami.
@@ -101,7 +101,7 @@ export default function FeaturesPage() {
             Gotowy, aby rozpocząć?
           </h2>
           <p className="text-muted-foreground mb-6">
-            Rozpocznij z 1 darmową galerią i odkryj wszystkie funkcje PhotoCloud.
+            Rozpocznij z 1 darmową galerią i odkryj wszystkie funkcje PixiProof.
           </p>
           <Button asChild size="lg">
             <Link 

@@ -134,9 +134,14 @@ export default function NavbarBusiness() {
             <div className="col-lg-12">
               <nav className="navbar navbar-expand-lg">
                 <Link className="navbar-brand" href="/">
-                  <span className="brand-text-white">
-                    PhotoCloud
-                  </span>
+                  <div className="flex flex-col items-start">
+                    <span className="brand-text-white">
+                      PixiProof
+                    </span>
+                    <span className="text-xs text-white/70 mt-0.5 font-medium tracking-wide">
+                      Your photos. Their stories.
+                    </span>
+                  </div>
                 </Link>
                 <button
                   className={`navbar-toggler ${isMenuOpen ? 'active' : ''}`}
@@ -250,13 +255,18 @@ export default function NavbarBusiness() {
         <div className="sidebar-content">
           <div className="sidebar-logo">
             <Link href="/">
-              <span className="brand-text-black">
-                PhotoCloud
-              </span>
+              <div className="flex flex-col items-start">
+                <span className="brand-text-black">
+                  PixiProof
+                </span>
+                <span className="text-xs text-gray-600 mt-0.5 font-medium tracking-wide">
+                  Your photos. Their stories.
+                </span>
+              </div>
             </Link>
           </div>
           <p className="text">
-            PhotoCloud to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.
+            PixiProof to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.
           </p>
           <div className="sidebar-menu">
             <h5 className="menu-title">Szybkie Linki</h5>

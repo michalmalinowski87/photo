@@ -19,7 +19,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Gallery - PhotoCloud",
+  title: "Gallery - PixiProof",
   description: "View and select your photos",
 };
 

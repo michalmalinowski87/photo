@@ -376,7 +376,7 @@ const AppSidebar = () => {
       <div className="py-10 flex justify-start">
         <Link href="/" prefetch={true} className="transition active:scale-[0.98]">
           <span className="text-2xl font-bold text-photographer-accent dark:text-white">
-            PhotoCloud
+            PixiProof
           </span>
         </Link>
       </div>

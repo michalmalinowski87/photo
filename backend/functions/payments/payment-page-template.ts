@@ -262,7 +262,7 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 </head>
 <body>
 	<div class="container">
-		<div class="logo">PhotoCloud</div>
+		<div class="logo">PixiProof</div>
 		<h1>${escapeHtml(title)}</h1>
 		<p class="message">${escapeHtml(message)}</p>
 		
@@ -276,7 +276,7 @@ export function generatePaymentPageHTML(options: PaymentPageOptions): string {
 		</div>
 		
 		<p class="redirect-message" id="redirectMessage" style="display: none;"></p>
-		<button class="redirect-button" id="redirectButton">Przekieruj do PhotoCloud</button>
+		<button class="redirect-button" id="redirectButton">Przekieruj do PixiProof</button>
 	</div>
 	
 	<script nonce="${nonce}">

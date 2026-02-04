@@ -4,7 +4,7 @@ export interface EmailTemplate {
 	html?: string;
 }
 
-// Design system colors matching PhotoCloud Landing + Dashboard (photographer palette)
+// Design system colors matching PixiProof Landing + Dashboard (photographer palette)
 const COLORS = {
 	brand: {
 		accent: '#8B6F57', // photographer-accent
@@ -92,7 +92,7 @@ function createEmailWrapper(content: string): string {
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="color-scheme" content="light">
 	<meta name="supported-color-schemes" content="light">
-	<title>PhotoCloud</title>
+	<title>PixiProof</title>
 	<style type="text/css">
 		/* Style auto-linked URLs to match theme (beige, no underline) */
 		/* Target all auto-linked URLs */
@@ -127,7 +127,7 @@ function createEmailWrapper(content: string): string {
 <body style="margin: 0; padding: 0; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: ${COLORS.surface.background};">
 	<!-- Preheader (hidden) -->
 	<div style="display: none; font-size: 1px; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
-		Powiadomienie od PhotoCloud.
+		Powiadomienie od PixiProof.
 	</div>
 	<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${COLORS.surface.background};">
 		<tr>
@@ -143,7 +143,7 @@ function createEmailWrapper(content: string): string {
 					<tr>
 						<td style="padding: 22px 40px; border-top: 1px solid ${COLORS.surface.border}; background-color: ${COLORS.surface.background};">
 							<p style="margin: 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-								Zespół PhotoCloud<br>
+								Zespół PixiProof<br>
 								<small style="color: ${COLORS.text.muted};">Ta wiadomość została wysłana automatycznie. Prosimy nie odpowiadać na ten e-mail.</small>
 							</p>
 						</td>
@@ -517,7 +517,7 @@ export function createPasswordResetEmail(galleryId: string, galleryName: string,
 	`;
 	
 	return {
-		subject: `Hasło do galerii PhotoCloud zostało zresetowane: ${galleryDisplayName}`,
+		subject: `Hasło do galerii PixiProof zostało zresetowane: ${galleryDisplayName}`,
 		text: `Witaj,\n\nHasło do galerii ${galleryDisplayName} zostało zresetowane przez Twojego fotografa.\n\nNowe hasło: ${password}\n\nDostęp do galerii: ${link}\n\nJeśli nie spodziewałeś się tej wiadomości, skontaktuj się ze swoim fotografem.`,
 		html: createEmailWrapper(content)
 	};
@@ -702,7 +702,7 @@ Chcielibyśmy serdecznie podziękować Ci za współpracę i za to, że wybrałe
 Będzie nam Cię brakować i mamy nadzieję, że kiedyś znów do nas wrócisz.
 
 Z wyrazami szacunku,
-Zespół PhotoCloud`,
+Zespół PixiProof`,
 		html: createEmailWrapper(content)
 	};
 }
@@ -733,7 +733,7 @@ Chcielibyśmy serdecznie podziękować Ci za współpracę i za to, że wybrałe
 Będzie nam Cię brakować i mamy nadzieję, że kiedyś znów do nas wrócisz. Jeśli w przyszłości będziesz chciał/chciała ponownie skorzystać z naszych usług, będziemy bardzo szczęśliwi, mogąc Cię powitać z powrotem.
 
 Z wyrazami szacunku,
-Zespół PhotoCloud`,
+Zespół PixiProof`,
 		html: createEmailWrapper(content)
 	};
 }
@@ -745,7 +745,7 @@ export function createInactivityReminderEmail(
 	senderEmail: string,
 	websiteUrl: string
 ): EmailTemplate {
-	const companyName = 'PhotoCloud';
+	const companyName = 'PixiProof';
 	const supportEmail = senderEmail;
 	const websiteUrlNormalized = websiteUrl.replace(/\/+$/, '');
 	
@@ -799,7 +799,7 @@ export function createInactivityFinalWarningEmail(
 		hour: '2-digit',
 		minute: '2-digit'
 	});
-	const companyName = 'PhotoCloud';
+	const companyName = 'PixiProof';
 	const supportEmail = senderEmail;
 	const websiteUrlNormalized = websiteUrl.replace(/\/+$/, '');
 
@@ -865,7 +865,7 @@ export function createExportEmail(galleryDisplayName: string, photoCount: number
 }
 
 /**
- * Creates a verification code email template matching PhotoCloud design system
+ * Creates a verification code email template matching PixiProof design system
  * This is used for Cognito email verification codes
  * Note: The {####} placeholder will be replaced by Cognito with the actual code
  */
@@ -876,7 +876,7 @@ export function createVerificationCodeEmail(codePlaceholder: string = '{####}'):
 		<div style="background-color: ${COLORS.surface.elevated}; border: 2px dashed ${COLORS.brand.accent}; border-radius: 12px; padding: 24px; margin: 32px 0; text-align: center;">
 			<p style="margin: 0; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: ${COLORS.brand.accent}; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">${codePlaceholder}</p>
 		</div>
-		${createSmallText('Ten kod jest ważny przez 15 minut. Jeśli nie rejestrowałeś się w PhotoCloud, możesz zignorować tę wiadomość.')}
+		${createSmallText('Ten kod jest ważny przez 15 minut. Jeśli nie rejestrowałeś się w PixiProof, możesz zignorować tę wiadomość.')}
 	`;
 	
 	return createEmailWrapper(content);
@@ -894,7 +894,7 @@ export function createWelcomeEmail(params: {
 	const landingUrl = params.landingUrl.replace(/\/+$/, '');
 	const privacyUrl = params.privacyUrl || `${landingUrl}/privacy`;
 	const termsUrl = params.termsUrl || `${landingUrl}/terms`;
-	const companyName = params.companyName?.trim() || 'PhotoCloud';
+	const companyName = params.companyName?.trim() || 'PixiProof';
 	const isReferred = params.isReferred === true;
 
 	const referralDiscountInfo = isReferred
@@ -909,7 +909,7 @@ export function createWelcomeEmail(params: {
 		: '';
 
 	const content = `
-		${createHeading("Witaj w PhotoCloud!", 2)}
+		${createHeading("Witaj w PixiProof!", 2)}
 		${createParagraph("Twoje konto zostało pomyślnie utworzone. Cieszymy się, że jesteś z nami!")}
 		${createParagraph("W podziękowaniu zostawiliśmy w Twoim portfelu mały prezent powitalny — wystarczy na pierwszą galerię. To nasz sposób, by powiedzieć: Dziękujemy za Twój czas!")}
 		${referralDiscountInfo}
@@ -927,7 +927,7 @@ export function createWelcomeEmail(params: {
 		${createHeading("Dokumenty i ochrona danych", 2)}
 		<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; border-radius: 12px; padding: 20px; margin: 20px 0;">
 			<p style="margin: 0 0 12px 0; font-size: 15px; color: ${COLORS.text.body}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-				Administratorem danych jest <strong>PhotoCloud</strong>. Szczegóły znajdziesz w dokumentach poniżej.
+				Administratorem danych jest <strong>PixiProof</strong>. Szczegóły znajdziesz w dokumentach poniżej.
 			</p>
 			<p style="margin: 0; font-size: 14px; line-height: 1.8; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
 				<a href="${escapeHtml(termsUrl)}" style="color: ${COLORS.brand.accent}; text-decoration: none; font-weight: 600;">Regulamin</a><br>
@@ -941,9 +941,9 @@ export function createWelcomeEmail(params: {
 		: '';
 
 	return {
-		subject: 'Witamy w PhotoCloud — pierwsze kroki',
+		subject: 'Witamy w PixiProof — pierwsze kroki',
 		text:
-			`Witaj w PhotoCloud!\n\n` +
+			`Witaj w PixiProof!\n\n` +
 			`Twoje konto zostało pomyślnie utworzone.\n\n` +
 			`W podziękowaniu zostawiliśmy w Twoim portfelu mały prezent powitalny — wystarczy na pierwszą galerię. To nasz sposób, by powiedzieć: Dziękujemy za Twój czas!\n` +
 			textReferralInfo +
@@ -952,7 +952,7 @@ export function createWelcomeEmail(params: {
 			`2) Utwórz pierwszą galerię\n` +
 			`3) Wyślij klientowi link\n\n` +
 			`Panel: ${dashboardUrl}/login\n\n` +
-			`Administratorem danych jest PhotoCloud.\n` +
+			`Administratorem danych jest PixiProof.\n` +
 			`Regulamin: ${termsUrl}\n` +
 			`Polityka Prywatności/RODO: ${privacyUrl}\n`,
 		html: createEmailWrapper(content),
@@ -978,7 +978,7 @@ export function createReferralProgramInfoEmail(params: { dashboardUrl: string; i
 	const content = `
 		${createHeading("Zaproszenia i nagrody", 2)}
 		${referredUserInfo}
-		${createParagraph("W programie „Zaproszenia i nagrody” zapraszasz znajomych do PhotoCloud. Gdy zaproszona osoba opłaci pierwszą galerię lub doładuje portfel, otrzymasz kod rabatowy. Swój unikalny link i kod znajdziesz w panelu po opłaceniu przez Ciebie pierwszej galerii lub doładowaniu portfela używając STRIPE.")}
+		${createParagraph("W programie „Zaproszenia i nagrody” zapraszasz znajomych do PixiProof. Gdy zaproszona osoba opłaci pierwszą galerię lub doładuje portfel, otrzymasz kod rabatowy. Swój unikalny link i kod znajdziesz w panelu po opłaceniu przez Ciebie pierwszej galerii lub doładowaniu portfela używając STRIPE.")}
 		${createHeading("Tabela nagród", 2)}
 		<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-collapse: collapse; margin: 16px 0; font-size: 15px; color: ${COLORS.text.body}; font-family: Outfit, Inter, sans-serif;">
 			<thead>
@@ -1064,7 +1064,7 @@ export function createEligibilityEmail(params: {
 		${createButton('Otwórz panel', dashboardUrl.replace(/\/+$/, ''), 'primary')}
 	`;
 	return {
-		subject: 'Twój link zaproszenia — PhotoCloud',
+		subject: 'Twój link zaproszenia — PixiProof',
 		text: `Twój link zaproszenia jest gotowy.\n\nKod: ${referralCode}\nLink: ${referralLink}\n\nPanel: ${dashboardUrl}\n`,
 		html: createEmailWrapper(content),
 	};
@@ -1107,10 +1107,10 @@ export function createReferrerRewardEmail(params: {
 		${createButton("Otwórz panel", dashboardUrl, "primary")}
 	`;
 	const subject = isWallet
-		? 'Otrzymałeś doładowanie portfela za 20 PLN — PhotoCloud'
+		? 'Otrzymałeś doładowanie portfela za 20 PLN — PixiProof'
 		: params.rewardType === 'free_small'
-			? 'Otrzymałeś nagrodę: darmowa galeria 1 GB — PhotoCloud'
-			: `Otrzymałeś kod rabatowy ${label} — PhotoCloud`;
+			? 'Otrzymałeś nagrodę: darmowa galeria 1 GB — PixiProof'
+			: `Otrzymałeś kod rabatowy ${label} — PixiProof`;
 	const textBody = isWallet
     ? `Świetna robota! Otrzymałeś doładowanie portfela za 20 PLN* (nagroda za 10. zaproszenie). * 20 PLN – jednorazowy bonus; środki bezzwrotne do wykorzystania wyłącznie w naszym systemie. Sprawdź saldo w panelu.\n\n${dashboardUrl}\n`
     : params.rewardType === "free_small"

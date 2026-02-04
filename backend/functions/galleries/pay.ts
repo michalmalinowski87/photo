@@ -48,8 +48,8 @@ function calculateStripeFee(amountCents: number): number {
 /**
  * Calculate amount to charge user including Stripe fees
  * User pays: baseAmount + Stripe fees
- * PhotoCloud receives: baseAmount (after Stripe deducts fees)
- * @param baseAmountCents Base amount in cents (what PhotoCloud should receive)
+ * PixiProof receives: baseAmount (after Stripe deducts fees)
+ * @param baseAmountCents Base amount in cents (what PixiProof should receive)
  * @returns Amount to charge user in cents (including Stripe fees)
  */
 function calculateAmountWithStripeFee(baseAmountCents: number): number {
@@ -1642,7 +1642,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		const cancelUrl = `${apiUrl}/payments/cancel?session_id={CHECKOUT_SESSION_ID}&transactionId=${transactionId}&userId=${ownerId}`;
 
 		// USER-CENTRIC FIX: Add Stripe fees to gallery payments (user pays fees)
-		// For wallet top-ups, PhotoCloud covers fees (handled in checkoutCreate.ts)
+		// For wallet top-ups, PixiProof covers fees (handled in checkoutCreate.ts)
 		// For gallery payments, user pays fees (we add fees to the amount charged)
 		// IMPORTANT: For upgrades, calculate fee on price difference; for regular payments, calculate on full plan price
 		// Example: Upgrade from 7 PLN to 10 PLN (3 PLN difference), Stripe should charge 3 PLN + fee calculated on 3 PLN
@@ -1684,8 +1684,8 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 						product_data: {
 							name: `Gallery: ${galleryId}`,
 							description: walletAmountCents > 0
-								? `PhotoCloud gallery payment - ${plan} plan (${(galleryPriceCents / 100).toFixed(2)} PLN total, ${(walletAmountCents / 100).toFixed(2)} PLN from wallet)`
-								: `PhotoCloud gallery payment - ${plan} plan`
+								? `PixiProof gallery payment - ${plan} plan (${(galleryPriceCents / 100).toFixed(2)} PLN total, ${(walletAmountCents / 100).toFixed(2)} PLN from wallet)`
+								: `PixiProof gallery payment - ${plan} plan`
 						},
 						unit_amount: stripeAmountCents
 					},

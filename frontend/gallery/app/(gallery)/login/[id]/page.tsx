@@ -38,7 +38,7 @@ function LoginScreen() {
     setLoginPageLayout(info.loginPageLayout || null);
     // Update document title for better SEO
     if (info.galleryName && typeof document !== "undefined") {
-      document.title = `${info.galleryName} - PhotoCloud`;
+      document.title = `${info.galleryName} - PixiProof`;
     }
   }, []);
 

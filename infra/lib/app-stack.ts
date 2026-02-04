@@ -33,12 +33,12 @@ interface AppStackProps extends StackProps {
 }
 
 /**
- * Creates a verification code email template matching PhotoCloud design system
- * Uses the same colors, fonts, and structure as other PhotoCloud emails
+ * Creates a verification code email template matching PixiProof design system
+ * Uses the same colors, fonts, and structure as other PixiProof emails
  * The {####} placeholder will be replaced by Cognito with the actual code
  */
 function createVerificationCodeEmailTemplate(): string {
-	// PhotoCloud design system colors (matching backend/lib/src/email.ts)
+	// PixiProof design system colors (matching backend/lib/src/email.ts)
 	const COLORS = {
 		brand: {
 			accent: '#8B6F57', // photographer-accent
@@ -65,12 +65,12 @@ function createVerificationCodeEmailTemplate(): string {
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="color-scheme" content="light">
 	<meta name="supported-color-schemes" content="light">
-	<title>PhotoCloud</title>
+	<title>PixiProof</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: ${COLORS.surface.background};">
 	<!-- Preheader (hidden) -->
 	<div style="display: none; font-size: 1px; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
-		Powiadomienie od PhotoCloud.
+		Powiadomienie od PixiProof.
 	</div>
 	<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${COLORS.surface.background};">
 		<tr>
@@ -84,14 +84,14 @@ function createVerificationCodeEmailTemplate(): string {
 							<div style="background-color: ${COLORS.surface.elevated}; border: 2px dashed ${COLORS.brand.accent}; border-radius: 12px; padding: 24px; margin: 32px 0; text-align: center;">
 								<p style="margin: 0; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: ${COLORS.brand.accent}; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">{####}</p>
 							</div>
-							<p style="margin: 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">Ten kod jest ważny przez 15 minut. Jeśli nie rejestrowałeś się w PhotoCloud, możesz zignorować tę wiadomość.</p>
+							<p style="margin: 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">Ten kod jest ważny przez 15 minut. Jeśli nie rejestrowałeś się w PixiProof, możesz zignorować tę wiadomość.</p>
 						</td>
 					</tr>
 					<!-- Footer -->
 					<tr>
 						<td style="padding: 22px 40px; border-top: 1px solid ${COLORS.surface.border}; background-color: ${COLORS.surface.background};">
 							<p style="margin: 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-								Zespół PhotoCloud<br>
+								Zespół PixiProof<br>
 								<small style="color: ${COLORS.text.muted};">Ta wiadomość została wysłana automatycznie. Prosimy nie odpowiadać na ten e-mail.</small>
 							</p>
 						</td>
@@ -105,12 +105,12 @@ function createVerificationCodeEmailTemplate(): string {
 }
 
 /**
- * Creates an invitation email template for AdminCreateUser matching PhotoCloud design system
- * Uses the same colors, fonts, and structure as other PhotoCloud emails
+ * Creates an invitation email template for AdminCreateUser matching PixiProof design system
+ * Uses the same colors, fonts, and structure as other PixiProof emails
  * Placeholders: {username} for username, {####} for temporary password
  */
 function createInvitationEmailTemplate(): string {
-	// PhotoCloud design system colors (matching backend/lib/src/email.ts)
+	// PixiProof design system colors (matching backend/lib/src/email.ts)
 	const COLORS = {
 		brand: {
 			accent: '#8B6F57', // photographer-accent
@@ -137,12 +137,12 @@ function createInvitationEmailTemplate(): string {
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="color-scheme" content="light">
 	<meta name="supported-color-schemes" content="light">
-	<title>PhotoCloud</title>
+	<title>PixiProof</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: ${COLORS.surface.background};">
 	<!-- Preheader (hidden) -->
 	<div style="display: none; font-size: 1px; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
-		Powiadomienie od PhotoCloud.
+		Powiadomienie od PixiProof.
 	</div>
 	<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${COLORS.surface.background};">
 		<tr>
@@ -151,7 +151,7 @@ function createInvitationEmailTemplate(): string {
 					<!-- Content -->
 					<tr>
 						<td style="padding: 32px 40px;">
-							<h2 style="margin: 0 0 14px 0; font-size: 22px; font-weight: 800; color: ${COLORS.text.heading}; line-height: 1.25; letter-spacing: -0.02em; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">Witaj w PhotoCloud!</h2>
+							<h2 style="margin: 0 0 14px 0; font-size: 22px; font-weight: 800; color: ${COLORS.text.heading}; line-height: 1.25; letter-spacing: -0.02em; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">Witaj w PixiProof!</h2>
 							<p style="margin: 0 0 16px 0; font-size: 16px; color: ${COLORS.text.body}; line-height: 1.7; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">Twoje konto zostało utworzone. Poniżej znajdziesz dane potrzebne do pierwszego logowania:</p>
 							<div style="background-color: ${COLORS.surface.elevated}; border: 1px solid ${COLORS.surface.border}; border-radius: 12px; padding: 20px; margin: 24px 0;">
 								<p style="margin: 0 0 12px 0; font-size: 14px; color: ${COLORS.text.muted}; font-weight: 800; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">Nazwa użytkownika:</p>
@@ -169,7 +169,7 @@ function createInvitationEmailTemplate(): string {
 					<tr>
 						<td style="padding: 22px 40px; border-top: 1px solid ${COLORS.surface.border}; background-color: ${COLORS.surface.background};">
 							<p style="margin: 0; font-size: 13px; color: ${COLORS.text.muted}; line-height: 1.6; font-family: Outfit, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-								Zespół PhotoCloud<br>
+								Zespół PixiProof<br>
 								<small style="color: ${COLORS.text.muted};">Ta wiadomość została wysłana automatycznie. Prosimy nie odpowiadać na ten e-mail.</small>
 							</p>
 						</td>
@@ -407,8 +407,8 @@ export class AppStack extends Stack {
 			// According to AWS docs: "Amazon Cognito sends confirmation codes to the user attribute 
 			// in the AutoVerifiedAttributes property of your user pool"
 			// This doesn't auto-verify the email - it tells Cognito to send verification codes TO the email
-		// Customize email verification templates (for signup) - styled HTML email matching PhotoCloud design system
-		userVerificationEmailSubject: 'Weryfikuj swoje konto PhotoCloud',
+		// Customize email verification templates (for signup) - styled HTML email matching PixiProof design system
+		userVerificationEmailSubject: 'Zweryfikuj swoje konto PixiProof',
 		userVerificationEmailBody: createVerificationCodeEmailTemplate()
 		});
 		
@@ -420,13 +420,13 @@ export class AppStack extends Stack {
 		cfnUserPool.addPropertyOverride('AutoVerifiedAttributes', ['email']);
 		
 		// Override verification email template - this affects both signup verification and password reset
-		// Styled HTML email template matching PhotoCloud design system
-		cfnUserPool.addPropertyOverride('VerificationMessageTemplate.EmailSubject', 'Weryfikuj swoje konto PhotoCloud');
+		// Styled HTML email template matching PixiProof design system
+		cfnUserPool.addPropertyOverride('VerificationMessageTemplate.EmailSubject', 'Zweryfikuj swoje konto PixiProof');
 		cfnUserPool.addPropertyOverride('VerificationMessageTemplate.EmailMessage', createVerificationCodeEmailTemplate());
 		
 		// Override invitation email template (for AdminCreateUser)
 		// This is sent when admins create users - includes temporary password
-		cfnUserPool.addPropertyOverride('AdminCreateUserConfig.InviteMessageTemplate.EmailSubject', 'Witaj w PhotoCloud');
+		cfnUserPool.addPropertyOverride('AdminCreateUserConfig.InviteMessageTemplate.EmailSubject', 'Witaj w PixiProof');
 		cfnUserPool.addPropertyOverride('AdminCreateUserConfig.InviteMessageTemplate.EmailMessage', createInvitationEmailTemplate());
 		
 		// Note: PostAuthentication Lambda trigger will be added later to avoid circular dependencies

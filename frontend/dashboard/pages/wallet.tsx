@@ -9,6 +9,7 @@ import { WalletTopUpSection } from "../components/wallet/WalletTopUpSection";
 import { useWalletBalance, useWalletTransactions } from "../hooks/queries/useWallet";
 import { formatPrice } from "../lib/format-price";
 import { queryKeys } from "../lib/react-query";
+import { getPublicLandingUrl } from "../lib/public-env";
 
 interface Transaction {
   transactionId?: string;
@@ -33,6 +34,8 @@ export const getServerSideProps: GetServerSideProps = () => {
 
 export default function Wallet() {
   const queryClient = useQueryClient();
+  const landingUrl = getPublicLandingUrl().replace(/\/$/, "");
+  const privacyUrl = `${landingUrl}/privacy`;
 
   // React Query hooks
   const { data: walletBalanceData, isLoading: loading, error: balanceError } = useWalletBalance();
@@ -179,6 +182,31 @@ export default function Wallet() {
             quickAmounts={[2000, 5000, 10000, 20000]}
             showCustomInput={true}
           />
+
+          {/* RODO Information Clause for wallet top-up */}
+          <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              <strong>Informacja o przetwarzaniu danych osobowych (RODO):</strong> Administratorem Twoich danych osobowych jest podmiot wskazany w{" "}
+              <a
+                href={privacyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-semibold hover:opacity-80 underline"
+              >
+                Polityce Prywatności
+              </a>
+              . Przetwarzamy dane związane z doładowaniem portfela w celu realizacji usługi (art. 6 ust. 1 lit. b RODO). Szczegóły dotyczące przetwarzania danych, w tym Twoich praw, znajdziesz w{" "}
+              <a
+                href={privacyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary font-semibold hover:opacity-80 underline"
+              >
+                Polityce Prywatności
+              </a>
+              .
+            </p>
+          </div>
         </div>
       )}
 

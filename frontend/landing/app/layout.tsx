@@ -15,8 +15,8 @@ import { cn, generateMetadata, inter } from "@/utils";
 import { WebPCompatibilityCheck } from "@shared-auth/webp-check";
 
 export const metadata = generateMetadata({
-  title: "PhotoCloud - Prosty sposób na udostępnianie zdjęć klientom",
-  description: "PhotoCloud to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.",
+  title: "PixiProof - Prosty sposób na udostępnianie zdjęć klientom",
+  description: "PixiProof to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.",
 });
 
 export default function RootLayout({

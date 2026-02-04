@@ -52,9 +52,13 @@ const Navbar = () => {
             <Link 
               href="/#home"
               data-ph-action={PostHogActions.landing.logoClick}
+              className="flex flex-col items-start"
             >
               <span className="text-lg font-bold font-heading !leading-none text-foreground">
-                PhotoCloud
+                PixiProof
+              </span>
+              <span className="text-xs text-muted-foreground mt-0.5 font-medium tracking-wide">
+                Your photos. Their stories.
               </span>
             </Link>
 

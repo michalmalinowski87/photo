@@ -1,6 +1,6 @@
 const RESERVED_SUBDOMAINS = new Set([
   "dashboard",
-  "photocloud",
+  "pixiproof",
   "api",
   "auth",
   "www",

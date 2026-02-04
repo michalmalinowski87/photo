@@ -86,7 +86,7 @@ export function GalleryNotFound({ galleryId }: GalleryNotFoundProps) {
         {/* Thank you message */}
         <div className="space-y-2">
           <p className="text-base text-gray-600">
-            Dziękujemy za korzystanie z <span className="font-semibold">PhotoCloud</span>.
+            Dziękujemy za korzystanie z <span className="font-semibold">PixiProof</span>.
           </p>
           <p className="text-sm text-gray-500">
             Jeśli masz pytania lub potrzebujesz pomocy, skontaktuj się z właścicielem galerii.

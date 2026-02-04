@@ -170,7 +170,7 @@ export async function getStripePaymentMethods(): Promise<string[]> {
 }
 
 /**
- * Creates a Stripe Checkout session with PhotoCloud branding and Polish payment methods
+ * Creates a Stripe Checkout session with PixiProof branding and Polish payment methods
  * @param stripe - Stripe instance
  * @param params - Checkout session parameters
  * @returns Stripe Checkout session
@@ -201,7 +201,7 @@ export async function createStripeCheckoutSession(
 			background_color: '#FFFAF5',  // photographer-background
 			button_color: '#7A5F4A',       // photographer-accentHover (darker for contrast)
 			border_style: 'rounded',
-			display_name: 'PhotoCloud'
+			display_name: 'PixiProof'
 		}
 	});
 }

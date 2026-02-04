@@ -316,9 +316,12 @@ export default function SignUp() {
       {loading && <FullPageLoading text="Tworzymy Twoje konto..." />}
       <div className="flex flex-col items-start max-w-sm md:max-w-lg mx-auto h-dvh overflow-x-visible overflow-y-auto pt-4 md:pt-20 px-4 md:px-8 relative">
         <div className="flex items-center w-full py-10 border-b border-border/80">
-          <Link href={getPublicLandingUrl()} className="flex items-center gap-x-3">
+          <Link href={getPublicLandingUrl()} className="flex flex-col items-start gap-1">
             <span className="text-2xl font-bold" style={{ color: "#465fff" }}>
-              PhotoCloud
+              PixiProof
+            </span>
+            <span className="text-xs text-gray-600 font-medium tracking-wide">
+              Your photos. Their stories.
             </span>
           </Link>
         </div>
@@ -429,6 +432,31 @@ export default function SignUp() {
             </div>
 
             <div className="space-y-3">
+              {/* RODO Information Clause */}
+              <div className="rounded-lg border border-border bg-card p-3 mb-2">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <strong>Informacja o przetwarzaniu danych osobowych (RODO):</strong> Administratorem Twoich danych osobowych (adres e-mail) jest podmiot wskazany w{" "}
+                  <a
+                    href={privacyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary font-semibold hover:opacity-80 underline"
+                  >
+                    Polityce Prywatności
+                  </a>
+                  . Przetwarzamy Twój adres e-mail w celu realizacji usługi (art. 6 ust. 1 lit. b RODO). Szczegóły dotyczące przetwarzania danych, w tym Twoich praw, znajdziesz w{" "}
+                  <a
+                    href={privacyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary font-semibold hover:opacity-80 underline"
+                  >
+                    Polityce Prywatności
+                  </a>
+                  .
+                </p>
+              </div>
+
               <div className="rounded-lg border border-border bg-card p-4">
                 <div className="flex flex-col gap-3">
                   <label className="flex items-start gap-3 cursor-pointer select-none">

@@ -81,9 +81,12 @@ export default function ForgotPassword() {
   return (
     <div className="flex flex-col items-start max-w-sm md:max-w-lg mx-auto h-dvh overflow-hidden pt-4 md:pt-20 px-4 md:px-8">
       <div className="flex items-center w-full py-10 border-b border-border/80">
-        <Link href={getPublicLandingUrl()} className="flex items-center gap-x-3">
+        <Link href={getPublicLandingUrl()} className="flex flex-col items-start gap-1">
           <span className="text-2xl font-bold" style={{ color: "#465fff" }}>
-            PhotoCloud
+            PixiProof
+          </span>
+          <span className="text-xs text-gray-600 font-medium tracking-wide">
+            Your photos. Their stories.
           </span>
         </Link>
       </div>

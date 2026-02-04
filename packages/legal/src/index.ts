@@ -44,9 +44,9 @@ export const LEGAL_DOC_VERSIONS = {
 
 export function getLegalDocMeta(id: LegalDocId): LegalDocMeta {
   if (id === 'privacy') {
-    return { id, title: 'Polityka Prywatności PhotoCloud', version: LEGAL_DOC_VERSIONS.privacy, updatedAt: '2026-02' };
+    return { id, title: 'Polityka Prywatności PixiProof', version: LEGAL_DOC_VERSIONS.privacy, updatedAt: '2026-02' };
   }
-  return { id, title: 'Regulamin Usługi PhotoCloud', version: LEGAL_DOC_VERSIONS.terms, updatedAt: '2026-02' };
+  return { id, title: 'Regulamin Usługi PixiProof', version: LEGAL_DOC_VERSIONS.terms, updatedAt: '2026-02' };
 }
 
 /**
@@ -103,7 +103,7 @@ export function getLegalPlainText(id: LegalDocId): string {
 }
 
 const PRIVACY_HTML = `
-  <h1>Polityka Prywatności PhotoCloud</h1>
+  <h1>Polityka Prywatności PixiProof</h1>
   <div class="legal-meta">
     <span><strong>Stan:</strong> {{legal_document_publication_date}}</span>
     <span><strong>Wersja:</strong> ${LEGAL_DOC_VERSIONS.privacy}</span>
@@ -115,7 +115,7 @@ const PRIVACY_HTML = `
   NIP: <strong>{{company_tax_id}}</strong><br/>
   Adres siedziby: <strong>{{company_address}}</strong><br/>
   E-mail kontaktowy: <strong>{{company_email}}</strong><br/>
-  (dalej: „Administrator”, „my” lub „PhotoCloud”)</p>
+  (dalej: „Administrator”, „my” lub „PixiProof”)</p>
 
   <h2>2. Jak możesz się z nami skontaktować w sprawach ochrony danych?</h2>
   <p>Wszelkie pytania dotyczące przetwarzania Twoich danych osobowych możesz kierować na adres e-mail: <strong>{{company_email}}</strong> lub listownie na adres siedziby.</p>
@@ -134,7 +134,7 @@ const PRIVACY_HTML = `
     <tbody>
       <tr>
         <td>Założenie i prowadzenie Konta fotografa</td>
-        <td>Imię, nazwisko / nazwa firmy, e-mail, numer telefonu, dane logowania</td>
+        <td>Adres e-mail, dane logowania</td>
         <td>Art. 6 ust. 1 lit. b) – wykonanie umowy</td>
         <td>Do czasu usunięcia Konta + 6 lat (roszczenia)</td>
       </tr>
@@ -146,19 +146,19 @@ const PRIVACY_HTML = `
       </tr>
       <tr>
         <td>Doładowanie i prowadzenie salda Portfela</td>
-        <td>Kwota doładowania, historia transakcji, dane płatnicze (przetwarzane przez Stripe/Przelewy24)</td>
+        <td>Kwota doładowania, historia transakcji. Dane płatnicze (numer karty, CVV itp.) przetwarzane są wyłącznie przez operatora płatności (Stripe/Przelewy24) – nie przechowujemy ich w naszym systemie.</td>
         <td>Art. 6 ust. 1 lit. b) + lit. c) (obowiązek podatkowy)</td>
         <td>Do czasu usunięcia Konta + 5 lat (prawo podatkowe)</td>
       </tr>
       <tr>
         <td>Realizacja płatności za Galerie i Portfel</td>
-        <td>Dane transakcyjne, dane płatnicze (przetwarzane przez operatora płatności)</td>
+        <td>Dane transakcyjne (kwota, data, status). Dane płatnicze (numer karty, CVV itp.) przetwarzane są wyłącznie przez operatora płatności – nie przechowujemy ich w naszym systemie.</td>
         <td>Art. 6 ust. 1 lit. b) + lit. c)</td>
         <td>5 lat od końca roku podatkowego</td>
       </tr>
       <tr>
         <td>Wysyłanie powiadomień systemowych i e-maili transakcyjnych</td>
-        <td>Adres e-mail, imię/nazwa użytkownika</td>
+        <td>Adres e-mail</td>
         <td>Art. 6 ust. 1 lit. b) + lit. f)</td>
         <td>Do czasu usunięcia Konta lub wycofania zgody</td>
       </tr>
@@ -170,7 +170,7 @@ const PRIVACY_HTML = `
       </tr>
       <tr>
         <td>Marketing bezpośredni własnych usług (opcjonalnie)</td>
-        <td>Adres e-mail, imię/nazwa użytkownika</td>
+        <td>Adres e-mail</td>
         <td>Art. 6 ust. 1 lit. f) (prawnie uzasadniony interes) lub lit. a) (zgoda)</td>
         <td>Do czasu skutecznego sprzeciwu lub wycofania zgody</td>
       </tr>
@@ -237,21 +237,21 @@ const PRIVACY_HTML = `
 `;
 
 const TERMS_HTML = `
-  <h1>Regulamin Usługi PhotoCloud</h1>
+  <h1>Regulamin Usługi PixiProof</h1>
   <div class="legal-meta">
     <span><strong>Stan:</strong> {{legal_document_publication_date}}</span>
     <span><strong>Wersja:</strong> ${LEGAL_DOC_VERSIONS.terms}</span>
   </div>
 
   <h2>1. Postanowienia ogólne</h2>
-  <p>1.1. Usługodawcą jest <strong>{{company_name}}</strong>, prowadząca działalność gospodarczą pod nazwą <strong>{{company_name}}</strong>, NIP <strong>{{company_tax_id}}</strong>, adres siedziby <strong>{{company_address}}</strong>, adres e-mail: <strong>{{company_email}}</strong> (dalej: „Usługodawca” lub „PhotoCloud”).</p>
-  <p>1.2. Usługa PhotoCloud (dalej: „Usługa”) polega na udostępnianiu platformy internetowej umożliwiającej fotografom tworzenie prywatnych galerii zdjęć online, udostępnianie ich klientom, selekcję zdjęć przez klientów oraz pobieranie plików.</p>
+  <p>1.1. Usługodawcą jest <strong>{{company_name}}</strong>, prowadząca działalność gospodarczą pod nazwą <strong>{{company_name}}</strong>, NIP <strong>{{company_tax_id}}</strong>, adres siedziby <strong>{{company_address}}</strong>, adres e-mail: <strong>{{company_email}}</strong> (dalej: „Usługodawca” lub „PixiProof”).</p>
+  <p>1.2. Usługa PixiProof (dalej: „Usługa”) polega na udostępnianiu platformy internetowej umożliwiającej fotografom tworzenie prywatnych galerii zdjęć online, udostępnianie ich klientom, selekcję zdjęć przez klientów oraz pobieranie plików.</p>
   <p>1.3. Korzystanie z Usługi wymaga akceptacji niniejszego Regulaminu oraz Polityki Prywatności.</p>
   <p>1.4. Usługa jest skierowana zarówno do przedsiębiorców, jak i konsumentów. Postanowienia dotyczące konsumentów stosuje się wyłącznie do osób fizycznych dokonujących czynności prawnej niezwiązanej bezpośrednio z ich działalnością gospodarczą lub zawodową (zob. art. 22¹ Kodeksu cywilnego).</p>
 
   <h2>2. Definicje</h2>
   <ul>
-    <li><strong>Konto</strong> – konto użytkownika w systemie PhotoCloud przypisane do fotografa.</li>
+    <li><strong>Konto</strong> – konto użytkownika w systemie PixiProof przypisane do fotografa.</li>
     <li><strong>Galeria</strong> – prywatna przestrzeń online utworzona przez fotografa, zawierająca zdjęcia.</li>
     <li><strong>Klient</strong> – osoba, której fotograf udostępnia dostęp do Galerii (nie musi posiadać Konta).</li>
     <li><strong>Opłata</strong> – jednorazowa opłata za utworzenie Galerii w wybranym Pakiecie.</li>
@@ -281,7 +281,7 @@ const TERMS_HTML = `
   <h2>5. Dostęp klienta do Galerii</h2>
   <p>5.1. Dostęp do Galerii jest zabezpieczony hasłem lub linkiem prywatnym.</p>
   <p>5.2. Klient może przeglądać, wybierać i pobierać zdjęcia zgodnie z uprawnieniami nadanymi przez fotografa.</p>
-  <p>5.3. PhotoCloud nie pośredniczy w relacjach handlowych między fotografem a klientem.</p>
+  <p>5.3. PixiProof nie pośredniczy w relacjach handlowych między fotografem a klientem.</p>
 
   <h2>6. Płatności i Portfel</h2>
   <p>6.1. Opłaty za Galerie są jednorazowe i pobierane z góry.</p>

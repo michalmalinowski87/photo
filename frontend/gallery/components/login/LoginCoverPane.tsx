@@ -3,7 +3,7 @@
 import React, { memo } from "react";
 import { apiFetch, type ApiError } from "@/lib/api";
 import { CoverAreaLoading } from "@/components/ui/CoverAreaLoading";
-import { PhotoCloudMark } from "@/components/branding/PhotoCloudMark";
+import { PixiProofMark } from "@/components/branding/PixiProofMark";
 import { getQuoteForGallery, getRotatingQuoteForGallery } from "@/lib/quotes";
 
 export interface GalleryPublicInfo {
@@ -90,7 +90,7 @@ export const LoginCoverPane = memo(function LoginCoverPane({
         if (status === 404) {
           onGalleryRemoved?.();
         }
-        // If we can't load public info (and it's not 404), assume no cover and show PhotoCloud fallback.
+        // If we can't load public info (and it's not 404), assume no cover and show PixiProof fallback.
         setPublicInfo({
           galleryName: null,
           coverPhotoUrl: null,
@@ -312,7 +312,7 @@ export const LoginCoverPane = memo(function LoginCoverPane({
         ) : (
           <div className="absolute inset-0 flex items-center">
             <div className="w-full max-w-xl px-10 text-center">
-              <PhotoCloudMark variant="full" className="mx-auto" />
+              <PixiProofMark variant="full" className="mx-auto" showSlogan={true} />
 
               {quote ? (
                 <figure className="mt-10 mx-auto max-w-lg">

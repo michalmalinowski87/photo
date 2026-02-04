@@ -1,5 +1,5 @@
 /**
- * Unified development tools for PhotoCloud dashboard
+ * Unified development tools for PixiProof dashboard
  * Exposes console commands for testing and development purposes
  * Only available in development mode
  */
@@ -85,7 +85,7 @@ Example:
     help: () => {
       // eslint-disable-next-line no-console
       console.log(`
-🧪 PhotoCloud Development Tools
+🧪 PixiProof Development Tools
 
 Available commands:
   devTools.help()              - Show this help message
@@ -119,7 +119,7 @@ Quick Examples:
 
   // Show welcome message
   // eslint-disable-next-line no-console
-  console.log(`%c🧪 PhotoCloud Dev Tools`, "color: #10b981; font-weight: bold; font-size: 14px;");
+  console.log(`%c🧪 PixiProof Dev Tools`, "color: #10b981; font-weight: bold; font-size: 14px;");
   // eslint-disable-next-line no-console
   console.log(
     "Run %cdevTools.help()%c for available commands.",

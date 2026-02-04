@@ -89,7 +89,7 @@ export function WebPCompatibilityCheck({ children }: { children: React.ReactNode
 						Twoja przeglądarka nie jest obsługiwana
 					</h1>
 					<p style={{ fontSize: '18px', color: '#374151', marginBottom: '24px' }}>
-						PhotoCloud wymaga nowoczesnej przeglądarki z obsługą formatu WebP do wyświetlania zdjęć.
+						PixiProof wymaga nowoczesnej przeglądarki z obsługą formatu WebP do wyświetlania zdjęć.
 					</p>
 					<div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '24px', marginBottom: '24px' }}>
 						<h2 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', marginBottom: '16px' }}>
@@ -136,7 +136,7 @@ export function WebPCompatibilityCheck({ children }: { children: React.ReactNode
 					</div>
 					<div style={{ fontSize: '14px', color: '#4b5563' }}>
 						<p style={{ marginBottom: '8px' }}>
-							Zaktualizuj swoją przeglądarkę do najnowszej wersji, aby korzystać z PhotoCloud.
+							Zaktualizuj swoją przeglądarkę do najnowszej wersji, aby korzystać z PixiProof.
 						</p>
 						<p>
 							WebP jest nowoczesnym formatem obrazów, który zapewnia lepszą jakość przy mniejszym rozmiarze plików.

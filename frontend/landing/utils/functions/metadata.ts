@@ -11,8 +11,8 @@ type GenerateMetadataOptions = {
 
 export const generateMetadata = (options: GenerateMetadataOptions = {}): Metadata => {
   const {
-    title = "PhotoCloud - Prosty sposób na udostępnianie zdjęć klientom",
-    description = "PhotoCloud to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.",
+    title = "PixiProof - Prosty sposób na udostępnianie zdjęć klientom",
+    description = "PixiProof to prosty i opłacalny sposób na udostępnianie zdjęć klientom. Łączymy fotografów z ich klientami w bezpieczny i wygodny sposób.",
     image = "/thumbnail.png",
     icons = [
       {
@@ -40,10 +40,10 @@ export const generateMetadata = (options: GenerateMetadataOptions = {}): Metadat
     metadataBase: new URL(APP_DOMAIN),
     title,
     description,
-    keywords: ["PhotoCloud", "fotografia", "udostępnianie zdjęć", "galerie zdjęć", "proofing", "fotograf", "klient"],
-    authors: [{ name: "PhotoCloud" }],
-    creator: "PhotoCloud",
-    publisher: "PhotoCloud",
+    keywords: ["PixiProof", "fotografia", "udostępnianie zdjęć", "galerie zdjęć", "proofing", "fotograf", "klient"],
+    authors: [{ name: "PixiProof" }],
+    creator: "PixiProof",
+    publisher: "PixiProof",
     formatDetection: {
       email: false,
       address: false,
@@ -54,7 +54,7 @@ export const generateMetadata = (options: GenerateMetadataOptions = {}): Metadat
       type: "website",
       locale: "pl_PL",
       url: APP_DOMAIN,
-      siteName: "PhotoCloud",
+      siteName: "PixiProof",
       title,
       description,
       ...(fullImageUrl && {

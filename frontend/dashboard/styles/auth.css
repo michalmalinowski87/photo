@@ -152,7 +152,7 @@ html:has(.auth-layout) body {
   color: #2d241f !important; /* var(--dark-2) */
 }
 
-/* PhotoCloud brand styling - larger with less padding/margin */
+/* PixiProof brand styling - larger with less padding/margin */
 .auth-layout a span.text-xl,
 .auth-layout a span[style*="#465fff"],
 .auth-layout a span[style*="color"] {
@@ -162,14 +162,14 @@ html:has(.auth-layout) body {
   line-height: 1.2 !important;
 }
 
-/* Reduce padding on PhotoCloud container */
+/* Reduce padding on PixiProof container */
 .auth-layout .flex.items-center.w-full.border-b {
   padding-top: 0.5rem !important; /* py-8 (2rem) -> py-2 (0.5rem) */
   padding-bottom: 0.5rem !important;
   margin-bottom: 0 !important;
 }
 
-/* Reduce gap in PhotoCloud link */
+/* Reduce gap in PixiProof link */
 .auth-layout a.flex.items-center.gap-x-2 {
   gap: 0.25rem !important; /* gap-x-2 (0.5rem) -> smaller */
 }

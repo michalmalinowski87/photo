@@ -1,6 +1,42 @@
+"use client";
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
+interface CompanyConfig {
+  company_name: string;
+  company_tax_id: string;
+  company_address: string;
+  company_email: string;
+}
 
 export default function FooterBusiness() {
+  const [company, setCompany] = useState<CompanyConfig | null>(null);
+
+  useEffect(() => {
+    const fetchCompany = async () => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+        if (!apiUrl) return;
+        
+        const res = await fetch(`${apiUrl}/config`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!res.ok) return;
+        
+        const data = await res.json() as { company?: CompanyConfig };
+        if (data.company) {
+          setCompany(data.company);
+        }
+      } catch {
+        // Silently fail - footer will show without company data
+      }
+    };
+
+    void fetchCompany();
+  }, []);
+
   return (
     <footer className="footer-area footer-eleven">
       <div className="footer-top">
@@ -11,17 +47,40 @@ export default function FooterBusiness() {
                 <div className="footer-widget f-about">
                   <div className="logo">
                     <Link href="/">
-                      <span className="brand-text-black">PhotoCloud</span>
+                      <div className="flex flex-col items-start">
+                        <span className="brand-text-black">PixiProof</span>
+                        <span className="text-xs text-gray-600 mt-0.5 font-medium tracking-wide">
+                          Your photos. Their stories.
+                        </span>
+                      </div>
                     </Link>
                   </div>
                   <p>
-                    PhotoCloud – proofing, który wreszcie pracuje dla Ciebie. Szybkie, bezpieczne
+                    PixiProof – proofing, który wreszcie pracuje dla Ciebie. Szybkie, bezpieczne
                     galerie, automatyczne notyfikacje i zero comiesięcznych opłat. Płacisz tylko za
                     to, co naprawdę wykorzystujesz.
                   </p>
                   <p className="copyright-text">
-                    <span>© 2026 PhotoCloud.</span> Wszelkie prawa zastrzeżone.
+                    <span>© 2026 PixiProof.</span> Wszelkie prawa zastrzeżone.
                   </p>
+                  {company && (
+                    <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+                      <p className="mb-1">
+                        <strong>{company.company_name}</strong>
+                        {company.company_tax_id !== "TBA" && `, NIP: ${company.company_tax_id}`}
+                      </p>
+                      {company.company_address !== "TBA" && (
+                        <p className="mb-1">{company.company_address}</p>
+                      )}
+                      {company.company_email !== "TBA" && (
+                        <p>
+                          <a href={`mailto:${company.company_email}`} className="hover:underline">
+                            {company.company_email}
+                          </a>
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="col-lg-2 col-md-6 col-12">
@@ -64,7 +123,11 @@ export default function FooterBusiness() {
                       <Link href="/privacy">Polityka Prywatności</Link>
                     </li>
                     <li>
-                      <a href="mailto:[email kontaktowy]">Kontakt</a>
+                      {company && company.company_email !== "TBA" ? (
+                        <a href={`mailto:${company.company_email}`}>Kontakt</a>
+                      ) : (
+                        <Link href="/privacy">Kontakt</Link>
+                      )}
                     </li>
                   </ul>
                 </div>

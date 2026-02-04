@@ -31,7 +31,7 @@ export const WelcomePopup = ({
             </div>
           </div>
           <h2 className="text-2xl md:text-3xl font-bold mb-2 text-photographer-accentDark dark:text-photographer-accentLight">
-            Witamy w PhotoCloud!
+            Witamy w PixiProof!
           </h2>
           <p className="text-base md:text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
             Jesteśmy zachwyceni, że dołączyłeś do naszej społeczności fotografów!

@@ -23,13 +23,13 @@ const faqCategories = [
     items: [
       {
         id: "1",
-        question: "Jak zacząć korzystać z PhotoCloud?",
+        question: "Jak zacząć korzystać z PixiProof?",
         answer: "Rozpoczęcie jest niezwykle proste! Załóż darmowe konto w kilka sekund i od razu otrzymasz swoją pierwszą galerię o pojemności 1 GB na 3 miesiące, bez żadnych zobowiązań. Po zalogowaniu możesz natychmiast tworzyć i przesyłać zdjęcia, odkrywając intuicyjny workflow."
       },
       {
         id: "2",
         question: "Czy pierwsza galeria jest naprawdę darmowa?",
-        answer: "Absolutnie tak! Twoja pierwsza galeria (1 GB na 3 miesiące) jest całkowicie darmowa i nie wymaga podawania danych karty płatniczej. To nasz sposób, byś mógł bez żadnego ryzyka przetestować wszystkie funkcje platformy i zobaczyć, jak PhotoCloud pracuje dla Ciebie."
+        answer: "Absolutnie tak! Twoja pierwsza galeria (1 GB na 3 miesiące) jest całkowicie darmowa i nie wymaga podawania danych karty płatniczej. To nasz sposób, byś mógł bez żadnego ryzyka przetestować wszystkie funkcje platformy i zobaczyć, jak PixiProof pracuje dla Ciebie."
       },
       {
         id: "3",
@@ -39,7 +39,7 @@ const faqCategories = [
       {
         id: "4",
         question: "Jakie formaty zdjęć są obsługiwane i czy mogę pobrać oryginalne pliki?",
-        answer: "PhotoCloud obsługuje wszystkie popularne formaty zdjęć (JPEG, PNG itp.), automatycznie optymalizując je do szybkiego wyświetlania. Tak, masz pełną swobodę – możesz pobrać wybrane lub wszystkie oryginalne pliki w formie skompresowanego archiwum ZIP po zakończeniu selekcji przez klienta."
+        answer: "PixiProof obsługuje wszystkie popularne formaty zdjęć (JPEG, PNG itp.), automatycznie optymalizując je do szybkiego wyświetlania. Tak, masz pełną swobodę – możesz pobrać wybrane lub wszystkie oryginalne pliki w formie skompresowanego archiwum ZIP po zakończeniu selekcji przez klienta."
       },
     ]
   },
@@ -50,8 +50,8 @@ const faqCategories = [
     items: [
       {
         id: "5",
-        question: "Ile kosztuje PhotoCloud i jak działają płatności?",
-        answer: "W PhotoCloud nie ma miesięcznych subskrypcji – płacisz tylko za każdą galerię, co ułatwia wliczenie kosztu w Twoje usługi. Oferujemy elastyczne pakiety danych i okresy ważności, które dopasowują się do Twoich indywidualnych potrzeb, zapewniając pełną przejrzystość cen."
+        question: "Ile kosztuje PixiProof i jak działają płatności?",
+        answer: "W PixiProof nie ma miesięcznych subskrypcji – płacisz tylko za każdą galerię, co ułatwia wliczenie kosztu w Twoje usługi. Oferujemy elastyczne pakiety danych i okresy ważności, które dopasowują się do Twoich indywidualnych potrzeb, zapewniając pełną przejrzystość cen."
       },
       {
         id: "6",
@@ -109,7 +109,7 @@ const HelpPage = () => {
                 Centrum pomocy
               </h1>
               <p className="text-base md:text-lg mt-6 text-center text-muted-foreground">
-                Znajdź odpowiedzi na swoje pytania i dowiedz się, jak rozpocząć korzystanie z PhotoCloud.
+                Znajdź odpowiedzi na swoje pytania i dowiedz się, jak rozpocząć korzystanie z PixiProof.
               </p>
             </div>
           </AnimationContainer>
@@ -126,7 +126,7 @@ const HelpPage = () => {
                   <h6>FAQ</h6>
                   <h2 className="fw-bold">Najczęściej zadawane pytania</h2>
                   <p>
-                    Masz pytania? Przygotowaliśmy odpowiedzi na najważniejsze zagadnienia, aby rozwiać wątpliwości i pokazać, jak proste jest korzystanie z PhotoCloud.
+                    Masz pytania? Przygotowaliśmy odpowiedzi na najważniejsze zagadnienia, aby rozwiać wątpliwości i pokazać, jak proste jest korzystanie z PixiProof.
                   </p>
                 </div>
               </div>
@@ -176,7 +176,7 @@ const HelpPage = () => {
                   <h6>Przewodnik</h6>
                   <h2 className="fw-bold">Jak rozpocząć?</h2>
                   <p>
-                    Wykonaj te 6 prostych kroków, aby rozpocząć korzystanie z PhotoCloud i udostępniać zdjęcia klientom w profesjonalny sposób.
+                    Wykonaj te 6 prostych kroków, aby rozpocząć korzystanie z PixiProof i udostępniać zdjęcia klientom w profesjonalny sposób.
                   </p>
                 </div>
               </div>
@@ -213,9 +213,9 @@ const HelpPage = () => {
             <div className="col-xxl-6 col-xl-7 col-lg-8 col-md-9">
               <AnimationContainer delay={0.1}>
                 <div className="inner-content">
-                  <h2 className="text-white mb-4">Gotowy, by rozpocząć swoją przygodę z PhotoCloud?</h2>
+                  <h2 className="text-white mb-4">Gotowy, by rozpocząć swoją przygodę z PixiProof?</h2>
                   <p className="text-white text-lg">
-                    Dołącz do grona zadowolonych fotografów, którzy cenią prostotę, szybkość i kontrolę. Skorzystaj z darmowej galerii już dziś i przekonaj się, jak PhotoCloud usprawni Twoją pracę.
+                    Dołącz do grona zadowolonych fotografów, którzy cenią prostotę, szybkość i kontrolę. Skorzystaj z darmowej galerii już dziś i przekonaj się, jak PixiProof usprawni Twoją pracę.
                   </p>
                   <div className="light-rounded-buttons">
                     <Link 

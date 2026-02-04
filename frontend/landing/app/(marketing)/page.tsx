@@ -45,7 +45,10 @@ export default function HomePage() {
           <div className="row align-items-center">
             <div className="col-lg-6 col-md-12 col-12">
               <div className="header-content">
-                <h1>PhotoCloud - Intuicyjne udostępnianie zdjęć, które działa dla Ciebie</h1>
+                <h1>PixiProof - Intuicyjne udostępnianie zdjęć, które działa dla Ciebie</h1>
+                <p className="text-base text-gray-600 mt-2 font-medium italic">
+                  Your photos. Their stories.
+                </p>
                 <p>
                   Zaprojektowany przez fotografów z ponad 15-letnim doświadczeniem, z naciskiem na
                   prostotę i funkcjonalność. Oszczędzaj czas i poprawiaj interakcje z klientami
@@ -66,7 +69,7 @@ export default function HomePage() {
               <div className="header-image">
                 <Image
                   src="/assets/images/header/hero-image.jpg"
-                  alt="PhotoCloud Dashboard Preview"
+                  alt="PixiProof Dashboard Preview"
                   width={800}
                   height={600}
                   priority
@@ -136,7 +139,7 @@ export default function HomePage() {
                   <div className="tab-content" id="nav-tabContent">
                     <div className={`tab-pane fade ${activeTab === "who" ? "show active" : ""}`}>
                       <p>
-                        PhotoCloud to platforma stworzona przez fotografów z ponad 15-letnim
+                        PixiProof to platforma stworzona przez fotografów z ponad 15-letnim
                         doświadczeniem w branży. Rozumiemy wyzwania związane z udostępnianiem i
                         zarządzaniem zdjęciami dla klientów, ponieważ sami je przeżywaliśmy. Nasza
                         misja to dostarczenie intuicyjnego, bezpiecznego i efektywnego rozwiązania,
@@ -150,7 +153,7 @@ export default function HomePage() {
                         Naszą wizją jest stworzenie wiodącej platformy, która rewolucjonizuje
                         sposób, w jaki fotografowie współpracują z klientami. Chcemy, aby
                         udostępnianie zdjęć było przyjemnością, a zarządzanie galeriami – dziecinnie
-                        proste. Dążymy do tego, by PhotoCloud był synonimem innowacyjności,
+                        proste. Dążymy do tego, by PixiProof był synonimem innowacyjności,
                         niezawodności i pełnej kontroli dla każdego fotografa, niezależnie od skali
                         jego działalności. Nasz cel to nie tylko dostarczanie narzędzi, ale
                         budowanie społeczności i wspieranie rozwoju branży fotograficznej.
@@ -160,12 +163,12 @@ export default function HomePage() {
                       className={`tab-pane fade ${activeTab === "history" ? "show active" : ""}`}
                     >
                       <p>
-                        PhotoCloud narodził się z potrzeby – z frustracji związanej z przestarzałymi
+                        PixiProof narodził się z potrzeby – z frustracji związanej z przestarzałymi
                         i skomplikowanymi metodami udostępniania zdjęć. Grupa fotografów z ponad
                         15-letnim doświadczeniem w branży połączyła siły z deweloperami, aby
                         stworzyć platformę, która odpowiada na realne problemy branży. Od początku
                         kierowała nami jedna zasada: prostota i funkcjonalność.
-                        Dziś, PhotoCloud to dojrzałe narzędzie, które stale
+                        Dziś, PixiProof to dojrzałe narzędzie, które stale
                         ewoluuje, dzięki ciągłemu słuchaniu potrzeb naszych użytkowników i adaptacji
                         do dynamicznie zmieniającego się rynku.
                       </p>
@@ -356,7 +359,7 @@ export default function HomePage() {
           <div className="row justify-content-center">
             <div className="col-xxl-6 col-xl-7 col-lg-8 col-md-9">
               <div className="inner-content">
-                <h2>Wypróbuj PhotoCloud – nic nie ryzykujesz</h2>
+                <h2>Wypróbuj PixiProof – nic nie ryzykujesz</h2>
                 <p>
                   Pierwsza galeria 1 GB na 3 miesiące jest całkowicie za darmo, bez karty i bez
                   abonamentu. To nasz sposób na podziękowanie za 15 minut twojego czasu na spróbowanie
@@ -392,7 +395,7 @@ export default function HomePage() {
                   <h2 className="fw-bold">Kto nam zaufał</h2>
                   <p>
                     Jesteśmy dumni z zaufania, jakim obdarzyło nas wielu profesjonalnych fotografów.
-                    Przeczytaj opinie tych, którzy już korzystają z PhotoCloud.
+                    Przeczytaj opinie tych, którzy już korzystają z PixiProof.
                   </p>
                 </div>
               </div>
@@ -405,7 +408,7 @@ export default function HomePage() {
               <div className="testimonials-grid">
                 {[
                   {
-                    text: "PhotoCloud zmienił sposób, w jaki udostępniam zdjęcia klientom. Prosty, bezpieczny i bardzo opłacalny!",
+                    text: "PixiProof zmienił sposób, w jaki udostępniam zdjęcia klientom. Prosty, bezpieczny i bardzo opłacalny!",
                     name: "Anna Kowalska",
                     role: "Fotograf ślubny",
                   },
@@ -430,7 +433,7 @@ export default function HomePage() {
                     role: "Fotograf produktowy",
                   },
                   {
-                    text: "PhotoCloud to game changer. Oszczędzam czas i pieniądze, a klienci są zadowoleni.",
+                    text: "PixiProof to game changer. Oszczędzam czas i pieniądze, a klienci są zadowoleni.",
                     name: "Tomasz Lewandowski",
                     role: "Fotograf komercyjny",
                   },

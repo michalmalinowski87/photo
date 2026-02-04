@@ -56,7 +56,7 @@ export function GalleryRemoved() {
 
         <div className="space-y-2">
           <p className="text-base text-gray-600">
-            Dziękujemy za korzystanie z <span className="font-semibold">PhotoCloud</span>.
+            Dziękujemy za korzystanie z <span className="font-semibold">PixiProof</span>.
           </p>
         </div>
 

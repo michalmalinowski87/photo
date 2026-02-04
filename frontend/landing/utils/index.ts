@@ -1,5 +1,5 @@
 // constants
-import { APP_DOMAIN, APP_NAME } from "./constants/site";
+import { APP_DOMAIN } from "./constants/site";
 import { aeonik, inter } from "./constants/fonts";
 import { NAV_LINKS } from "./nav-links";
 import { COMPANIES, PROCESS, REVIEWS, DEFAULT_AVATAR_URL, PAGINATION_LIMIT } from "./constants/misc";
@@ -12,7 +12,6 @@ import { generateMetadata } from "./functions/metadata";
 export {
   // constants
   APP_DOMAIN,
-  APP_NAME,
   NAV_LINKS,
   aeonik,
   inter,
