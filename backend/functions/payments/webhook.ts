@@ -6,7 +6,7 @@ const Stripe = require('stripe');
 import { getTransaction, updateTransactionStatus, createTransaction } from '../../lib/src/transactions';
 import { PRICING_PLANS } from '../../lib/src/pricing';
 import { cancelExpirySchedule, createExpirySchedule, getScheduleName } from '../../lib/src/expiry-scheduler';
-import { getStripeSecretKey } from '../../lib/src/stripe-config';
+import { getStripeSecretKey, getStripeWebhookSecret } from '../../lib/src/stripe-config';
 import {
 	markEarnedCodeUsed,
 	markUserReferralDiscountUsed,
@@ -812,6 +812,226 @@ async function creditWallet(userId: string, amountCents: number, txnId: string, 
 	return newBalance;
 }
 
+async function handleStripeEvent(
+	stripeEvent: any,
+	stripe: any,
+	logger: any,
+	envProc: any,
+	walletsTable: string,
+	ledgerTable: string,
+	paymentsTable: string | undefined,
+	galleriesTable: string | undefined,
+	ordersTable: string | undefined
+) {
+	logger.info('Processing Stripe event', {
+		eventType: stripeEvent.type,
+		eventId: stripeEvent.id,
+	});
+
+	if (stripeEvent.type === 'checkout.session.completed') {
+		const session = stripeEvent.data.object;
+
+		logger.info('Received checkout.session.completed event', {
+			sessionId: session.id,
+			paymentStatus: session.payment_status,
+			status: session.status,
+			amountTotal: session.amount_total,
+			hasMetadata: !!session.metadata,
+			metadataType: session.metadata?.type,
+			metadataUserId: session.metadata?.userId,
+			metadataTransactionId: session.metadata?.transactionId,
+		});
+
+		// Only process if payment is actually complete
+		if (session.payment_status === 'paid' && session.status === 'complete') {
+			logger.info('Processing checkout.session.completed - payment is paid and complete', {
+				sessionId: session.id,
+			});
+			await processCheckoutSession(session, stripe, logger, walletsTable, ledgerTable, paymentsTable, galleriesTable, ordersTable, envProc);
+			logger.info('Successfully processed checkout.session.completed', {
+				sessionId: session.id,
+			});
+		} else {
+			logger.warn('Checkout session is not paid/complete, skipping', {
+				sessionId: session.id,
+				paymentStatus: session.payment_status,
+				status: session.status,
+			});
+		}
+	} else if (stripeEvent.type === 'checkout.session.expired') {
+		const session = stripeEvent.data.object;
+		const userId = session.metadata?.userId;
+		const transactionId = session.metadata?.transactionId;
+
+		if (transactionId && userId) {
+			try {
+				const transaction = await getTransaction(userId, transactionId);
+				if (transaction && transaction.status === 'UNPAID') {
+					await updateTransactionStatus(userId, transactionId, 'CANCELED');
+					logger.info('Transaction status updated to CANCELED (session expired)', { transactionId, userId });
+
+					// USER-CENTRIC FIX: Clear paymentLocked flag when session expires
+					// No rollback needed - gallery plan is only updated after successful payment
+					if (transaction.galleryId && galleriesTable) {
+						try {
+							await ddb.send(new UpdateCommand({
+								TableName: galleriesTable,
+								Key: { galleryId: transaction.galleryId },
+								UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
+								ExpressionAttributeValues: {
+									':u': new Date().toISOString()
+								}
+							}));
+							logger.info('Cleared paymentLocked flag after session expiry', { galleryId: transaction.galleryId });
+						} catch (unlockErr: any) {
+							logger.warn('Failed to clear paymentLocked flag on session expiry', {
+								error: unlockErr.message,
+								galleryId: transaction.galleryId
+							});
+						}
+					}
+				}
+			} catch (txnErr: any) {
+				logger.error('Failed to update transaction status (expired)', {
+					error: txnErr.message,
+					transactionId,
+					userId
+				});
+			}
+		}
+	} else if (stripeEvent.type === 'payment_intent.payment_failed') {
+		const paymentIntent = stripeEvent.data.object;
+		const userId = paymentIntent.metadata?.userId;
+		const transactionId = paymentIntent.metadata?.transactionId;
+
+		if (transactionId && userId) {
+			try {
+				const transaction = await getTransaction(userId, transactionId);
+				if (transaction && transaction.status === 'UNPAID') {
+					await updateTransactionStatus(userId, transactionId, 'FAILED');
+					logger.info('Transaction status updated to FAILED', { transactionId, userId });
+
+					// USER-CENTRIC FIX: Clear paymentLocked flag when payment fails
+					// No rollback needed - gallery plan is only updated after successful payment
+					if (transaction.galleryId && galleriesTable) {
+						try {
+							await ddb.send(new UpdateCommand({
+								TableName: galleriesTable,
+								Key: { galleryId: transaction.galleryId },
+								UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
+								ExpressionAttributeValues: {
+									':u': new Date().toISOString()
+								}
+							}));
+							logger.info('Cleared paymentLocked flag after payment failure', { galleryId: transaction.galleryId });
+						} catch (unlockErr: any) {
+							logger.warn('Failed to clear paymentLocked flag on payment failure', {
+								error: unlockErr.message,
+								galleryId: transaction.galleryId
+							});
+						}
+					}
+				}
+			} catch (txnErr: any) {
+				logger.error('Failed to update transaction status (failed)', {
+					error: txnErr.message,
+					transactionId,
+					userId
+				});
+			}
+		}
+	} else if (stripeEvent.type === 'payment_intent.canceled') {
+		const paymentIntent = stripeEvent.data.object;
+		const userId = paymentIntent.metadata?.userId;
+		const transactionId = paymentIntent.metadata?.transactionId;
+
+		if (transactionId && userId) {
+			try {
+				const transaction = await getTransaction(userId, transactionId);
+				if (transaction && transaction.status === 'UNPAID') {
+					await updateTransactionStatus(userId, transactionId, 'CANCELED');
+					logger.info('Transaction status updated to CANCELED (payment intent canceled)', { transactionId, userId });
+
+					// USER-CENTRIC FIX: Clear paymentLocked flag when payment is cancelled
+					// No rollback needed - gallery plan is only updated after successful payment
+					if (transaction.galleryId && galleriesTable) {
+						try {
+							await ddb.send(new UpdateCommand({
+								TableName: galleriesTable,
+								Key: { galleryId: transaction.galleryId },
+								UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
+								ExpressionAttributeValues: {
+									':u': new Date().toISOString()
+								}
+							}));
+							logger.info('Cleared paymentLocked flag after payment cancellation', { galleryId: transaction.galleryId });
+						} catch (unlockErr: any) {
+							logger.warn('Failed to clear paymentLocked flag on payment cancellation', {
+								error: unlockErr.message,
+								galleryId: transaction.galleryId
+							});
+						}
+					}
+				}
+			} catch (txnErr: any) {
+				logger.error('Failed to update transaction status (canceled)', {
+					error: txnErr.message,
+					transactionId,
+					userId
+				});
+			}
+		}
+	} else if (stripeEvent.type === 'payment_intent.succeeded') {
+		// payment_intent.succeeded - payment intent was successfully created
+		// This is a confirmation event, but checkout.session.completed is the authoritative event
+		// We can use this for tracking/logging purposes
+		const paymentIntent = stripeEvent.data.object;
+		logger.info('Payment intent succeeded', {
+			paymentIntentId: paymentIntent.id,
+			amount: paymentIntent.amount,
+			currency: paymentIntent.currency,
+			status: paymentIntent.status,
+		});
+		// Don't process here - wait for checkout.session.completed for the authoritative processing
+	} else if (stripeEvent.type === 'charge.succeeded') {
+		// charge.succeeded - charge was successfully created
+		// This is a confirmation event, but checkout.session.completed is the authoritative event
+		const charge = stripeEvent.data.object;
+		logger.info('Charge succeeded', {
+			chargeId: charge.id,
+			amount: charge.amount,
+			currency: charge.currency,
+			paymentIntentId: charge.payment_intent,
+			status: charge.status,
+		});
+		// Don't process here - wait for checkout.session.completed for the authoritative processing
+	} else if (stripeEvent.type === 'charge.updated') {
+		// charge.updated - charge was updated (e.g., balance_transaction added)
+		// This is informational, checkout.session.completed is the authoritative event
+		const charge = stripeEvent.data.object;
+		logger.info('Charge updated', {
+			chargeId: charge.id,
+			amount: charge.amount,
+			currency: charge.currency,
+			paymentIntentId: charge.payment_intent,
+			status: charge.status,
+			hasBalanceTransaction: !!charge.balance_transaction,
+		});
+		// Don't process here - checkout.session.completed is the authoritative event
+	} else {
+		// Unknown event type - log but don't fail
+		logger.info('Unhandled event type, skipping', {
+			eventType: stripeEvent.type,
+			eventId: stripeEvent.id,
+		});
+	}
+
+	logger.info('Event processing completed successfully', {
+		eventType: stripeEvent.type,
+		eventId: stripeEvent.id,
+	});
+}
+
 export const handler = lambdaLogger(async (event: any, context: any) => {
 	const logger = (context as any).logger;
 	const envProc = (globalThis as any).process;
@@ -821,7 +1041,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	const galleriesTable = envProc?.env?.GALLERIES_TABLE as string;
 	const ordersTable = envProc?.env?.ORDERS_TABLE as string;
 
-	// CRITICAL: Log raw event structure FIRST to diagnose EventBridge delivery
+	// CRITICAL: Log raw event structure FIRST to diagnose delivery format
 	logger.info('Webhook handler invoked - raw event structure', {
 		eventType: typeof event,
 		isArray: Array.isArray(event),
@@ -832,24 +1052,12 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		detailType: event?.['detail-type'],
 		hasId: !!event?.id,
 		eventId: event?.id,
+		hasRequestContext: !!event?.requestContext,
+		requestContextKeys: event?.requestContext ? Object.keys(event.requestContext) : [],
 		eventPreview: JSON.stringify(event).substring(0, 500), // First 500 chars
 	});
 
-	// EventBridge can send events as an array (batch) or single event
-	// Handle both cases
-	const events = Array.isArray(event) ? event : [event];
-	
-	logger.info('Processing events', {
-		eventCount: events.length,
-		events: events.map((e: any) => ({
-			source: e?.source,
-			detailType: e?.['detail-type'],
-			id: e?.id,
-			hasDetail: !!e?.detail
-		}))
-	});
-
-	// Get Stripe secret key from SSM
+	// Get Stripe secret key from SSM/env
 	let stripeSecretKey: string;
 	try {
 		stripeSecretKey = await getStripeSecretKey();
@@ -872,12 +1080,114 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 		logger.warn('GALLERIES_TABLE not configured, gallery payment updates will be skipped');
 	}
 
-	// Initialize Stripe client for any API calls needed during processing
+	// Initialize Stripe client
 	const stripe = new Stripe(stripeSecretKey);
 
-	// Process each event
+	// Detect HTTP API v2 (direct Stripe webhook to API Gateway) vs EventBridge
+	const isHttpApiV2 = !!event?.requestContext?.http && typeof event.body === 'string';
+	const isEventBridgeLike = !!(event?.source || event?.['detail-type'] || Array.isArray(event));
+
+	if (isHttpApiV2) {
+		// HTTP API v2 webhook: verify signature using webhook secret
+		logger.info('Detected HTTP API v2 Stripe webhook event');
+
+		const headers = event.headers || {};
+		const sig =
+			headers['stripe-signature'] ||
+			headers['Stripe-Signature'] ||
+			headers['Stripe-signature'] ||
+			headers['STRIPE-SIGNATURE'];
+
+		if (!sig) {
+			logger.error('Missing Stripe-Signature header on HTTP webhook');
+			return { statusCode: 400, body: JSON.stringify({ error: 'Missing Stripe-Signature header' }) };
+		}
+
+		let rawBody = event.body as string;
+		if (event.isBase64Encoded) {
+			rawBody = Buffer.from(rawBody, 'base64').toString('utf8');
+		}
+
+		let webhookSecret: string | undefined;
+		try {
+			webhookSecret = await getStripeWebhookSecret();
+		} catch (err: any) {
+			logger.error('Failed to load Stripe webhook secret', { error: err.message });
+			return { statusCode: 500, body: JSON.stringify({ error: 'Webhook secret not configured' }) };
+		}
+
+		if (!webhookSecret) {
+			logger.error('Stripe webhook secret is not configured (STRIPE_WEBHOOK_SECRET / SSM)');
+			return { statusCode: 500, body: JSON.stringify({ error: 'Webhook secret not configured' }) };
+		}
+
+		let stripeEvent: any;
+		try {
+			stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+		} catch (err: any) {
+			logger.error('Stripe webhook signature verification failed', {
+				error: err.message,
+			});
+			// Return 400 so Stripe marks it as failed and retries according to its policy
+			return { statusCode: 400, body: JSON.stringify({ error: 'Signature verification failed' }) };
+		}
+
+		logger.info('Stripe HTTP webhook event verified', {
+			eventType: stripeEvent.type,
+			eventId: stripeEvent.id,
+		});
+
+		try {
+			await handleStripeEvent(
+				stripeEvent,
+				stripe,
+				logger,
+				envProc,
+				walletsTable,
+				ledgerTable,
+				paymentsTable,
+				galleriesTable,
+				ordersTable
+			);
+		} catch (err: any) {
+			logger.error('HTTP webhook processing failed', {
+				error: {
+					name: err.name,
+					message: err.message,
+					stack: err.stack,
+				},
+				eventId: stripeEvent?.id,
+			});
+			// 500 => Stripe will retry
+			return { statusCode: 500, body: JSON.stringify({ error: 'Webhook processing failed' }) };
+		}
+
+		return { statusCode: 200, body: JSON.stringify({ received: true }) };
+	}
+
+	// Default: EventBridge path (batch or single event)
+	if (!isEventBridgeLike) {
+		logger.error('Unsupported event format for Stripe webhook', {
+			eventPreview: JSON.stringify(event).substring(0, 500),
+		});
+		return { statusCode: 400, body: JSON.stringify({ error: 'Unsupported event format' }) };
+	}
+
+	// EventBridge can send events as an array (batch) or single event
+	const events = Array.isArray(event) ? event : [event];
+
+	logger.info('Processing EventBridge events', {
+		eventCount: events.length,
+		events: events.map((e: any) => ({
+			source: e?.source,
+			detailType: e?.['detail-type'],
+			id: e?.id,
+			hasDetail: !!e?.detail
+		}))
+	});
+
 	const results: Array<{ success: boolean; eventId?: string; error?: string }> = [];
-	
+
 	for (const evt of events) {
 		try {
 			// Verify this is an EventBridge event from Stripe
@@ -922,7 +1232,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				pending_webhooks: evt.detail?.pending_webhooks || 0,
 				request: evt.detail?.request || null
 			};
-			
+
 			// Log structure for debugging
 			logger.info('Event structure analysis', {
 				hasDetail: !!evt.detail,
@@ -944,222 +1254,19 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				objectKeys: stripeEvent.data?.object ? Object.keys(stripeEvent.data.object).slice(0, 10) : [],
 			});
 
-			logger.info('Processing Stripe event', {
-				eventType: stripeEvent.type,
-				eventId: stripeEvent.id,
-			});
+			await handleStripeEvent(
+				stripeEvent,
+				stripe,
+				logger,
+				envProc,
+				walletsTable,
+				ledgerTable,
+				paymentsTable,
+				galleriesTable,
+				ordersTable
+			);
 
-			if (stripeEvent.type === 'checkout.session.completed') {
-				const session = stripeEvent.data.object;
-				
-				logger.info('Received checkout.session.completed event', {
-					sessionId: session.id,
-					paymentStatus: session.payment_status,
-					status: session.status,
-					amountTotal: session.amount_total,
-					hasMetadata: !!session.metadata,
-					metadataType: session.metadata?.type,
-					metadataUserId: session.metadata?.userId,
-					metadataTransactionId: session.metadata?.transactionId,
-				});
-				
-				// Only process if payment is actually complete
-				if (session.payment_status === 'paid' && session.status === 'complete') {
-					logger.info('Processing checkout.session.completed - payment is paid and complete', {
-						sessionId: session.id,
-					});
-					await processCheckoutSession(session, stripe, logger, walletsTable, ledgerTable, paymentsTable, galleriesTable, ordersTable, envProc);
-					logger.info('Successfully processed checkout.session.completed', {
-						sessionId: session.id,
-					});
-					results.push({ success: true, eventId: stripeEvent.id });
-				} else {
-					logger.warn('Checkout session is not paid/complete, skipping', {
-						sessionId: session.id,
-						paymentStatus: session.payment_status,
-						status: session.status,
-					});
-					results.push({ success: true, eventId: stripeEvent.id }); // Success but skipped
-				}
-			} else if (stripeEvent.type === 'checkout.session.expired') {
-				const session = stripeEvent.data.object;
-				const userId = session.metadata?.userId;
-				const transactionId = session.metadata?.transactionId;
-
-				if (transactionId && userId) {
-					try {
-						const transaction = await getTransaction(userId, transactionId);
-						if (transaction && transaction.status === 'UNPAID') {
-							await updateTransactionStatus(userId, transactionId, 'CANCELED');
-							logger.info('Transaction status updated to CANCELED (session expired)', { transactionId, userId });
-							
-							// USER-CENTRIC FIX: Clear paymentLocked flag when session expires
-							// No rollback needed - gallery plan is only updated after successful payment
-							if (transaction.galleryId && galleriesTable) {
-								try {
-									await ddb.send(new UpdateCommand({
-										TableName: galleriesTable,
-										Key: { galleryId: transaction.galleryId },
-										UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
-										ExpressionAttributeValues: {
-											':u': new Date().toISOString()
-										}
-									}));
-									logger.info('Cleared paymentLocked flag after session expiry', { galleryId: transaction.galleryId });
-								} catch (unlockErr: any) {
-									logger.warn('Failed to clear paymentLocked flag on session expiry', {
-										error: unlockErr.message,
-										galleryId: transaction.galleryId
-									});
-								}
-							}
-						}
-					} catch (txnErr: any) {
-						logger.error('Failed to update transaction status (expired)', {
-							error: txnErr.message,
-							transactionId,
-							userId
-						});
-					}
-				}
-				results.push({ success: true, eventId: stripeEvent.id });
-			} else if (stripeEvent.type === 'payment_intent.payment_failed') {
-				const paymentIntent = stripeEvent.data.object;
-				const userId = paymentIntent.metadata?.userId;
-				const transactionId = paymentIntent.metadata?.transactionId;
-
-				if (transactionId && userId) {
-					try {
-						const transaction = await getTransaction(userId, transactionId);
-						if (transaction && transaction.status === 'UNPAID') {
-							await updateTransactionStatus(userId, transactionId, 'FAILED');
-							logger.info('Transaction status updated to FAILED', { transactionId, userId });
-							
-							// USER-CENTRIC FIX: Clear paymentLocked flag when payment fails
-							// No rollback needed - gallery plan is only updated after successful payment
-							if (transaction.galleryId && galleriesTable) {
-								try {
-									await ddb.send(new UpdateCommand({
-										TableName: galleriesTable,
-										Key: { galleryId: transaction.galleryId },
-										UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
-										ExpressionAttributeValues: {
-											':u': new Date().toISOString()
-										}
-									}));
-									logger.info('Cleared paymentLocked flag after payment failure', { galleryId: transaction.galleryId });
-								} catch (unlockErr: any) {
-									logger.warn('Failed to clear paymentLocked flag on payment failure', {
-										error: unlockErr.message,
-										galleryId: transaction.galleryId
-									});
-								}
-							}
-						}
-					} catch (txnErr: any) {
-						logger.error('Failed to update transaction status (failed)', {
-							error: txnErr.message,
-							transactionId,
-							userId
-						});
-					}
-				}
-				results.push({ success: true, eventId: stripeEvent.id });
-			} else if (stripeEvent.type === 'payment_intent.canceled') {
-				const paymentIntent = stripeEvent.data.object;
-				const userId = paymentIntent.metadata?.userId;
-				const transactionId = paymentIntent.metadata?.transactionId;
-
-				if (transactionId && userId) {
-					try {
-						const transaction = await getTransaction(userId, transactionId);
-						if (transaction && transaction.status === 'UNPAID') {
-							await updateTransactionStatus(userId, transactionId, 'CANCELED');
-							logger.info('Transaction status updated to CANCELED (payment intent canceled)', { transactionId, userId });
-							
-							// USER-CENTRIC FIX: Clear paymentLocked flag when payment is cancelled
-							// No rollback needed - gallery plan is only updated after successful payment
-							if (transaction.galleryId && galleriesTable) {
-								try {
-									await ddb.send(new UpdateCommand({
-										TableName: galleriesTable,
-										Key: { galleryId: transaction.galleryId },
-										UpdateExpression: 'REMOVE paymentLocked, paymentLockedAt SET updatedAt = :u',
-										ExpressionAttributeValues: {
-											':u': new Date().toISOString()
-										}
-									}));
-									logger.info('Cleared paymentLocked flag after payment cancellation', { galleryId: transaction.galleryId });
-								} catch (unlockErr: any) {
-									logger.warn('Failed to clear paymentLocked flag on payment cancellation', {
-										error: unlockErr.message,
-										galleryId: transaction.galleryId
-									});
-								}
-							}
-						}
-					} catch (txnErr: any) {
-						logger.error('Failed to update transaction status (canceled)', {
-							error: txnErr.message,
-							transactionId,
-							userId
-						});
-					}
-				}
-				results.push({ success: true, eventId: stripeEvent.id });
-			} else if (stripeEvent.type === 'payment_intent.succeeded') {
-				// payment_intent.succeeded - payment intent was successfully created
-				// This is a confirmation event, but checkout.session.completed is the authoritative event
-				// We can use this for tracking/logging purposes
-				const paymentIntent = stripeEvent.data.object;
-				logger.info('Payment intent succeeded', {
-					paymentIntentId: paymentIntent.id,
-					amount: paymentIntent.amount,
-					currency: paymentIntent.currency,
-					status: paymentIntent.status,
-				});
-				// Don't process here - wait for checkout.session.completed for the authoritative processing
-				results.push({ success: true, eventId: stripeEvent.id });
-			} else if (stripeEvent.type === 'charge.succeeded') {
-				// charge.succeeded - charge was successfully created
-				// This is a confirmation event, but checkout.session.completed is the authoritative event
-				const charge = stripeEvent.data.object;
-				logger.info('Charge succeeded', {
-					chargeId: charge.id,
-					amount: charge.amount,
-					currency: charge.currency,
-					paymentIntentId: charge.payment_intent,
-					status: charge.status,
-				});
-				// Don't process here - wait for checkout.session.completed for the authoritative processing
-				results.push({ success: true, eventId: stripeEvent.id });
-			} else if (stripeEvent.type === 'charge.updated') {
-				// charge.updated - charge was updated (e.g., balance_transaction added)
-				// This is informational, checkout.session.completed is the authoritative event
-				const charge = stripeEvent.data.object;
-				logger.info('Charge updated', {
-					chargeId: charge.id,
-					amount: charge.amount,
-					currency: charge.currency,
-					paymentIntentId: charge.payment_intent,
-					status: charge.status,
-					hasBalanceTransaction: !!charge.balance_transaction,
-				});
-				// Don't process here - checkout.session.completed is the authoritative event
-				results.push({ success: true, eventId: stripeEvent.id });
-			} else {
-				// Unknown event type - log but don't fail
-				logger.info('Unhandled event type, skipping', {
-					eventType: stripeEvent.type,
-					eventId: stripeEvent.id,
-				});
-				results.push({ success: true, eventId: stripeEvent.id }); // Success but unhandled
-			}
-
-			logger.info('Event processing completed successfully', {
-				eventType: stripeEvent.type,
-				eventId: stripeEvent.id,
-			});
+			results.push({ success: true, eventId: stripeEvent.id });
 		} catch (error: any) {
 			logger.error('Event processing failed', {
 				error: {

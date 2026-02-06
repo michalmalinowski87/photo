@@ -655,6 +655,32 @@ export class AppStack extends Stack {
 			description: 'Public landing (website) URL'
 		});
 
+		// Cognito configuration for frontend builds
+		// These are non-secret identifiers used by Next.js apps (dashboard/landing/gallery)
+		const cognitoUserPoolIdParam = new StringParameter(this, 'CognitoUserPoolIdParam', {
+			parameterName: `${ssmParameterPrefix}/CognitoUserPoolId`,
+			stringValue: userPool.userPoolId,
+			description: 'Cognito User Pool ID for frontend configuration'
+		});
+
+		const cognitoClientIdParam = new StringParameter(this, 'CognitoClientIdParam', {
+			parameterName: `${ssmParameterPrefix}/CognitoClientId`,
+			stringValue: userPoolClient.userPoolClientId,
+			description: 'Cognito User Pool Client ID for frontend configuration'
+		});
+
+		const cognitoDomainParam = new StringParameter(this, 'CognitoDomainParam', {
+			parameterName: `${ssmParameterPrefix}/CognitoDomain`,
+			stringValue: userPoolDomain.domainName,
+			description: 'Cognito User Pool domain for frontend (Hosted UI / auth)'
+		});
+
+		const awsRegionParam = new StringParameter(this, 'AwsRegionParam', {
+			parameterName: `${ssmParameterPrefix}/AwsRegion`,
+			stringValue: this.region,
+			description: 'AWS region for frontend configuration'
+		});
+
 		// CORS Origins configuration
 		const corsOriginsParam = new StringParameter(this, 'CorsOriginsParam', {
 			parameterName: `${ssmParameterPrefix}/CorsOrigins`,
@@ -2540,16 +2566,8 @@ export class AppStack extends Stack {
 		// 1. Create CloudFront key pair in AWS Console: https://console.aws.amazon.com/cloudfront/v3/home#/public-key
 		// 2. Store private key in SSM: aws ssm put-parameter --name "/PixiProof/{stage}/CloudFrontPrivateKey" --type "SecureString" --value "$(cat private-key.pem)"
 		// 3. Store key pair ID in SSM: aws ssm put-parameter --name "/PixiProof/{stage}/CloudFrontKeyPairId" --type "String" --value "K1234567890ABC"
-		// The parameters are created here as placeholders - actual values must be set manually
-		const cloudfrontKeyPairIdParam = new StringParameter(this, 'CloudFrontKeyPairIdParam', {
-			parameterName: `${ssmParameterPrefix}/CloudFrontKeyPairId`,
-			stringValue: 'PLACEHOLDER', // Must be replaced with actual key pair ID
-			description: 'CloudFront key pair ID for signed URLs (ZIP downloads). Must be set manually after creating CloudFront key pair.'
-		});
-
-		// CloudFront private key is stored as SecureString in SSM
-		// This is created manually via AWS CLI (see comment above)
-		// We don't create it here to avoid storing secrets in CDK code
+		// These parameters are not created by CDK to avoid overwriting manually managed secrets.
+		// CloudFront private key is stored as SecureString in SSM (created manually or via helper script).
 
 		// CloudFront invalidation permissions (must be added after distribution is created)
 		apiFn.addToRolePolicy(new PolicyStatement({

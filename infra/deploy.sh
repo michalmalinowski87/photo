@@ -6,9 +6,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Try to load .env file from multiple locations (infra dir first, then project root)
-# If STAGE is provided as argument (dev|staging|prod), load the matching .env file
-ENV_FILE=""
 STAGE_ARG="${1:-}"
 
 # Map short stage names to .env file names (dev -> development, prod -> production)
@@ -18,77 +15,52 @@ case "$STAGE_ARG" in
   prod)     ENV_BASENAME=".env.production.local" ;;
   *)        ENV_BASENAME="" ;;
 esac
-
-if [ -n "$ENV_BASENAME" ] && [ -f "$SCRIPT_DIR/$ENV_BASENAME" ]; then
-  ENV_FILE="$SCRIPT_DIR/$ENV_BASENAME"
-  echo "Found stage-specific .env file: $ENV_BASENAME"
+if [ -z "$STAGE_ARG" ]; then
+  echo "ERROR: Stage argument is required (dev|staging|prod)"
+  exit 1
 fi
 
-# Fallback to default .env files if stage-specific not found
-if [ -z "$ENV_FILE" ]; then
-  if [ -f "$SCRIPT_DIR/.env" ]; then
-    ENV_FILE="$SCRIPT_DIR/.env"
-    echo "Found .env file in infra directory"
-  elif [ -f "$PROJECT_ROOT/.env" ]; then
-    ENV_FILE="$PROJECT_ROOT/.env"
-    echo "Found .env file in project root"
-  else
-    echo "ERROR: .env file not found in infra/ or project root"
-    echo "Create .env file from an example template and fill in the values:"
-    echo "  # Preferred (infra-scoped):"
-    echo "  cp infra/env.example infra/.env"
-    echo "  # Or project root:"
-    echo "  cp infra/env.example .env"
-    echo "  # Then edit .env and fill in all required values"
+# Helper: load infra/.env.<stage>.local (for AWS_PROFILE, STAGE, and any local-only vars)
+load_stage_env_file() {
+  local env_path="$SCRIPT_DIR/$ENV_BASENAME"
+  if [ ! -f "$env_path" ]; then
+    echo "ERROR: $ENV_BASENAME not found in infra/. Create it from infra/env.example and fill required values."
     exit 1
   fi
+
+  echo "Loading environment variables from $ENV_BASENAME..."
+  set -a
+  # shellcheck disable=SC1090
+  source "$env_path"
+  set +a
+}
+
+# Always load the stage env file so we at least get AWS_PROFILE, STAGE, account/region
+load_stage_env_file
+
+# Ensure STAGE is set and matches the argument
+export STAGE="${STAGE:-$STAGE_ARG}"
+if [ "$STAGE" != "$STAGE_ARG" ]; then
+  echo "WARNING: STAGE in .env ($STAGE) does not match argument ($STAGE_ARG). Using argument."
+  STAGE="$STAGE_ARG"
 fi
 
-# Load .env file
-echo "Loading environment variables from $ENV_FILE..."
-# Export variables from .env file, handling values with spaces and special characters
-# set -a automatically exports all variables
-set -a
-source "$ENV_FILE"
-set +a
-
-# Explicitly export critical variables to ensure they're available to child processes
-export STRIPE_SECRET_KEY
-export STRIPE_WEBHOOK_SECRET
-export PUBLIC_API_URL
-export PUBLIC_DASHBOARD_URL
-export PUBLIC_GALLERY_URL
-export PUBLIC_LANDING_URL
-export SENDER_EMAIL
-export AWS_PROFILE
-export CDK_DEFAULT_ACCOUNT
-export CDK_DEFAULT_REGION
-export STAGE
-
-echo "Environment variables loaded and exported."
-
-# Set AWS_PROFILE if it's defined in .env file
+# Set AWS profile if defined
 if [ -n "$AWS_PROFILE" ]; then
   export AWS_PROFILE
   echo "Using AWS profile: $AWS_PROFILE"
-  # Verify profile exists
-  if ! aws configure list-profiles 2>/dev/null | grep -q "^${AWS_PROFILE}$"; then
-    echo "WARNING: AWS profile '$AWS_PROFILE' not found in AWS config"
-    echo "Available profiles:"
-    aws configure list-profiles 2>/dev/null || echo "  (none found)"
-  fi
 else
-  echo "WARNING: AWS_PROFILE not set in .env file. Using default AWS credentials."
+  echo "WARNING: AWS_PROFILE not set in infra/$ENV_BASENAME. Using default AWS credentials."
 fi
 
-# Helper: hard-require non-empty env var
+# Helper: hard-require non-empty env var (used for dev-only checks)
 require_env() {
   local name="$1"
   local value="$2"
   local hint="$3"
 
   if [ -z "$value" ]; then
-    echo "ERROR: $name is not set in .env file"
+    echo "ERROR: $name is not set"
     if [ -n "$hint" ]; then
       echo "$hint"
     fi
@@ -96,46 +68,97 @@ require_env() {
   fi
 }
 
-# Validate critical environment variables
-if [ -z "$STRIPE_SECRET_KEY" ] || [ "$STRIPE_SECRET_KEY" = "sk_test_..." ] || [ "$STRIPE_SECRET_KEY" = "sk_live_..." ] || [ "$STRIPE_SECRET_KEY" = "sk_test_" ] || [ "$STRIPE_SECRET_KEY" = "sk_live_" ]; then
-  echo "ERROR: STRIPE_SECRET_KEY is not set or has placeholder value in .env file"
-  echo "Current value: '${STRIPE_SECRET_KEY:0:20}...' (first 20 chars)"
-  echo "Please set STRIPE_SECRET_KEY to your actual Stripe secret key"
-  exit 1
+# For staging/prod, read all config (including secrets) from SSM as much as possible
+if [ "$STAGE" != "dev" ]; then
+  echo "Staging/Production deployment: reading configuration from SSM Parameter Store (including secrets)..."
+
+  REGION="${CDK_DEFAULT_REGION:-$AWS_REGION}"
+  if [ -z "$REGION" ]; then
+    REGION="eu-west-1"
+  fi
+
+  SSM_PREFIX="/PixiProof/${STAGE}"
+
+  _aws() {
+    if [ -n "$AWS_PROFILE" ]; then
+      AWS_PROFILE="$AWS_PROFILE" aws "$@"
+    else
+      aws "$@"
+    fi
+  }
+
+  # Non-secret config (String or SecureString)
+  export SENDER_EMAIL=$(_aws ssm get-parameter --name "${SSM_PREFIX}/SenderEmail" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  export PUBLIC_API_URL=$(_aws ssm get-parameter --name "${SSM_PREFIX}/PublicApiUrl" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  export PUBLIC_DASHBOARD_URL=$(_aws ssm get-parameter --name "${SSM_PREFIX}/PublicDashboardUrl" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  export PUBLIC_GALLERY_URL=$(_aws ssm get-parameter --name "${SSM_PREFIX}/PublicGalleryUrl" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  export PUBLIC_LANDING_URL=$(_aws ssm get-parameter --name "${SSM_PREFIX}/PublicLandingUrl" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+
+  # Stripe & gallery secrets (now SecureString)
+  export STRIPE_SECRET_KEY=$(_aws ssm get-parameter --name "${SSM_PREFIX}/StripeSecretKey" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  export STRIPE_WEBHOOK_SECRET=$(_aws ssm get-parameter --name "${SSM_PREFIX}/StripeWebhookSecret" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  export GALLERY_PASSWORD_ENCRYPTION_SECRET=$(_aws ssm get-parameter --name "${SSM_PREFIX}/GalleryPasswordEncryptionSecret" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+
+  # Optional/advanced config
+  export STRIPE_EVENTBRIDGE_SOURCE_NAME=$(_aws ssm get-parameter --name "${SSM_PREFIX}/StripeEventBridgeSourceName" --region "$REGION" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+
+  # Validate required parameters
+  if [ -z "$SENDER_EMAIL" ]; then
+    echo "ERROR: SSM parameter ${SSM_PREFIX}/SenderEmail not found or empty"
+    exit 1
+  fi
+  if [ -z "$STRIPE_SECRET_KEY" ]; then
+    echo "ERROR: SSM parameter ${SSM_PREFIX}/StripeSecretKey not found or empty"
+    exit 1
+  fi
+  if [ -z "$STRIPE_WEBHOOK_SECRET" ]; then
+    echo "ERROR: SSM parameter ${SSM_PREFIX}/StripeWebhookSecret not found or empty"
+    exit 1
+  fi
+  if [ -z "$GALLERY_PASSWORD_ENCRYPTION_SECRET" ]; then
+    echo "ERROR: SSM parameter ${SSM_PREFIX}/GalleryPasswordEncryptionSecret not found or empty"
+    exit 1
+  fi
+
+  # Allow PUBLIC_API_URL to be empty on first deploy; CDK uses placeholder
+  if [ -z "$PUBLIC_API_URL" ]; then
+    REGION_FOR_PLACEHOLDER="${REGION}"
+    export PUBLIC_API_URL="https://placeholder-first-deploy.execute-api.${REGION_FOR_PLACEHOLDER}.amazonaws.com"
+    echo "PUBLIC_API_URL not set in SSM; using placeholder for first deploy."
+  fi
+
+  export CDK_DEFAULT_REGION="${CDK_DEFAULT_REGION:-$REGION}"
+
+  echo "✓ SSM parameters loaded and exported for CDK synthesis (stage: $STAGE)"
+else
+  # Dev: use local .env.development.local for everything (fastest DX)
+  echo "Development deployment: using infra/$ENV_BASENAME for configuration (including secrets)."
+
+  # Validate critical secrets in dev
+  if [ -z "$STRIPE_SECRET_KEY" ] || [ "$STRIPE_SECRET_KEY" = "sk_test_..." ] || [ "$STRIPE_SECRET_KEY" = "sk_live_..." ] || [ "$STRIPE_SECRET_KEY" = "sk_test_" ] || [ "$STRIPE_SECRET_KEY" = "sk_live_" ]; then
+    echo "ERROR: STRIPE_SECRET_KEY is not set or has placeholder value in $ENV_BASENAME"
+    echo "Current value: '${STRIPE_SECRET_KEY:0:20}...' (first 20 chars)"
+    echo "Please set STRIPE_SECRET_KEY to your actual Stripe secret key"
+    exit 1
+  fi
+
+  require_env "STRIPE_WEBHOOK_SECRET" "$STRIPE_WEBHOOK_SECRET" "This is required for local webhook testing."
+  require_env "SENDER_EMAIL" "$SENDER_EMAIL" "This is required for sending emails."
+  require_env "PUBLIC_DASHBOARD_URL" "$PUBLIC_DASHBOARD_URL" "Required for redirects and trusted origins."
+  require_env "PUBLIC_GALLERY_URL" "$PUBLIC_GALLERY_URL" "Required for redirects and links."
+  require_env "PUBLIC_LANDING_URL" "$PUBLIC_LANDING_URL" "Required for website links, redirects, and emails."
+
+  # Allow first deploy without PUBLIC_API_URL in dev: use placeholder (stack will output the real URL)
+  if [ -z "$PUBLIC_API_URL" ] || [ "$PUBLIC_API_URL" = "" ]; then
+    REGION_FOR_PLACEHOLDER="${CDK_DEFAULT_REGION:-$AWS_REGION:-eu-west-1}"
+    export PUBLIC_API_URL="https://placeholder-first-deploy.execute-api.${REGION_FOR_PLACEHOLDER}.amazonaws.com"
+    echo "PUBLIC_API_URL not set; using placeholder for first dev deploy."
+  fi
+
+  export CDK_DEFAULT_REGION="${CDK_DEFAULT_REGION:-$AWS_REGION:-eu-west-1}"
 fi
 
-require_env "STRIPE_WEBHOOK_SECRET" "$STRIPE_WEBHOOK_SECRET" "This is required to populate SSM /PixiProof/<stage>/StripeWebhookSecret."
-require_env "SENDER_EMAIL" "$SENDER_EMAIL" "This is required to populate SSM /PixiProof/<stage>/SenderEmail (used for notification emails)."
-
-require_env "PUBLIC_DASHBOARD_URL" "$PUBLIC_DASHBOARD_URL" "This is required to populate SSM /PixiProof/<stage>/PublicDashboardUrl (used for redirects, trusted origins, and emails)."
-require_env "PUBLIC_GALLERY_URL" "$PUBLIC_GALLERY_URL" "This is required to populate SSM /PixiProof/<stage>/PublicGalleryUrl (used for redirects and links)."
-require_env "PUBLIC_LANDING_URL" "$PUBLIC_LANDING_URL" "This is required to populate SSM /PixiProof/<stage>/PublicLandingUrl (used for website links, redirects, and emails)."
-
-# Allow first deploy without PUBLIC_API_URL: use a placeholder (stack will output the real URL)
-if [ -z "$PUBLIC_API_URL" ] || [ "$PUBLIC_API_URL" = "" ]; then
-  REGION_FOR_PLACEHOLDER="${CDK_DEFAULT_REGION:-eu-west-1}"
-  export PUBLIC_API_URL="https://placeholder-first-deploy.execute-api.${REGION_FOR_PLACEHOLDER}.amazonaws.com"
-  echo "PUBLIC_API_URL not set; using placeholder for first deploy."
-  echo "After deploy, copy the 'API (Lambda) URL' from the outputs below into infra/.env.development.local and redeploy if needed."
-fi
-if [ "$PUBLIC_API_URL" = "https://your-api-id.execute-api.region.amazonaws.com" ] || [ "$PUBLIC_API_URL" = "https://placeholder-first-deploy.execute-api."* ]; then
-  echo "WARNING: PUBLIC_API_URL is a placeholder; update .env after deployment with the real API Gateway URL from stack outputs."
-fi
-
-echo "✓ Critical environment variables validated"
-echo "✓ STRIPE_SECRET_KEY is set (length: ${#STRIPE_SECRET_KEY} chars, prefix: ${STRIPE_SECRET_KEY:0:10}...)"
-
-# Verify environment variables are exported (for debugging)
-echo ""
-echo "Verifying environment variables are exported:"
-echo "  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:+SET} (${#STRIPE_SECRET_KEY} chars)"
-echo "  PUBLIC_API_URL: ${PUBLIC_API_URL:+SET}"
-echo "  PUBLIC_DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:+SET}"
-echo "  PUBLIC_GALLERY_URL: ${PUBLIC_GALLERY_URL:+SET}"
-echo "  PUBLIC_LANDING_URL: ${PUBLIC_LANDING_URL:+SET}"
-echo "  SENDER_EMAIL: ${SENDER_EMAIL:+SET}"
-echo "  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:+SET}"
-echo ""
+echo "Environment variables prepared for stage: $STAGE"
 
 # Change to infra directory
 cd "$SCRIPT_DIR"
