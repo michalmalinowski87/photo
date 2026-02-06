@@ -177,19 +177,44 @@ else
   echo "Run manually: ./scripts/migrate-secrets-to-secure-string.sh $STAGE"
 fi
 
-# Check for conflicting resources before deploying
-echo "Checking for conflicting resources..."
-if ! "$SCRIPT_DIR/check-conflicting-resources.sh" "$STAGE"; then
-  echo ""
-  echo "❌ Conflicting resources detected!"
-  echo ""
-  echo "To delete conflicting resources, run:"
-  echo "  ./scripts/delete-conflicting-resources.sh $STAGE --confirm"
-  echo ""
-  echo "Or manually delete them via AWS Console/CLI"
-  echo ""
-  echo "Deployment aborted to prevent resource conflicts."
-  exit 1
+# Check for conflicting resources before first deploy only
+# If the CloudFormation stack already exists in a stable state, we skip this check
+STACK_NAME="PixiProof-${STAGE}"
+REGION_FOR_CHECK="${CDK_DEFAULT_REGION:-eu-west-1}"
+
+_aws_conflict_check() {
+  if [ -n "$AWS_PROFILE" ]; then
+    AWS_PROFILE="$AWS_PROFILE" aws "$@"
+  else
+    aws "$@"
+  fi
+}
+
+EXISTING_STACK_STATUS=$(_aws_conflict_check cloudformation describe-stacks \
+  --stack-name "$STACK_NAME" \
+  --region "$REGION_FOR_CHECK" \
+  --query 'Stacks[0].StackStatus' \
+  --output text 2>/dev/null || echo "")
+
+if [ -n "$EXISTING_STACK_STATUS" ] && \
+   [[ "$EXISTING_STACK_STATUS" =~ ^(CREATE_COMPLETE|UPDATE_COMPLETE|UPDATE_ROLLBACK_COMPLETE|IMPORT_COMPLETE|IMPORT_ROLLBACK_COMPLETE)$ ]]; then
+  echo "Existing CloudFormation stack '$STACK_NAME' found with status '$EXISTING_STACK_STATUS'."
+  echo "Skipping conflicting-resources check (DynamoDB/S3/Cognito are managed by CDK)."
+else
+  echo "No stable existing stack '$STACK_NAME' found (status: '${EXISTING_STACK_STATUS:-<none>}' )."
+  echo "Running conflicting-resources check to avoid first-deploy name collisions..."
+  if ! "$SCRIPT_DIR/check-conflicting-resources.sh" "$STAGE"; then
+    echo ""
+    echo "❌ Conflicting resources detected!"
+    echo ""
+    echo "To delete conflicting resources, run:"
+    echo "  ./scripts/delete-conflicting-resources.sh $STAGE --confirm"
+    echo ""
+    echo "Or manually delete them via AWS Console/CLI"
+    echo ""
+    echo "Deployment aborted to prevent resource conflicts."
+    exit 1
+  fi
 fi
 
 # Build and deploy

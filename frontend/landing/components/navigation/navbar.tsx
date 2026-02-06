@@ -42,14 +42,16 @@ const Navbar = () => {
   }, []);
 
   return (
-    <header className={cn(
-      "sticky top-0 inset-x-0 h-14 w-full border-b border-transparent z-[99999] select-none",
-      scroll && "border-background/80 bg-background/40 backdrop-blur-md"
-    )}>
+    <header
+      className={cn(
+        "sticky top-0 inset-x-0 h-14 w-full border-b border-transparent z-[99999] select-none",
+        scroll && "border-background/80 bg-background/40 backdrop-blur-md"
+      )}
+    >
       <AnimationContainer reverse delay={0.1} className="size-full">
         <MaxWidthWrapper className="flex items-center justify-between">
           <div className="flex items-center space-x-12">
-            <Link 
+            <Link
               href="/#home"
               data-ph-action={PostHogActions.landing.logoClick}
               className="flex flex-col items-start"
@@ -65,12 +67,18 @@ const Navbar = () => {
                   <NavigationMenuItem key={link.title}>
                     {link.menu ? (
                       <>
-                        <NavigationMenuTrigger className="text-foreground">{link.title}</NavigationMenuTrigger>
+                        <NavigationMenuTrigger className="text-foreground">
+                          {link.title}
+                        </NavigationMenuTrigger>
                         <NavigationMenuContent>
-                          <ul className={cn(
-                            "grid gap-1 p-4 md:w-[400px] lg:w-[500px] rounded-xl",
-                            link.title === "Funkcje" ? "lg:grid-cols-[.75fr_1fr]" : "lg:grid-cols-2"
-                          )}>
+                          <ul
+                            className={cn(
+                              "grid gap-1 p-4 md:w-[400px] lg:w-[500px] rounded-xl",
+                              link.title === "Funkcje"
+                                ? "lg:grid-cols-[.75fr_1fr]"
+                                : "lg:grid-cols-2"
+                            )}
+                          >
                             {link.title === "Funkcje" && (
                               <li className="row-span-4 pr-2 relative rounded-lg overflow-hidden">
                                 <div className="absolute inset-0 !z-10 h-full w-[calc(100%-10px)] bg-[linear-gradient(to_right,rgb(38,38,38,0.5)_1px,transparent_1px),linear-gradient(to_bottom,rgb(38,38,38,0.5)_1px,transparent_1px)] bg-[size:1rem_1rem]"></div>
@@ -106,8 +114,8 @@ const Navbar = () => {
                       </>
                     ) : (
                       <NavigationMenuLink asChild>
-                        <Link 
-                          href={link.href} 
+                        <Link
+                          href={link.href}
                           className={navigationMenuTriggerStyle()}
                           data-ph-action={PostHogActions.landing.navMenuItemClick}
                           data-ph-property-landing_nav_item={link.title}
@@ -120,25 +128,24 @@ const Navbar = () => {
                 ))}
               </NavigationMenuList>
             </NavigationMenu>
-
           </div>
 
           <div className="hidden lg:flex items-center gap-x-4">
             {isLoading ? null : isAuthenticated ? (
               <Link href={`${dashboardUrl}/`} className={buttonVariants({ size: "sm" })}>
-                Dashboard
+                Panel główny
               </Link>
             ) : (
               <>
-                <Link 
-                  href={`${dashboardUrl}/login`} 
+                <Link
+                  href={`${dashboardUrl}/login`}
                   className={buttonVariants({ size: "sm", variant: "ghost" })}
                   data-ph-action={PostHogActions.landing.navLoginClick}
                 >
                   Zaloguj się
                 </Link>
-                <Link 
-                  href={`${dashboardUrl}/sign-up`} 
+                <Link
+                  href={`${dashboardUrl}/sign-up`}
                   className={buttonVariants({ size: "sm" })}
                   data-ph-action={PostHogActions.landing.navSignupClick}
                 >
@@ -149,11 +156,10 @@ const Navbar = () => {
           </div>
 
           <MobileNavbar />
-
         </MaxWidthWrapper>
       </AnimationContainer>
     </header>
-  )
+  );
 };
 
 const ListItem = React.forwardRef<

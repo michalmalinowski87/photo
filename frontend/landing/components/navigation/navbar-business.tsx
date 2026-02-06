@@ -288,7 +288,7 @@ export default function NavbarBusiness() {
               {!isLoading && isAuthenticated ? (
                 <li>
                   <Link href={`${dashboardUrl}/`} onClick={() => setIsSidebarOpen(false)}>
-                    Dashboard
+                    Panel główny
                   </Link>
                 </li>
               ) : (

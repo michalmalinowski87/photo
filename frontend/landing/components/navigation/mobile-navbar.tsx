@@ -42,17 +42,20 @@ const MobileNavbar = () => {
 
   return (
     <div className="flex lg:hidden items-center justify-end">
-      <Sheet open={isOpen} onOpenChange={(open) => {
-        setIsOpen(open);
-        if (open) {
-          handleOpen();
-        } else {
-          handleClose();
-        }
-      }}>
+      <Sheet
+        open={isOpen}
+        onOpenChange={(open) => {
+          setIsOpen(open);
+          if (open) {
+            handleOpen();
+          } else {
+            handleClose();
+          }
+        }}
+      >
         <SheetTrigger asChild>
-          <Button 
-            size="icon" 
+          <Button
+            size="icon"
             variant="ghost"
             data-ph-action={PostHogActions.landing.mobileMenuOpen}
           >
@@ -64,10 +67,13 @@ const MobileNavbar = () => {
           <SheetDescription className="sr-only">
             Menu nawigacyjne z linkami do sekcji strony i opcjami logowania
           </SheetDescription>
-          <SheetClose asChild className="absolute top-3 right-5 bg-background z-20 flex items-center justify-center">
-            <Button 
-              size="icon" 
-              variant="ghost" 
+          <SheetClose
+            asChild
+            className="absolute top-3 right-5 bg-background z-20 flex items-center justify-center"
+          >
+            <Button
+              size="icon"
+              variant="ghost"
               className="text-neutral-600"
               data-ph-action={PostHogActions.landing.mobileMenuClose}
             >
@@ -77,22 +83,26 @@ const MobileNavbar = () => {
           <div className="flex flex-col items-start w-full py-2 mt-10">
             <div className="flex items-center justify-evenly w-full space-x-2">
               {isLoading ? null : isAuthenticated ? (
-                <Link href={`${dashboardUrl}/`} className={buttonVariants({ className: "w-full" })} onClick={handleClose}>
-                  Dashboard
+                <Link
+                  href={`${dashboardUrl}/`}
+                  className={buttonVariants({ className: "w-full" })}
+                  onClick={handleClose}
+                >
+                  Panel główny
                 </Link>
               ) : (
                 <>
-                  <Link 
-                    href={`${dashboardUrl}/login`} 
-                    className={buttonVariants({ variant: "outline", className: "w-full" })} 
+                  <Link
+                    href={`${dashboardUrl}/login`}
+                    className={buttonVariants({ variant: "outline", className: "w-full" })}
                     onClick={handleClose}
                     data-ph-action={PostHogActions.landing.navLoginClick}
                   >
                     Zaloguj się
                   </Link>
-                  <Link 
-                    href={`${dashboardUrl}/sign-up`} 
-                    className={buttonVariants({ className: "w-full" })} 
+                  <Link
+                    href={`${dashboardUrl}/sign-up`}
+                    className={buttonVariants({ className: "w-full" })}
                     onClick={handleClose}
                     data-ph-action={PostHogActions.landing.navSignupClick}
                   >
@@ -107,18 +117,16 @@ const MobileNavbar = () => {
                   <AccordionItem key={link.title} value={link.title} className="last:border-none">
                     {link.menu ? (
                       <>
-                        <AccordionTrigger>
-                          {link.title}
-                        </AccordionTrigger>
+                        <AccordionTrigger>{link.title}</AccordionTrigger>
                         <AccordionContent>
-                          <ul
-                            onClick={handleClose}
-                            className={cn(
-                              "w-full",
-                            )}
-                          >
+                          <ul onClick={handleClose} className={cn("w-full")}>
                             {link.menu.map((menuItem) => (
-                              <ListItem key={menuItem.title} title={menuItem.title} href={menuItem.href} icon={menuItem.icon}>
+                              <ListItem
+                                key={menuItem.title}
+                                title={menuItem.title}
+                                href={menuItem.href}
+                                icon={menuItem.icon}
+                              >
                                 {menuItem.tagline}
                               </ListItem>
                             ))}
@@ -144,7 +152,7 @@ const MobileNavbar = () => {
         </SheetContent>
       </Sheet>
     </div>
-  )
+  );
 };
 
 const ListItem = React.forwardRef<
