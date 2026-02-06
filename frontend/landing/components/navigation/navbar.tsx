@@ -57,9 +57,6 @@ const Navbar = () => {
               <span className="text-lg font-bold font-heading !leading-none text-foreground">
                 PixiProof
               </span>
-              <span className="text-xs text-muted-foreground mt-0.5 font-medium tracking-wide">
-                Your photos. Their stories.
-              </span>
             </Link>
 
             <NavigationMenu className="hidden lg:flex">

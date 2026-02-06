@@ -51,11 +51,11 @@ async function getCdkStackName(stage) {
 		// Try to get stack name from CDK context or environment
 		const cdkJson = JSON.parse(readFileSync(join(projectRoot, 'infra/cdk.json'), 'utf8'));
 		const app = cdkJson.app || 'npx ts-node --prefer-ts-exts bin/cdk.ts';
-		// Extract stack name pattern - typically PhotoHub-{stage}
-		return `PhotoHub-${stage}`;
+		// Extract stack name pattern - typically PixiProof-{stage}
+		return `PixiProof-${stage}`;
 	} catch (err) {
 		console.warn('Could not read cdk.json, using default stack name pattern');
-		return `PhotoHub-${stage}`;
+		return `PixiProof-${stage}`;
 	}
 }
 
@@ -118,7 +118,7 @@ async function main() {
 	const stackNamePattern = await getCdkStackName(stage);
 	const stackFunctions = functions.filter(fn => 
 		fn.FunctionName.includes(stackNamePattern) || 
-		fn.FunctionName.includes('PhotoHub') ||
+		fn.FunctionName.includes('PixiProof') ||
 		fn.FunctionName.includes('PhotoCloud')
 	);
 

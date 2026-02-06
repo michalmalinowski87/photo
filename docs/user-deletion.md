@@ -560,7 +560,7 @@ Access dev tools at `/dev/test-user-deletion`:
      - Cognito: `AdminDeleteUser` permission
      - SES: `SendEmail` permission
      - EventBridge Scheduler: `scheduler:DeleteSchedule` permission
-     - SSM: Read access to `/PhotoHub/{stage}/*` parameters
+     - SSM: Read access to `/PixiProof/{stage}/*` parameters
    - Environment Variables:
      - `USERS_TABLE`, `GALLERIES_TABLE`, `ORDERS_TABLE`, `PACKAGES_TABLE`, `IMAGES_TABLE`
      - `WALLETS_TABLE`, `WALLET_LEDGER_TABLE`, `TRANSACTIONS_TABLE`
@@ -578,7 +578,7 @@ Access dev tools at `/dev/test-user-deletion`:
      - SES: `SendEmail` permission
      - EventBridge Scheduler: `scheduler:CreateSchedule`, `scheduler:DeleteSchedule`, `scheduler:GetSchedule`, `scheduler:UpdateSchedule` permissions
      - IAM: `iam:PassRole` permission for EventBridge Scheduler role
-     - SSM: Read access to `/PhotoHub/{stage}/*` parameters
+     - SSM: Read access to `/PixiProof/{stage}/*` parameters
    - Environment Variables:
      - `USERS_TABLE`, `SENDER_EMAIL`, `STAGE`
      - `USER_DELETION_LAMBDA_ARN` (ARN of PerformUserDeletion Lambda)
@@ -595,7 +595,7 @@ Access dev tools at `/dev/test-user-deletion`:
      - DynamoDB: Read/Write access to Users table
      - EventBridge Scheduler: `scheduler:DeleteSchedule` permission
      - Cognito: Permission to be invoked by Cognito (`AllowCognitoInvoke` with `userpool/*` pattern)
-     - SSM: Read access to `/PhotoHub/{stage}/*` parameters (if needed)
+     - SSM: Read access to `/PixiProof/{stage}/*` parameters (if needed)
    - Environment Variables:
      - `USERS_TABLE`, `STAGE`
    - **CDK Output**: `PostAuthenticationLambdaArn` - Use this ARN to configure the Cognito trigger
@@ -626,7 +626,7 @@ Access dev tools at `/dev/test-user-deletion`:
 **⚠️ IMPORTANT: This DLQ is NOT currently defined in the CDK stack.**
 
 - **UserDeletionDLQ**: Failed user deletion schedule executions
-  - Queue Name: `PhotoHub-{stage}-UserDeletionDLQ`
+  - Queue Name: `PixiProof-{stage}-UserDeletionDLQ`
   - Encryption: SQS Managed
   - Retention: 14 days
   - Visibility Timeout: Should be longer than Lambda timeout (15+ minutes)
@@ -638,7 +638,7 @@ Access dev tools at `/dev/test-user-deletion`:
 - **UserDeletionScheduleRole**: IAM role for EventBridge Scheduler to invoke PerformUserDeletion Lambda
   - Trust Policy: `scheduler.amazonaws.com`
   - Permissions: `lambda:InvokeFunction` on PerformUserDeletion Lambda
-  - ARN stored in SSM: `/PhotoHub/{stage}/UserDeletionScheduleRoleArn`
+  - ARN stored in SSM: `/PixiProof/{stage}/UserDeletionScheduleRoleArn`
 
 ### SSM Parameters
 
@@ -646,11 +646,11 @@ Access dev tools at `/dev/test-user-deletion`:
 
 The following SSM parameters are read at runtime by the Lambda functions:
 
-- `/PhotoHub/{stage}/UserDeletionLambdaArn` - ARN of PerformUserDeletion Lambda
-- `/PhotoHub/{stage}/UserDeletionScheduleRoleArn` - ARN of IAM role for EventBridge Scheduler
-- `/PhotoHub/{stage}/UserDeletionDlqArn` - ARN of Dead Letter Queue
-- `/PhotoHub/{stage}/SenderEmail` - SES sender email (already exists)
-- `/PhotoHub/{stage}/PublicDashboardUrl` - Dashboard URL for undo links (already exists)
+- `/PixiProof/{stage}/UserDeletionLambdaArn` - ARN of PerformUserDeletion Lambda
+- `/PixiProof/{stage}/UserDeletionScheduleRoleArn` - ARN of IAM role for EventBridge Scheduler
+- `/PixiProof/{stage}/UserDeletionDlqArn` - ARN of Dead Letter Queue
+- `/PixiProof/{stage}/SenderEmail` - SES sender email (already exists)
+- `/PixiProof/{stage}/PublicDashboardUrl` - Dashboard URL for undo links (already exists)
 
 ### Cognito Configuration
 
@@ -701,9 +701,9 @@ The following SSM parameters are read at runtime by the Lambda functions:
    - ✅ UserDeletionScheduleRole for EventBridge Scheduler to invoke PerformUserDeletion Lambda
 
 5. **SSM Parameters**:
-   - ✅ `/PhotoHub/{stage}/UserDeletionLambdaArn`
-   - ✅ `/PhotoHub/{stage}/UserDeletionScheduleRoleArn`
-   - ✅ `/PhotoHub/{stage}/UserDeletionDlqArn`
+   - ✅ `/PixiProof/{stage}/UserDeletionLambdaArn`
+   - ✅ `/PixiProof/{stage}/UserDeletionScheduleRoleArn`
+   - ✅ `/PixiProof/{stage}/UserDeletionDlqArn`
 
 6. **Cognito Configuration**:
    - ⚠️ Post Authentication Lambda trigger on User Pool (configured manually after deployment to avoid circular dependencies)
@@ -742,7 +742,7 @@ To avoid this, the Lambda function is created without the Cognito invoke permiss
    - Post authentication
 7. Find **Post authentication** in the list
 8. Click **Edit** or select the dropdown next to it
-9. Choose your Lambda function: `PhotoHub-dev-PostAuthenticationFn` (or paste the ARN from stack outputs)
+9. Choose your Lambda function: `dev-postAuthentication` (or paste the ARN from stack outputs)
 10. Click **Save changes**
 
 **If Extensions doesn't show Lambda triggers:**
@@ -757,13 +757,13 @@ The AWS Console UI changes frequently and Lambda triggers can be hard to find. *
 ```bash
 # Get the Lambda ARN from stack outputs
 LAMBDA_ARN=$(aws cloudformation describe-stacks \
-  --stack-name PhotoHub-dev \
+  --stack-name PixiProof-dev \
   --query 'Stacks[0].Outputs[?OutputKey==`PostAuthenticationLambdaArn`].OutputValue' \
   --output text)
 
 # Get the User Pool ID from stack outputs
 USER_POOL_ID=$(aws cloudformation describe-stacks \
-  --stack-name PhotoHub-dev \
+  --stack-name PixiProof-dev \
   --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
   --output text)
 
@@ -782,8 +782,8 @@ aws cognito-idp update-user-pool \
 # Configure Post Authentication trigger in one command (automatically gets values from stack)
 # ⚠️ IMPORTANT: Always include --auto-verified-attributes to prevent resetting email verification!
 aws cognito-idp update-user-pool \
-  --user-pool-id $(aws cloudformation describe-stacks --stack-name PhotoHub-dev --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text) \
-  --lambda-config "PostAuthentication=$(aws cloudformation describe-stacks --stack-name PhotoHub-dev --query 'Stacks[0].Outputs[?OutputKey==`PostAuthenticationLambdaArn`].OutputValue' --output text)" \
+  --user-pool-id $(aws cloudformation describe-stacks --stack-name PixiProof-dev --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text) \
+  --lambda-config "PostAuthentication=$(aws cloudformation describe-stacks --stack-name PixiProof-dev --query 'Stacks[0].Outputs[?OutputKey==`PostAuthenticationLambdaArn`].OutputValue' --output text)" \
   --auto-verified-attributes email
 ```
 
@@ -802,7 +802,7 @@ cdk outputs
 
 # Or get specific output
 aws cloudformation describe-stacks \
-  --stack-name PhotoHub-dev \
+  --stack-name PixiProof-dev \
   --query 'Stacks[0].Outputs[?OutputKey==`PostAuthenticationLambdaArn`]'
 ```
 
@@ -819,7 +819,7 @@ aws cognito-idp describe-user-pool \
 
 Expected output should show the Lambda ARN:
 ```
-arn:aws:lambda:REGION:ACCOUNT:function:PhotoHub-dev-PostAuthenticationFn
+arn:aws:lambda:REGION:ACCOUNT:function:dev-postAuthentication
 ```
 
 #### Testing
@@ -850,7 +850,7 @@ After configuration, test the trigger:
 - AWS Cognito automatically grants the Lambda invoke permission when you configure the trigger via Console or CLI
 - If you see permission errors, reconfigure the trigger via AWS CLI (Method 2) - this will re-grant the permission
 - Verify the Lambda function exists and is in the same region as the User Pool
-- Check Lambda function's resource policy: `aws lambda get-policy --function-name PhotoHub-dev-PostAuthenticationFn`
+- Check Lambda function's resource policy: `aws lambda get-policy --function-name dev-postAuthentication`
 
 **Circular dependency during deployment:**
 - If you see circular dependency errors, ensure you're NOT modifying the User Pool in CDK after it's been created
@@ -864,8 +864,8 @@ If you can't find the Lambda triggers in the console, use this one-liner:
 # Configure Post Authentication trigger in one command
 # ⚠️ IMPORTANT: Always include --auto-verified-attributes to prevent resetting email verification!
 aws cognito-idp update-user-pool \
-  --user-pool-id $(aws cloudformation describe-stacks --stack-name PhotoHub-dev --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text) \
-  --lambda-config "PostAuthentication=$(aws cloudformation describe-stacks --stack-name PhotoHub-dev --query 'Stacks[0].Outputs[?OutputKey==`PostAuthenticationLambdaArn`].OutputValue' --output text)" \
+  --user-pool-id $(aws cloudformation describe-stacks --stack-name PixiProof-dev --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text) \
+  --lambda-config "PostAuthentication=$(aws cloudformation describe-stacks --stack-name PixiProof-dev --query 'Stacks[0].Outputs[?OutputKey==`PostAuthenticationLambdaArn`].OutputValue' --output text)" \
   --auto-verified-attributes email
 ```
 

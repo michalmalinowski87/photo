@@ -182,7 +182,7 @@ Determine your deployment stage (usually `dev` or `prod`). This is used in the S
 # Replace {path-to-private-key.pem} with the actual path to your downloaded private key file
 
 aws ssm put-parameter \
-  --name "/PhotoHub/{stage}/CloudFrontPrivateKey" \
+  --name "/PixiProof/{stage}/CloudFrontPrivateKey" \
   --type "SecureString" \
   --value "$(cat {path-to-private-key.pem})" \
   --description "CloudFront private key for signed URLs (ZIP downloads) - {stage}" \
@@ -192,7 +192,7 @@ aws ssm put-parameter \
 **Example for dev:**
 ```bash
 aws ssm put-parameter \
-  --name "/PhotoHub/dev/CloudFrontPrivateKey" \
+  --name "/PixiProof/dev/CloudFrontPrivateKey" \
   --type "SecureString" \
   --value "$(cat ~/Downloads/pk-APKAIOSFODNN7EXAMPLE.pem)" \
   --description "CloudFront private key for signed URLs (ZIP downloads) - dev" \
@@ -207,7 +207,7 @@ aws ssm put-parameter \
 # Note: This is the ID shown after creating the public key in CloudFront
 
 aws ssm put-parameter \
-  --name "/PhotoHub/{stage}/CloudFrontKeyPairId" \
+  --name "/PixiProof/{stage}/CloudFrontKeyPairId" \
   --type "String" \
   --value "{PUBLIC_KEY_ID}" \
   --description "CloudFront public key ID (used as Key-Pair-Id) for signed URLs (ZIP downloads) - {stage}" \
@@ -217,7 +217,7 @@ aws ssm put-parameter \
 **Example for dev:**
 ```bash
 aws ssm put-parameter \
-  --name "/PhotoHub/dev/CloudFrontKeyPairId" \
+  --name "/PixiProof/dev/CloudFrontKeyPairId" \
   --type "String" \
   --value "K1234567890ABC" \
   --description "CloudFront public key ID (used as Key-Pair-Id) for signed URLs (ZIP downloads) - dev" \
@@ -247,11 +247,11 @@ const cloudfrontKeyPairIdParam = new StringParameter(this, 'CloudFrontKeyPairIdP
 ```bash
 # Verify private key exists (will show parameter name, not the value for security)
 aws ssm describe-parameters \
-  --parameter-filters "Key=Name,Values=/PhotoHub/{stage}/CloudFrontPrivateKey"
+  --parameter-filters "Key=Name,Values=/PixiProof/{stage}/CloudFrontPrivateKey"
 
 # Verify key pair ID exists
 aws ssm get-parameter \
-  --name "/PhotoHub/{stage}/CloudFrontKeyPairId" \
+  --name "/PixiProof/{stage}/CloudFrontKeyPairId" \
   --query "Parameter.Value" \
   --output text
 ```
@@ -322,17 +322,17 @@ If the distribution doesn't exist or isn't configured correctly, redeploy your C
 **Solutions**:
 1. Verify SSM parameters exist:
    ```bash
-   aws ssm get-parameter --name "/PhotoHub/{stage}/CloudFrontPrivateKey" --with-decryption
-   aws ssm get-parameter --name "/PhotoHub/{stage}/CloudFrontKeyPairId"
+   aws ssm get-parameter --name "/PixiProof/{stage}/CloudFrontPrivateKey" --with-decryption
+   aws ssm get-parameter --name "/PixiProof/{stage}/CloudFrontKeyPairId"
    ```
 
 2. Verify Lambda IAM role has SSM permissions:
    - Check that Lambda execution role includes: `ssm:GetParameter`, `ssm:GetParameters`
-   - Check parameter ARN is in the policy: `arn:aws:ssm:{region}:{account}:parameter/PhotoHub/{stage}/*`
+   - Check parameter ARN is in the policy: `arn:aws:ssm:{region}:{account}:parameter/PixiProof/{stage}/*`
 
 3. Verify stage matches your deployment:
    - Check `STAGE` environment variable in Lambda
-   - Ensure SSM parameter paths match: `/PhotoHub/{stage}/...`
+   - Ensure SSM parameter paths match: `/PixiProof/{stage}/...`
 
 ### Error: "ZIP not found" when ZIP exists in S3
 

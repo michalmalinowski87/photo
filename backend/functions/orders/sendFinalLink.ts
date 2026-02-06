@@ -116,7 +116,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 				body: JSON.stringify({
 					error: 'Missing GalleryPasswordEncryptionSecret',
 					message:
-						'Cannot retrieve gallery password because encryption secret is not configured. Set SSM /PhotoHub/<stage>/GalleryPasswordEncryptionSecret or env GALLERY_PASSWORD_ENCRYPTION_SECRET.',
+						'Cannot retrieve gallery password because encryption secret is not configured. Set SSM /PixiProof/<stage>/GalleryPasswordEncryptionSecret or env GALLERY_PASSWORD_ENCRYPTION_SECRET.',
 				}),
 			};
 		}
@@ -186,8 +186,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					link
 				},
 				envCheck: {
-					senderConfigured: !!sender,
-					apiUrlConfigured: !!apiUrl
+					senderConfigured: !!sender
 				}
 			});
 			return { statusCode: 500, body: JSON.stringify({ error: 'email failed', message: err.message }) };
@@ -241,8 +240,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 					link
 				},
 				envCheck: {
-					senderConfigured: !!sender,
-					apiUrlConfigured: !!apiUrl
+					senderConfigured: !!sender
 				}
 			});
 			return { statusCode: 500, body: JSON.stringify({ error: 'email failed', message: err.message }) };

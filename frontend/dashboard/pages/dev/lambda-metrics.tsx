@@ -100,8 +100,8 @@ export default function LambdaMetrics() {
   };
 
   const formatFunctionName = (name: string) => {
-    // Remove PhotoHub-dev- prefix for cleaner display (infrastructure still uses PhotoHub)
-    return name.replace(/^PhotoHub-[^-]+-/, "");
+    // Remove PixiProof-dev- prefix for cleaner display (infrastructure still uses PixiProof)
+    return name.replace(/^PixiProof-[^-]+-/, "");
   };
 
   if (loading) {

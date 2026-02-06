@@ -15,7 +15,7 @@ function toEnvLine(name, value) {
 }
 
 const stage = process.env.STAGE ? String(process.env.STAGE).trim() : "dev";
-const prefix = `/PhotoHub/${stage}`;
+const prefix = `/PixiProof/${stage}`;
 
 const mapping = [
   { ssmKey: "PublicApiUrl", envKey: "NEXT_PUBLIC_API_URL" },

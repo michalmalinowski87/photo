@@ -49,9 +49,6 @@ export default function FooterBusiness() {
                     <Link href="/">
                       <div className="flex flex-col items-start">
                         <span className="brand-text-black">PixiProof</span>
-                        <span className="text-xs text-gray-600 mt-0.5 font-medium tracking-wide">
-                          Your photos. Their stories.
-                        </span>
                       </div>
                     </Link>
                   </div>

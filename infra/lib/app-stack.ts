@@ -5,7 +5,7 @@ import { Bucket, BlockPublicAccess, HttpMethods, EventType, CfnBucket, ObjectOwn
 import { LambdaDestination } from 'aws-cdk-lib/aws-s3-notifications';
 import { AttributeType, BillingMode, Table, CfnTable, StreamViewType } from 'aws-cdk-lib/aws-dynamodb';
 import { UserPool, UserPoolClient, CfnUserPool } from 'aws-cdk-lib/aws-cognito';
-import { HttpApi, CorsHttpMethod, HttpMethod } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpApi, CorsHttpMethod, HttpMethod, CfnIntegration, CfnRoute, CfnAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { Runtime, LayerVersion, Code, StartingPosition, CfnFunction } from 'aws-cdk-lib/aws-lambda';
@@ -197,7 +197,14 @@ export class AppStack extends Stack {
 			return value.trim();
 		}
 
+		// Helper function to generate environment-prefixed resource names
+		// Format: {stage}-{resourceName} (e.g., dev-apiLambda, prod-apiLambda)
+		const prefixName = (resourceName: string): string => {
+			return `${props.stage}-${resourceName}`;
+		};
+
 		const galleriesBucket = new Bucket(this, 'GalleriesBucket', {
+			bucketName: prefixName('galleries-bucket'),
 			blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
 			autoDeleteObjects: false,
 			removalPolicy: RemovalPolicy.RETAIN,
@@ -231,6 +238,7 @@ export class AppStack extends Stack {
 		// Note: Using Lambda instead of lifecycle rule for precise control (only delete .zip files)
 
 		const galleries = new Table(this, 'GalleriesTable', {
+			tableName: prefixName('galleries'),
 			partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 			billingMode: BillingMode.PAY_PER_REQUEST,
 			removalPolicy: RemovalPolicy.RETAIN
@@ -248,24 +256,28 @@ export class AppStack extends Stack {
 		// Gallery expiration is now handled by EventBridge Scheduler for precise timing
 
 		const payments = new Table(this, 'PaymentsTable', {
+			tableName: prefixName('payments'),
 			partitionKey: { name: 'paymentId', type: AttributeType.STRING },
 			billingMode: BillingMode.PAY_PER_REQUEST,
 			removalPolicy: RemovalPolicy.RETAIN
 		});
 
 		const wallet = new Table(this, 'WalletsTable', {
+			tableName: prefixName('wallets'),
 			partitionKey: { name: 'userId', type: AttributeType.STRING },
 			billingMode: BillingMode.PAY_PER_REQUEST,
 			removalPolicy: RemovalPolicy.RETAIN
 		});
 
 		const walletLedger = new Table(this, 'WalletLedgerTable', {
+			tableName: prefixName('wallet-ledger'),
 			partitionKey: { name: 'userId', type: AttributeType.STRING },
 			sortKey: { name: 'txnId', type: AttributeType.STRING },
 			billingMode: BillingMode.PAY_PER_REQUEST,
 			removalPolicy: RemovalPolicy.RETAIN
 		});
 	const orders = new Table(this, 'OrdersTable', {
+		tableName: prefixName('orders'),
 		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 		sortKey: { name: 'orderId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
@@ -286,6 +298,7 @@ export class AppStack extends Stack {
 	});
 
 	const transactions = new Table(this, 'TransactionsTable', {
+		tableName: prefixName('transactions'),
 		partitionKey: { name: 'userId', type: AttributeType.STRING },
 		sortKey: { name: 'transactionId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
@@ -309,6 +322,7 @@ export class AppStack extends Stack {
 	// });
 
 	const clients = new Table(this, 'ClientsTable', {
+		tableName: prefixName('clients'),
 		partitionKey: { name: 'clientId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
@@ -320,6 +334,7 @@ export class AppStack extends Stack {
 	});
 
 	const packages = new Table(this, 'PackagesTable', {
+		tableName: prefixName('packages'),
 		partitionKey: { name: 'packageId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
@@ -331,6 +346,7 @@ export class AppStack extends Stack {
 	});
 
 	const notifications = new Table(this, 'NotificationsTable', {
+		tableName: prefixName('notifications'),
 		partitionKey: { name: 'userId', type: AttributeType.STRING },
 		sortKey: { name: 'notificationId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
@@ -338,6 +354,7 @@ export class AppStack extends Stack {
 	});
 
 	const users = new Table(this, 'UsersTable', {
+		tableName: prefixName('users'),
 		partitionKey: { name: 'userId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
@@ -351,12 +368,14 @@ export class AppStack extends Stack {
 	// Reserved subdomains registry (enforces uniqueness for photographer tenant subdomains).
 	// Partition key is the subdomain itself (lowercased).
 	const subdomains = new Table(this, 'SubdomainsTable', {
+		tableName: prefixName('subdomains'),
 		partitionKey: { name: 'subdomain', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
 	});
 
 	const emailCodeRateLimit = new Table(this, 'EmailCodeRateLimitTable', {
+		tableName: prefixName('email-code-rate-limit'),
 		partitionKey: { name: 'email', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
@@ -369,6 +388,7 @@ export class AppStack extends Stack {
 	};
 
 	const referralCodeValidation = new Table(this, 'ReferralCodeValidationTable', {
+		tableName: prefixName('referral-code-validation'),
 		partitionKey: { name: 'clientId', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
 		removalPolicy: RemovalPolicy.RETAIN
@@ -381,6 +401,7 @@ export class AppStack extends Stack {
 	};
 
 	const images = new Table(this, 'ImagesTable', {
+		tableName: prefixName('images'),
 		partitionKey: { name: 'galleryId', type: AttributeType.STRING },
 		sortKey: { name: 'imageKey', type: AttributeType.STRING },
 		billingMode: BillingMode.PAY_PER_REQUEST,
@@ -401,6 +422,7 @@ export class AppStack extends Stack {
 
 
 		const userPool = new UserPool(this, 'PhotographersUserPool', {
+			userPoolName: prefixName('photographers-user-pool'),
 			selfSignUpEnabled: true,
 			signInAliases: { email: true },
 			autoVerify: { email: true }, // REQUIRED: AutoVerifiedAttributes must include email for ResendConfirmationCode to work
@@ -441,6 +463,7 @@ export class AppStack extends Stack {
 			['http://localhost:3000'];
 		
 		const userPoolClient = new UserPoolClient(this, 'PhotographersUserPoolClient', {
+			userPoolClientName: prefixName('photographers-user-pool-client'),
 			userPool,
 			generateSecret: false,
 			allowedOAuthFlows: ['authorization_code'],
@@ -453,11 +476,12 @@ export class AppStack extends Stack {
 		
 		const userPoolDomain = userPool.addDomain('PhotographersUserPoolDomain', {
 			cognitoDomain: {
-				domainPrefix: `photohub-${props.stage}`
+				domainPrefix: `pixiproof-${props.stage}`
 			}
 		});
 
 		const httpApi = new HttpApi(this, 'Api', {
+			apiName: prefixName('api'),
 			corsPreflight: {
 				allowHeaders: ['*'],
 				allowMethods: [CorsHttpMethod.ANY],
@@ -465,7 +489,21 @@ export class AppStack extends Stack {
 			}
 		});
 
-		const authorizer = new HttpUserPoolAuthorizer('CognitoAuthorizer', userPool, {
+		// Create authorizer using CfnAuthorizer so we can reference it in CfnRoute
+		// This allows us to use CfnRoute for all routes (avoiding auto-permissions)
+		const authorizerResource = new CfnAuthorizer(this, 'CognitoAuthorizer', {
+			apiId: httpApi.apiId,
+			authorizerType: 'JWT',
+			identitySource: ['$request.header.Authorization'],
+			name: 'CognitoAuthorizer',
+			jwtConfiguration: {
+				audience: [userPoolClient.userPoolClientId],
+				issuer: `https://cognito-idp.${this.region}.amazonaws.com/${userPool.userPoolId}`
+			}
+		});
+		
+		// Keep HttpUserPoolAuthorizer for backward compatibility (not used directly)
+		const authorizer = new HttpUserPoolAuthorizer('CognitoAuthorizerLegacy', userPool, {
 			userPoolClients: [userPoolClient]
 		});
 
@@ -489,7 +527,7 @@ export class AppStack extends Stack {
 			}),
 			compatibleRuntimes: [Runtime.NODEJS_20_X],
 			description: 'AWS SDK v3 packages for Lambda functions',
-			layerVersionName: `PhotoHub-${props.stage}-aws-sdk-layer`
+			layerVersionName: `PixiProof-${props.stage}-aws-sdk-layer`
 		});
 
 		const defaultFnProps = {
@@ -547,7 +585,7 @@ export class AppStack extends Stack {
 
 		// Create SSM parameters for configurable values (can be changed without redeploying)
 		// These parameters are read at runtime by Lambda functions
-		const ssmParameterPrefix = `/PhotoHub/${props.stage}`;
+		const ssmParameterPrefix = `/PixiProof/${props.stage}`;
 		
 		// JWT Secret - SecureString for encryption
 		// Note: Using StringParameter without type property - CDK will create as String type
@@ -582,13 +620,15 @@ export class AppStack extends Stack {
 		});
 
 		// Stripe payment methods configuration
-		// Default payment methods: card, blik, p24, apple_pay, google_pay, paypal
+		// Default payment methods: card, blik, p24, paypal
+		// Note: apple_pay and google_pay are not valid payment method types for Stripe Checkout
+		// They are automatically available when using 'card' if the customer's browser supports them
 		// Can be customized per environment via SSM Parameter Store
-		const defaultPaymentMethods = JSON.stringify(['card', 'blik', 'p24', 'apple_pay', 'google_pay', 'paypal']);
+		const defaultPaymentMethods = JSON.stringify(['card', 'blik', 'p24', 'paypal']);
 		const stripePaymentMethodsParam = new StringParameter(this, 'StripePaymentMethodsParam', {
 			parameterName: `${ssmParameterPrefix}/StripePaymentMethods`,
 			stringValue: defaultPaymentMethods,
-			description: 'JSON array of enabled Stripe payment methods (e.g., ["card","blik","p24","apple_pay","google_pay","paypal"])'
+			description: 'JSON array of enabled Stripe payment methods (e.g., ["card","blik","p24","paypal"])'
 		});
 
 		// Email configuration
@@ -668,6 +708,23 @@ export class AppStack extends Stack {
 			]
 		});
 
+		// KMS policy for decrypting SecureString parameters (e.g., CloudFrontPrivateKey)
+		// AWS SSM uses the default AWS managed key (alias/aws/ssm) for SecureString parameters
+		// This policy allows Lambda functions to decrypt SecureString parameters via SSM
+		const kmsDecryptPolicy = new PolicyStatement({
+			actions: [
+				'kms:Decrypt'
+			],
+			resources: [
+				`arn:aws:kms:${this.region}:${this.account}:key/*`
+			],
+			conditions: {
+				StringEquals: {
+					'kms:ViaService': `ssm.${this.region}.amazonaws.com`
+				}
+			}
+		});
+
 		const envVars: Record<string, string> = {
 			STAGE: props.stage,
 			GALLERIES_BUCKET: galleriesBucket.bucketName,
@@ -695,13 +752,14 @@ export class AppStack extends Stack {
 		// Created before apiFn so DOWNLOADS_ZIP_FN_NAME can be added to envVars
 		// Dead Letter Queue for failed ZIP generation (production reliability)
 		const zipGenerationDLQ = new Queue(this, 'ZipGenerationDLQ', {
-			queueName: `PhotoHub-${props.stage}-ZipGenerationDLQ`,
+			queueName: `PixiProof-${props.stage}-ZipGenerationDLQ`,
 			encryption: QueueEncryption.SQS_MANAGED,
 			retentionPeriod: Duration.days(14), // Retain failed jobs for 14 days for debugging
 			visibilityTimeout: Duration.minutes(16) // Slightly longer than Lambda timeout
 		});
 		
 		const zipFn = new NodejsFunction(this, 'DownloadsZipFn', {
+			functionName: prefixName('downloadsZip'),
 			entry: path.join(__dirname, '../../../backend/functions/downloads/createZip.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -758,9 +816,11 @@ export class AppStack extends Stack {
 		// Grant DLQ permissions
 		zipGenerationDLQ.grantSendMessages(zipFn);
 		zipFn.addToRolePolicy(ssmPolicy);
+		zipFn.addToRolePolicy(kmsDecryptPolicy);
 
 		// ZIP Chunk Worker - copies raw files to temp prefix, invoked by Step Functions Map
 		const zipChunkWorkerFn = new NodejsFunction(this, 'ZipChunkWorkerFn', {
+			functionName: prefixName('zipChunkWorker'),
 			entry: path.join(__dirname, '../../../backend/functions/downloads/zipChunkWorker.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -791,6 +851,7 @@ export class AppStack extends Stack {
 		// 3008 MB: max allowed in many accounts - ~3x CPU vs 1024 MB for (de)compression/parse
 		// Note: ARM64 reverted - CloudWatch Lambda agent extension is x86-only, causes Extension.Crash
 		const zipMergeFn = new NodejsFunction(this, 'ZipMergeFn', {
+			functionName: prefixName('zipMerge'),
 			entry: path.join(__dirname, '../../../backend/functions/downloads/zipMerge.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -869,11 +930,13 @@ export class AppStack extends Stack {
 			}
 		});
 		const zipStateMachine = new StateMachine(this, 'ZipChunkedStateMachine', {
+			stateMachineName: prefixName('zipChunkedStateMachine'),
 			definition: zipMapState.next(mergeTask)
 		});
 
 		// ZIP Router - dispatches to single createZip or chunked Step Function
 		const zipRouterFn = new NodejsFunction(this, 'ZipRouterFn', {
+			functionName: prefixName('zipRouter'),
 			entry: path.join(__dirname, '../../../backend/functions/downloads/zipRouter.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -915,6 +978,7 @@ export class AppStack extends Stack {
 
 		// Lambda function to handle order delivery (pre-generate finals ZIP and trigger cleanup)
 		const onOrderDeliveredFn = new NodejsFunction(this, 'OnOrderDeliveredFn', {
+			functionName: prefixName('onOrderDelivered'),
 			entry: path.join(__dirname, '../../../backend/functions/orders/onOrderDelivered.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -952,6 +1016,7 @@ export class AppStack extends Stack {
 		
 		// Lambda function to cleanup originals/finals after order is delivered
 		const cleanupDeliveredOrderFn = new NodejsFunction(this, 'CleanupDeliveredOrderFn', {
+			functionName: prefixName('cleanupDeliveredOrder'),
 			entry: path.join(__dirname, '../../../backend/functions/orders/cleanupDeliveredOrder.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -993,6 +1058,7 @@ export class AppStack extends Stack {
 		// This ensures final ZIP generation happens even if order is marked DELIVERED outside of sendFinalLink/complete
 		// Processes stream records and filters for MODIFY events where deliveryStatus changes to DELIVERED
 		const orderDeliveredStreamProcessor = new NodejsFunction(this, 'OrderDeliveredStreamProcessor', {
+			functionName: prefixName('orderDeliveredStreamProcessor'),
 			entry: path.join(__dirname, '../../../backend/functions/orders/onOrderDeliveredStreamProcessor.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -1029,6 +1095,7 @@ export class AppStack extends Stack {
 		// Handles CLIENT_APPROVED and PREPARING_DELIVERY (from CHANGES_REQUESTED) status changes
 		// This ensures ZIP generation happens even if status changes outside of approveSelection function
 		const orderStatusChangeProcessor = new NodejsFunction(this, 'OrderStatusChangeProcessor', {
+			functionName: prefixName('orderStatusChangeProcessor'),
 			entry: path.join(__dirname, '../../../backend/functions/orders/onOrderStatusChange.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -1114,6 +1181,7 @@ export class AppStack extends Stack {
 		// ZIP Chunked Failure Handler - triggered by EventBridge when Step Function fails
 		// Clears generating flags and sets error state so UI shows failure + retry
 		const zipChunkedFailureHandlerFn = new NodejsFunction(this, 'ZipChunkedFailureHandlerFn', {
+			functionName: prefixName('zipChunkedFailureHandler'),
 			entry: path.join(__dirname, '../../../backend/functions/downloads/zipChunkedFailureHandler.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -1151,7 +1219,7 @@ export class AppStack extends Stack {
 		// EventBridge rule: Step Function execution failed -> invoke failure handler
 		// DLQ captures events when Lambda fails after retries - alerts on silent failures
 		const zipFailureHandlerDLQ = new Queue(this, 'ZipFailureHandlerDLQ', {
-			queueName: `PhotoHub-${props.stage}-ZipFailureHandlerDLQ`,
+			queueName: `PixiProof-${props.stage}-ZipFailureHandlerDLQ`,
 			encryption: QueueEncryption.SQS_MANAGED,
 			retentionPeriod: Duration.days(14),
 			visibilityTimeout: Duration.minutes(1)
@@ -1189,6 +1257,7 @@ export class AppStack extends Stack {
 
 		// Auth Lambda function - handles all authentication endpoints (signup, login, password reset)
 		const authFn = new NodejsFunction(this, 'AuthFunction', {
+			functionName: prefixName('authLambda'),
 			entry: path.join(__dirname, '../../../backend/functions/auth/index.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -1258,6 +1327,21 @@ export class AppStack extends Stack {
 			]
 		}));
 
+		// KMS permissions for decrypting SecureString parameters (e.g., CloudFrontPrivateKey)
+		authFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'kms:Decrypt'
+			],
+			resources: [
+				`arn:aws:kms:${this.region}:${this.account}:key/*`
+			],
+			conditions: {
+				StringEquals: {
+					'kms:ViaService': `ssm.${this.region}.amazonaws.com`
+				}
+			}
+		}));
+
 		// SES permissions for welcome email (confirm-signup sends email with PDF attachments)
 		authFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
@@ -1266,6 +1350,7 @@ export class AppStack extends Stack {
 
 		// Single API Lambda function - handles all HTTP endpoints via Express router (except auth)
 		const apiFn = new NodejsFunction(this, 'ApiFunction', {
+			functionName: prefixName('apiLambda'),
 			entry: path.join(__dirname, '../../../backend/functions/api/index.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -1347,6 +1432,22 @@ export class AppStack extends Stack {
 			]
 		}));
 
+		// KMS permissions for decrypting SecureString parameters (e.g., CloudFrontPrivateKey)
+		// AWS SSM uses the default AWS managed key (alias/aws/ssm) for SecureString parameters
+		apiFn.addToRolePolicy(new PolicyStatement({
+			actions: [
+				'kms:Decrypt'
+			],
+			resources: [
+				`arn:aws:kms:${this.region}:${this.account}:key/*`
+			],
+			conditions: {
+				StringEquals: {
+					'kms:ViaService': `ssm.${this.region}.amazonaws.com`
+				}
+			}
+		}));
+
 		// Lambda invoke permissions (for zip generation functions)
 		zipFn.grantInvoke(apiFn);
 		zipRouterFn.grantInvoke(apiFn);
@@ -1364,205 +1465,152 @@ export class AppStack extends Stack {
 			})
 		});
 
-		// Note: We use httpApi.addRoutes (not CfnRoute) to update existing routes instead of creating new ones
-		// This prevents "Route already exists" conflicts. Individual permissions will be cleaned up manually
-		// after deployment using the cleanup script.
+		// Add wildcard permission for authFn to avoid policy size limit
+		authFn.addPermission('AllowHttpApiInvoke', {
+			principal: new ServicePrincipal('apigateway.amazonaws.com'),
+			sourceArn: Stack.of(this).formatArn({
+				service: 'execute-api',
+				resource: httpApi.apiId,
+				resourceName: '*/*'
+			})
+		});
+
+		// Helper function to add routes using CfnIntegration (doesn't auto-create permissions)
+		// This prevents Lambda policy size from exceeding 20KB limit when many routes exist
+		const addRouteWithoutPermission = (
+			id: string,
+			path: string,
+			methods: HttpMethod[],
+			lambdaFn: NodejsFunction,
+			useAuthorizer: boolean = false
+		) => {
+			const integration = new CfnIntegration(this, `${id}Integration`, {
+				apiId: httpApi.apiId,
+				integrationType: 'AWS_PROXY',
+				integrationUri: lambdaFn.functionArn,
+				payloadFormatVersion: '1.0'
+			});
+
+			// Create a route for each HTTP method
+			methods.forEach((method, index) => {
+				new CfnRoute(this, `${id}Route${index}`, {
+					apiId: httpApi.apiId,
+					routeKey: `${method} ${path}`,
+					target: `integrations/${integration.ref}`,
+					authorizerId: useAuthorizer ? authorizerResource.ref : undefined,
+					authorizationType: useAuthorizer ? 'JWT' : undefined
+				});
+			});
+		};
 
 		// Explicit OPTIONS route for CORS preflight - must come before catch-all route
 		// API Gateway HTTP API v2's built-in CORS may not work correctly with authorizers,
 		// so we handle OPTIONS explicitly to ensure preflight requests succeed
-		httpApi.addRoutes({
-			path: '/{proxy+}',
-			methods: [HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOptionsIntegration', apiFn)
-			// No authorizer - OPTIONS requests must be public for CORS to work
-		});
+		// Using CfnIntegration to avoid auto-creating Lambda permissions
+		addRouteWithoutPermission('ApiOptions', '/{proxy+}', [HttpMethod.OPTIONS], apiFn);
 
 		// Auth routes - handled by separate auth Lambda
 		// Public auth endpoints (signup, password reset) - no authorizer required
-		httpApi.addRoutes({
-			path: '/auth/public/{proxy+}',
-			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('AuthPublicIntegration', authFn)
-			// No authorizer - public endpoints
-		});
+		addRouteWithoutPermission('AuthPublic', '/auth/public/{proxy+}', 
+			[HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE, HttpMethod.OPTIONS], 
+			authFn);
 		// Public undo deletion route - must be public (no authorizer) as it uses token in URL
 		// This is the only public /auth route that needs special handling
 		// All other /auth routes are handled by the catch-all below
-		httpApi.addRoutes({
-			path: '/auth/undo-deletion/{token}',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('UserDeletionUndoIntegration', apiFn)
-			// No authorizer - public endpoint accessed via token in URL
-		});
+		addRouteWithoutPermission('UserDeletionUndo', '/auth/undo-deletion/{token}', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
 
 		// OPTIONS for all /auth endpoints - must be public for CORS preflight
 		// This catch-all handles OPTIONS for all /auth routes (including deletion, dev, etc.)
-		httpApi.addRoutes({
-			path: '/auth/{proxy+}',
-			methods: [HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('AuthOptionsIntegration', authFn)
-			// No authorizer - OPTIONS requests must be public for CORS to work
-		});
+		addRouteWithoutPermission('AuthOptions', '/auth/{proxy+}', [HttpMethod.OPTIONS], authFn);
 
 		// Protected /auth endpoints catch-all - handles all authenticated /auth routes
 		// Routes like /auth/request-deletion, /auth/cancel-deletion, /auth/deletion-status,
 		// /auth/dev/trigger-inactivity-scanner, /auth/change-password, etc. are all handled here
 		// Express routing in the Lambda function handles the actual path matching
 		// This consolidates many individual routes into one, saving Lambda permission space
-		httpApi.addRoutes({
-			path: '/auth/{proxy+}',
-			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE],
-			integration: new HttpLambdaIntegration('AuthIntegration', authFn),
-			authorizer // Protected endpoints require authentication
-		});
+		// Using CfnRoute with authorizer to avoid auto-creating permissions
+		addRouteWithoutPermission('Auth', '/auth/{proxy+}', 
+			[HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE], 
+			authFn, true);
 		// Client login endpoint - clients authenticate with gallery password, not Cognito
-		httpApi.addRoutes({
-			path: '/galleries/{id}/client-login',
-			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiClientLoginIntegration', apiFn)
-			// No authorizer - public endpoint
-		});
+		addRouteWithoutPermission('ApiClientLogin', '/galleries/{id}/client-login', 
+			[HttpMethod.POST, HttpMethod.OPTIONS], apiFn);
 		// Public gallery info endpoint (login page): non-sensitive fields only
-		httpApi.addRoutes({
-			path: '/galleries/{id}/public-info',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiGalleryPublicInfoIntegration', apiFn)
-			// No authorizer - public endpoint
-		});
+		addRouteWithoutPermission('ApiGalleryPublicInfo', '/galleries/{id}/public-info', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
 
 		// Client gallery endpoints (use client JWT tokens, not Cognito)
 		// These endpoints verify client JWT tokens in the Lambda function itself
-		// Note: HttpLambdaIntegration will create individual permissions, but we have a wildcard permission above
-		// that covers all routes. After deployment, run the cleanup script to remove individual permissions.
+		// Using CfnIntegration to avoid auto-creating Lambda permissions (wildcard permission covers all routes)
 		// Keys-only endpoints first (more specific) - lightweight for Uppy collision detection
-		httpApi.addRoutes({
-			path: '/galleries/{id}/images/keys',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiGalleryImageKeysIntegration', apiFn)
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/images',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiGalleryImagesIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/images/{imageKey}/presigned-url',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiGalleryImagePresignedUrlIntegration', apiFn)
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/images/{imageKey}/download',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiGalleryImageDownloadIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/status',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiGalleryStatusIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOrdersListIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/delivered',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOrdersDeliveredIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/client-approved',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOrdersClientApprovedIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/selections',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiSelectionsGetIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/selections/approve',
-			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiSelectionsApproveIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/selection-change-request',
-			methods: [HttpMethod.POST, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiSelectionChangeRequestIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/zip',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOrdersZipIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/zip/status',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOrdersZipStatusIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/final/images/keys',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOrdersFinalImageKeysIntegration', apiFn)
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/final/images',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOrdersFinalImagesIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/final/zip',
-			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.OPTIONS], // Support both GET (new) and POST (backward compatibility)
-			integration: new HttpLambdaIntegration('ApiOrdersFinalZipIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
-		httpApi.addRoutes({
-			path: '/galleries/{id}/orders/{orderId}/final/zip/status',
-			methods: [HttpMethod.GET, HttpMethod.OPTIONS],
-			integration: new HttpLambdaIntegration('ApiOrdersFinalZipStatusIntegration', apiFn)
-			// No authorizer - uses client JWT token verification
-		});
+		addRouteWithoutPermission('ApiGalleryImageKeys', '/galleries/{id}/images/keys', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiGalleryImages', '/galleries/{id}/images', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiGalleryImagePresignedUrl', '/galleries/{id}/images/{imageKey}/presigned-url', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiGalleryImageDownload', '/galleries/{id}/images/{imageKey}/download', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiGalleryStatus', '/galleries/{id}/status', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiOrdersList', '/galleries/{id}/orders', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiOrdersDelivered', '/galleries/{id}/orders/delivered', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiOrdersClientApproved', '/galleries/{id}/orders/client-approved', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiSelectionsGet', '/galleries/{id}/selections', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiSelectionsApprove', '/galleries/{id}/selections/approve', 
+			[HttpMethod.POST, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiSelectionChangeRequest', '/galleries/{id}/selection-change-request', 
+			[HttpMethod.POST, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiOrdersZip', '/galleries/{id}/orders/{orderId}/zip', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiOrdersZipStatus', '/galleries/{id}/orders/{orderId}/zip/status', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiOrdersFinalImageKeys', '/galleries/{id}/orders/{orderId}/final/images/keys', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiOrdersFinalImages', '/galleries/{id}/orders/{orderId}/final/images', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
+		addRouteWithoutPermission('ApiOrdersFinalZip', '/galleries/{id}/orders/{orderId}/final/zip', 
+			[HttpMethod.GET, HttpMethod.POST, HttpMethod.OPTIONS], apiFn); // Support both GET (new) and POST (backward compatibility)
+		addRouteWithoutPermission('ApiOrdersFinalZipStatus', '/galleries/{id}/orders/{orderId}/final/zip/status', 
+			[HttpMethod.GET, HttpMethod.OPTIONS], apiFn);
 
 		// Stripe payment functions - separate Lambda functions for better isolation and scaling
 		// Created BEFORE catch-all route to ensure they're matched first
 		const paymentsCheckoutFn = new NodejsFunction(this, 'PaymentsCheckoutFn', {
+			functionName: prefixName('paymentsCheckout'),
 			entry: path.join(__dirname, '../../../backend/functions/payments/checkoutCreate.ts'),
 			handler: 'handler',
 			...defaultFnProps,
 			environment: envVars
 		});
 		const paymentsWebhookFn = new NodejsFunction(this, 'PaymentsWebhookFn', {
+			functionName: prefixName('paymentsWebhook'),
 			entry: path.join(__dirname, '../../../backend/functions/payments/webhook.ts'),
 			handler: 'handler',
 			...defaultFnProps,
 			environment: envVars
 		});
 		const paymentsSuccessFn = new NodejsFunction(this, 'PaymentsSuccessFn', {
+			functionName: prefixName('paymentsSuccess'),
 			entry: path.join(__dirname, '../../../backend/functions/payments/success.ts'),
 			handler: 'handler',
 			...defaultFnProps,
 			environment: envVars
 		});
 		const paymentsCancelFn = new NodejsFunction(this, 'PaymentsCancelFn', {
+			functionName: prefixName('paymentsCancel'),
 			entry: path.join(__dirname, '../../../backend/functions/payments/cancel.ts'),
 			handler: 'handler',
 			...defaultFnProps,
 			environment: envVars
 		});
 		const paymentsCheckStatusFn = new NodejsFunction(this, 'PaymentsCheckStatusFn', {
+			functionName: prefixName('paymentsCheckStatus'),
 			entry: path.join(__dirname, '../../../backend/functions/payments/checkStatus.ts'),
 			handler: 'handler',
 			...defaultFnProps,
@@ -1585,55 +1633,102 @@ export class AppStack extends Stack {
 
 		// SSM Parameter Store permissions for payment functions
 		paymentsCheckoutFn.addToRolePolicy(ssmPolicy);
+		paymentsCheckoutFn.addToRolePolicy(kmsDecryptPolicy);
 		paymentsWebhookFn.addToRolePolicy(ssmPolicy);
+		paymentsWebhookFn.addToRolePolicy(kmsDecryptPolicy);
 		paymentsWebhookFn.addToRolePolicy(new PolicyStatement({
 			actions: ['ses:SendEmail', 'ses:SendRawEmail'],
 			resources: ['*']
 		})); // Referral eligibility + referrer reward emails
 		paymentsSuccessFn.addToRolePolicy(ssmPolicy);
+		paymentsSuccessFn.addToRolePolicy(kmsDecryptPolicy);
 		paymentsCancelFn.addToRolePolicy(ssmPolicy);
+		paymentsCancelFn.addToRolePolicy(kmsDecryptPolicy);
 		paymentsCheckStatusFn.addToRolePolicy(ssmPolicy);
+		paymentsCheckStatusFn.addToRolePolicy(kmsDecryptPolicy);
 
 		// Create EventBridge rule for Stripe partner events
 		// Stripe sends events directly to EventBridge partner event bus, which routes them to Lambda
-		const stripeEventSourceName = 'aws.partner/stripe.com/ed_test_61ThbOqJLCV8JR42e16Tc793AKNJz6JQrPoxvHJd2XxQ';
+		// NOTE: This requires setting up Stripe's AWS EventBridge integration first
+		// See: https://stripe.com/docs/stripe-cli/eventbridge
+		// The event bus name format is: aws.partner/stripe.com/{account_id}
+		// Set STRIPE_EVENTBRIDGE_SOURCE_NAME env var to enable this feature
+		// Can be either:
+		//   - Event bus name: aws.partner/stripe.com/ed_test_...
+		//   - ARN format: arn:aws:events:region::event-source/aws.partner/stripe.com/ed_test_...
+		const stripeEventSourceNameRaw = process.env.STRIPE_EVENTBRIDGE_SOURCE_NAME || '';
 		
-		// Reference the partner event bus (created by Stripe when you set up the integration)
-		const stripePartnerEventBus = EventBus.fromEventBusName(
-			this,
-			'StripePartnerEventBus',
-			stripeEventSourceName
-		);
+		// Extract event bus name from ARN if ARN format is provided
+		// ARN format: arn:aws:events:region::event-source/aws.partner/stripe.com/...
+		// Event bus name: aws.partner/stripe.com/...
+		let stripeEventSourceName = stripeEventSourceNameRaw.trim();
+		if (stripeEventSourceName.startsWith('arn:aws:events:')) {
+			// Extract event bus name from ARN
+			// ARN format: arn:aws:events:region::event-source/aws.partner/stripe.com/...
+			const arnParts = stripeEventSourceName.split('/');
+			if (arnParts.length >= 2) {
+				// Take everything after the last '/' which should be the event bus name
+				stripeEventSourceName = arnParts.slice(1).join('/');
+			} else {
+				// Fallback: try to extract from ARN structure
+				const match = stripeEventSourceName.match(/event-source\/(.+)$/);
+				if (match && match[1]) {
+					stripeEventSourceName = match[1];
+				}
+			}
+		}
 		
-		// Create rule on the partner event bus (not the default event bus)
-		const stripeEventRule = new Rule(this, 'StripeEventRule', {
-			eventBus: stripePartnerEventBus,
-			eventPattern: {
-				source: [stripeEventSourceName],
-				'detail-type': [
-					'checkout.session.completed',
-					'checkout.session.expired',
-					'payment_intent.payment_failed',
-					'payment_intent.canceled',
-					'charge.succeeded',
-					'charge.updated',
-					'payment_intent.succeeded'
-				]
-			},
-			description: 'Route Stripe events from partner event bus to webhook Lambda',
-			enabled: true
+		// Only create EventBridge rule if Stripe event bus is configured
+		if (stripeEventSourceName && stripeEventSourceName.trim() !== '') {
+			// Reference the partner event bus (created by Stripe when you set up the integration)
+			const stripePartnerEventBus = EventBus.fromEventBusName(
+				this,
+				'StripePartnerEventBus',
+				stripeEventSourceName
+			);
+			
+			// Create rule on the partner event bus (not the default event bus)
+			const stripeEventRule = new Rule(this, 'StripeEventRule', {
+				eventBus: stripePartnerEventBus,
+				eventPattern: {
+					source: [stripeEventSourceName],
+					'detail-type': [
+						'checkout.session.completed',
+						'checkout.session.expired',
+						'payment_intent.payment_failed',
+						'payment_intent.canceled',
+						'charge.succeeded',
+						'charge.updated',
+						'payment_intent.succeeded'
+					]
+				},
+				description: 'Route Stripe events from partner event bus to webhook Lambda',
+				enabled: true
+			});
+
+			// Add Lambda as target for EventBridge rule
+			stripeEventRule.addTarget(new LambdaFunction(paymentsWebhookFn));
+
+			// Grant EventBridge permission to invoke Lambda
+			paymentsWebhookFn.addPermission('AllowEventBridgeInvoke', {
+				principal: new ServicePrincipal('events.amazonaws.com'),
+				sourceArn: stripeEventRule.ruleArn
+			});
+		} else {
+			// Log warning that EventBridge integration is not configured
+			// Stripe webhooks will need to use HTTP endpoint instead
+			console.warn('⚠️  STRIPE_EVENTBRIDGE_SOURCE_NAME not set. Stripe EventBridge rule will not be created.');
+			console.warn('   Stripe webhooks will need to use HTTP endpoint: /payments/webhook');
+		}
+
+		// Add HTTP webhook route as fallback (used when EventBridge is not configured)
+		// If EventBridge is configured, Stripe will send events there; otherwise use HTTP webhook
+		httpApi.addRoutes({
+			path: '/payments/webhook',
+			methods: [HttpMethod.POST],
+			integration: new HttpLambdaIntegration('PaymentsWebhookIntegration', paymentsWebhookFn)
+			// No authorizer - Stripe webhooks are authenticated via webhook secret verification
 		});
-
-		// Add Lambda as target for EventBridge rule
-		stripeEventRule.addTarget(new LambdaFunction(paymentsWebhookFn));
-
-		// Grant EventBridge permission to invoke Lambda
-		paymentsWebhookFn.addPermission('AllowEventBridgeInvoke', {
-			principal: new ServicePrincipal('events.amazonaws.com'),
-			sourceArn: stripeEventRule.ruleArn
-		});
-
-		// Note: HTTP webhook route removed - we only use EventBridge for Stripe events
 		httpApi.addRoutes({
 			path: '/payments/checkout',
 			methods: [HttpMethod.POST],
@@ -1661,25 +1756,14 @@ export class AppStack extends Stack {
 
 		// Single catch-all route for all other API endpoints (protected routes)
 		// Exclude OPTIONS from catch-all since it's handled separately above
-		httpApi.addRoutes({
-			path: '/{proxy+}',
-			methods: [HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE],
-			integration: new HttpLambdaIntegration('ApiIntegration', apiFn),
-			authorizer // Apply authorizer to all routes
-		});
+		// Using CfnRoute with authorizer to avoid auto-creating permissions
+		addRouteWithoutPermission('Api', '/{proxy+}', 
+			[HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE], 
+			apiFn, true);
 
 		// Also add root routes (without proxy)
-		httpApi.addRoutes({
-			path: '/health',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('ApiHealthIntegration', apiFn)
-		});
-		httpApi.addRoutes({
-			path: '/config',
-			methods: [HttpMethod.GET],
-			integration: new HttpLambdaIntegration('ApiConfigIntegration', apiFn)
-			// No authorizer - public endpoint for app configuration
-		});
+		addRouteWithoutPermission('ApiHealth', '/health', [HttpMethod.GET], apiFn);
+		addRouteWithoutPermission('ApiConfig', '/config', [HttpMethod.GET], apiFn);
 
 		// Grant API Lambda permission to invoke zipFn
 		apiFn.addToRolePolicy(new PolicyStatement({
@@ -1689,6 +1773,7 @@ export class AppStack extends Stack {
 
 		// Gallery delete helper - used by expiry event handlers
 		const galleriesDeleteHelperFn = new NodejsFunction(this, 'GalleriesDeleteHelperFn', {
+			functionName: prefixName('galleriesDeleteHelper'),
 			entry: path.join(__dirname, '../../../backend/functions/galleries/delete.ts'),
 			handler: 'handler',
 			...defaultFnProps,
@@ -1707,6 +1792,7 @@ export class AppStack extends Stack {
 			resources: [userPool.userPoolArn]
 		}));
 		galleriesDeleteHelperFn.addToRolePolicy(ssmPolicy);
+		galleriesDeleteHelperFn.addToRolePolicy(kmsDecryptPolicy);
 		envVars['GALLERIES_DELETE_FN_NAME'] = galleriesDeleteHelperFn.functionName;
 
 		// Remove all individual HTTP Lambda functions - they're now handled by the single API Lambda
@@ -1718,6 +1804,7 @@ export class AppStack extends Stack {
 		// Expiry reminders schedule - sends warning emails
 		// Note: Gallery deletion is handled by EventBridge Scheduler, not DynamoDB TTL
 		const expiryFn = new NodejsFunction(this, 'ExpiryCheckFn', {
+			functionName: prefixName('expiryCheck'),
 			entry: path.join(__dirname, '../../../backend/functions/expiry/checkAndNotify.ts'),
 			handler: 'handler',
 			...defaultFnProps,
@@ -1734,6 +1821,7 @@ export class AppStack extends Stack {
 			resources: [userPool.userPoolArn]
 		}));
 		expiryFn.addToRolePolicy(ssmPolicy);
+		expiryFn.addToRolePolicy(kmsDecryptPolicy);
 		// Run every 6 hours for more frequent expiry checks and warnings
 		new Rule(this, 'ExpirySchedule', {
 			schedule: Schedule.rate(Duration.hours(6)),
@@ -1743,6 +1831,7 @@ export class AppStack extends Stack {
 		// EventBridge Scheduler-based gallery expiration system
 		// Deletion Lambda function - invoked by EventBridge Scheduler at exact expiry time
 		const galleryExpiryDeletionFn = new NodejsFunction(this, 'GalleryExpiryDeletionFn', {
+			functionName: prefixName('galleryExpiryDeletion'),
 			entry: path.join(__dirname, '../../../backend/functions/expiry/deleteExpiredGallery.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -1790,10 +1879,11 @@ export class AppStack extends Stack {
 			resources: [userPool.userPoolArn]
 		}));
 		galleryExpiryDeletionFn.addToRolePolicy(ssmPolicy);
+		galleryExpiryDeletionFn.addToRolePolicy(kmsDecryptPolicy);
 		
 		// Dead Letter Queue for failed schedule executions
 		const galleryExpiryDLQ = new Queue(this, 'GalleryExpiryDLQ', {
-			queueName: `PhotoHub-${props.stage}-GalleryExpiryDLQ`,
+			queueName: `PixiProof-${props.stage}-GalleryExpiryDLQ`,
 			encryption: QueueEncryption.SQS_MANAGED,
 			retentionPeriod: Duration.days(14)
 		});
@@ -1879,7 +1969,7 @@ export class AppStack extends Stack {
 		// User Deletion System
 		// Dead Letter Queue for failed user deletion schedule executions
 		const userDeletionDLQ = new Queue(this, 'UserDeletionDLQ', {
-			queueName: `PhotoHub-${props.stage}-UserDeletionDLQ`,
+			queueName: `PixiProof-${props.stage}-UserDeletionDLQ`,
 			encryption: QueueEncryption.SQS_MANAGED,
 			retentionPeriod: Duration.days(14), // Retain failed jobs for 14 days for debugging
 			visibilityTimeout: Duration.minutes(16) // Slightly longer than Lambda timeout (15 minutes)
@@ -1887,6 +1977,7 @@ export class AppStack extends Stack {
 
 		// PerformUserDeletion Lambda - Main Lambda that performs actual user deletion
 		const performUserDeletionFn = new NodejsFunction(this, 'PerformUserDeletionFn', {
+			functionName: prefixName('performUserDeletion'),
 			entry: path.join(__dirname, '../../../backend/functions/users/performUserDeletion.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -1952,6 +2043,7 @@ export class AppStack extends Stack {
 			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/gallery-expiry-*`]
 		}));
 		performUserDeletionFn.addToRolePolicy(ssmPolicy);
+		performUserDeletionFn.addToRolePolicy(kmsDecryptPolicy);
 
 		// IAM role for EventBridge Scheduler to invoke PerformUserDeletion Lambda
 		const userDeletionSchedulerRole = new Role(this, 'UserDeletionSchedulerRole', {
@@ -1962,6 +2054,7 @@ export class AppStack extends Stack {
 
 		// InactivityScanner Lambda - Scans for inactive users and schedules deletions
 		const inactivityScannerFn = new NodejsFunction(this, 'InactivityScannerFn', {
+			functionName: prefixName('inactivityScanner'),
 			entry: path.join(__dirname, '../../../backend/functions/users/inactivityScanner.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -2015,6 +2108,7 @@ export class AppStack extends Stack {
 			resources: [userDeletionSchedulerRole.roleArn]
 		}));
 		inactivityScannerFn.addToRolePolicy(ssmPolicy);
+		inactivityScannerFn.addToRolePolicy(kmsDecryptPolicy);
 		envVars['INACTIVITY_SCANNER_FN_NAME'] = inactivityScannerFn.functionName;
 		// Update API Lambda environment with inactivity scanner function name (for dev endpoints)
 		// This must be done after inactivityScannerFn is created
@@ -2030,6 +2124,7 @@ export class AppStack extends Stack {
 
 		// PostAuthentication Lambda - Updates lastLoginAt and cancels inactivity deletions
 		const postAuthenticationFn = new NodejsFunction(this, 'PostAuthenticationFn', {
+			functionName: prefixName('postAuthentication'),
 			entry: path.join(__dirname, '../../../backend/functions/auth/postAuthentication.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -2062,6 +2157,7 @@ export class AppStack extends Stack {
 			resources: [`arn:aws:scheduler:${this.region}:${this.account}:schedule/default/user-deletion-*`]
 		}));
 		postAuthenticationFn.addToRolePolicy(ssmPolicy);
+		postAuthenticationFn.addToRolePolicy(kmsDecryptPolicy);
 
 		// Note: Cognito Lambda trigger permission will be granted automatically when the trigger is configured
 		// via AWS Console or CLI. The trigger configuration process grants the necessary permission.
@@ -2174,6 +2270,7 @@ export class AppStack extends Stack {
 
 		// Transaction expiry check (auto-cancel UNPAID transactions after 3 days for galleries, 15 minutes for wallet top-ups)
 		const transactionExpiryFn = new NodejsFunction(this, 'TransactionExpiryCheckFn', {
+			functionName: prefixName('transactionExpiryCheck'),
 			entry: path.join(__dirname, '../../../backend/functions/expiry/checkTransactions.ts'),
 			handler: 'handler',
 			...defaultFnProps,
@@ -2184,6 +2281,7 @@ export class AppStack extends Stack {
 		galleries.grantReadWriteData(transactionExpiryFn);
 		galleriesDeleteHelperFn.grantInvoke(transactionExpiryFn);
 		transactionExpiryFn.addToRolePolicy(ssmPolicy);
+		transactionExpiryFn.addToRolePolicy(kmsDecryptPolicy);
 		// Run every 15 minutes to check for expired wallet top-ups
 		// Also checks gallery transactions (3 days expiry)
 		new Rule(this, 'TransactionExpirySchedule', {
@@ -2233,7 +2331,7 @@ export class AppStack extends Stack {
 		// SQS Queue to batch delete operations - reduces Lambda invocations significantly
 		// For 3000 deletes: without batching = 3000 invocations, with batching (batch size 10) = 300 invocations
 		const deleteQueue = new Queue(this, 'DeleteOperationsQueue', {
-			queueName: `PhotoHub-${props.stage}-DeleteOperationsQueue`,
+			queueName: `PixiProof-${props.stage}-DeleteOperationsQueue`,
 			encryption: QueueEncryption.SQS_MANAGED,
 			visibilityTimeout: Duration.minutes(3), // Must be > Lambda timeout (2 min) + processing time
 			receiveMessageWaitTime: Duration.seconds(20), // Long polling for cost efficiency
@@ -2244,6 +2342,7 @@ export class AppStack extends Stack {
 		// Processes deletes in batches (optimal batch size: 6 per batch, 10 batches per invocation)
 		// Consumes from SQS queue with batching to reduce invocations
 		const deleteBatchFn = new NodejsFunction(this, 'ImagesOnS3DeleteBatchFn', {
+			functionName: prefixName('imagesOnS3DeleteBatch'),
 			entry: path.join(__dirname, '../../../backend/functions/images/onS3DeleteBatch.ts'),
 			handler: 'handler',
 			runtime: Runtime.NODEJS_20_X,
@@ -2326,9 +2425,9 @@ export class AppStack extends Stack {
 			enableAcceptEncodingBrotli: true,
 			// Only include 'v' query parameter in cache key (for cache-busting)
 			// This improves cache hit ratio by ignoring irrelevant query parameters
-			queryStringBehavior: CacheQueryStringBehavior.allowList(['v']),
+			queryStringBehavior: CacheQueryStringBehavior.allowList(...['v']),
 			// Forward ETag header for better cache validation (304 Not Modified responses)
-			headerBehavior: CacheHeaderBehavior.allowList(['ETag', 'If-None-Match', 'If-Modified-Since']),
+			headerBehavior: CacheHeaderBehavior.allowList(...['ETag', 'If-None-Match', 'If-Modified-Since']),
 			// Don't include cookies in cache key (standard for images)
 			cookieBehavior: CacheCookieBehavior.none()
 		});
@@ -2356,12 +2455,14 @@ export class AppStack extends Stack {
 
 		// Create CloudFront distribution with OAC
 		// S3BucketOrigin.withOriginAccessControl() automatically creates OAC and sets up bucket policy
+		const s3Origin = S3BucketOrigin.withOriginAccessControl(galleriesBucket, {
+			originAccessControlName: `PhotoCloud-${props.stage}-OAC`,
+			description: `Origin Access Control for PhotoCloud ${props.stage} galleries bucket`
+		});
+
 		const dist = new Distribution(this, 'PreviewsDistribution', {
 			defaultBehavior: {
-				origin: S3BucketOrigin.withOriginAccessControl(galleriesBucket, {
-					originAccessControlName: `PhotoCloud-${props.stage}-OAC`,
-					description: `Origin Access Control for PhotoCloud ${props.stage} galleries bucket`
-				}),
+				origin: s3Origin,
 				cachePolicy: imageCachePolicy,
 				responseHeadersPolicy: corsResponseHeadersPolicy,
 				allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
@@ -2369,6 +2470,22 @@ export class AppStack extends Stack {
 			},
 			priceClass: PriceClass.PRICE_CLASS_100,
 			comment: `PhotoCloud previews ${props.stage}`
+		});
+
+		// Add behavior for ZIP files (galleries/*/zips/*)
+		// Uses AWS managed CachingOptimized policy for better cache performance on ZIP files
+		dist.addBehavior('galleries/*/zips/*', s3Origin, {
+			cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+			allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+			viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS
+		});
+
+		// Add behavior for final ZIP files (galleries/*/orders/*/final-zip/*)
+		// Uses AWS managed CachingOptimized policy for better cache performance on final ZIP files
+		dist.addBehavior('galleries/*/orders/*/final-zip/*', s3Origin, {
+			cachePolicy: CachePolicy.CACHING_OPTIMIZED,
+			allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+			viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS
 		});
 		
 		// Explicitly add bucket policy for CloudFront OAC access to ensure it works correctly
@@ -2429,8 +2546,8 @@ export class AppStack extends Stack {
 		// CloudFront key pair for signed URLs (for ZIP downloads)
 		// NOTE: These parameters must be created manually with actual values:
 		// 1. Create CloudFront key pair in AWS Console: https://console.aws.amazon.com/cloudfront/v3/home#/public-key
-		// 2. Store private key in SSM: aws ssm put-parameter --name "/PhotoHub/{stage}/CloudFrontPrivateKey" --type "SecureString" --value "$(cat private-key.pem)"
-		// 3. Store key pair ID in SSM: aws ssm put-parameter --name "/PhotoHub/{stage}/CloudFrontKeyPairId" --type "String" --value "K1234567890ABC"
+		// 2. Store private key in SSM: aws ssm put-parameter --name "/PixiProof/{stage}/CloudFrontPrivateKey" --type "SecureString" --value "$(cat private-key.pem)"
+		// 3. Store key pair ID in SSM: aws ssm put-parameter --name "/PixiProof/{stage}/CloudFrontKeyPairId" --type "String" --value "K1234567890ABC"
 		// The parameters are created here as placeholders - actual values must be set manually
 		const cloudfrontKeyPairIdParam = new StringParameter(this, 'CloudFrontKeyPairIdParam', {
 			parameterName: `${ssmParameterPrefix}/CloudFrontKeyPairId`,
@@ -2539,9 +2656,22 @@ export class AppStack extends Stack {
 		new CfnOutput(this, 'OrdersTableName', { value: orders.tableName });
 		new CfnOutput(this, 'UserPoolId', { value: userPool.userPoolId });
 		new CfnOutput(this, 'UserPoolClientId', { value: userPoolClient.userPoolClientId });
-		new CfnOutput(this, 'UserPoolDomain', { value: userPoolDomain.domainName });
-		new CfnOutput(this, 'HttpApiUrl', { value: httpApi.apiEndpoint });
-		new CfnOutput(this, 'PreviewsDomainName', { value: dist.distributionDomainName });
+		new CfnOutput(this, 'UserPoolDomain', {
+			value: userPoolDomain.domainName,
+			description: 'Cognito domain (e.g. pixiproof-<stage>.auth.<region>.amazoncognito.com)'
+		});
+		new CfnOutput(this, 'CognitoHostedUiBaseUrl', {
+			value: `https://${userPoolDomain.domainName}`,
+			description: 'Cognito Hosted UI base URL for sign-in/sign-up'
+		});
+		new CfnOutput(this, 'HttpApiUrl', {
+			value: httpApi.apiEndpoint,
+			description: 'API Gateway URL (API Lambda / backend base URL)'
+		});
+		new CfnOutput(this, 'PreviewsDomainName', {
+			value: dist.distributionDomainName,
+			description: 'CloudFront distribution domain (image CDN)'
+		});
 		new CfnOutput(this, 'PreviewsDistributionId', { value: dist.distributionId });
 		new CfnOutput(this, 'PostAuthenticationLambdaArn', {
 			value: postAuthenticationFn.functionArn,
@@ -2552,17 +2682,13 @@ export class AppStack extends Stack {
 		// This prevents CDK from optimizing it away if it's not referenced elsewhere
 		stripePaymentMethodsParam.parameterName;
 
-		// Note: HttpLambdaIntegration automatically creates individual permissions for each route
-		// We have a wildcard permission above that covers all routes, but individual permissions
-		// still get created and count toward the 20KB limit.
+		// Note: Routes for apiFn and authFn use CfnIntegration instead of HttpLambdaIntegration
+		// to prevent automatic permission creation. This avoids hitting the 20KB Lambda policy
+		// size limit when many routes exist. Wildcard permissions are added for both apiFn and
+		// authFn to allow API Gateway to invoke them.
 		// 
-		// Solution: After the first deployment (which may fail due to limit), manually remove
-		// individual permissions using the script: scripts/cleanup-lambda-permissions.mjs
-		// Or delete them via AWS Console: Lambda > apiFn > Configuration > Permissions
-		// 
-		// Once individual permissions are removed, the wildcard permission will be sufficient
-		// and future deployments should work (though HttpLambdaIntegration will try to recreate
-		// them, which may cause issues - this is a known CDK limitation).
+		// Payment routes still use HttpLambdaIntegration since they use separate Lambda functions
+		// with only a few routes each, so they won't hit the policy size limit.
 	}
 }
 

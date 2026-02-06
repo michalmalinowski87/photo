@@ -44,12 +44,54 @@ export async function createTransaction(
 		metadata?: Record<string, any>;
 		refId?: string;
 		composites?: string[]; // List of items/components in this transaction
+		idempotencyKey?: string; // Optional idempotency key to prevent duplicates
 	}
 ): Promise<string> {
 	const envProc = (globalThis as any).process || process;
 	const transactionsTable = envProc?.env?.TRANSACTIONS_TABLE as string;
 	if (!transactionsTable) {
 		throw new Error('TRANSACTIONS_TABLE environment variable not set');
+	}
+
+	// For wallet top-ups, check for recent UNPAID transactions of the same type and amount
+	// This prevents duplicate transactions when checkoutCreate is called multiple times
+	if (type === 'WALLET_TOPUP' && !options.idempotencyKey) {
+		try {
+			// Check for UNPAID transactions created in the last 5 minutes with same amount
+			const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+			const result = await ddb.send(new QueryCommand({
+				TableName: transactionsTable,
+				KeyConditionExpression: 'userId = :u',
+				FilterExpression: '#type = :type AND #status = :status AND amountCents = :amount AND createdAt > :time',
+				ExpressionAttributeValues: {
+					':u': userId,
+					':type': type,
+					':status': 'UNPAID',
+					':amount': amountCents,
+					':time': fiveMinutesAgo
+				},
+				ExpressionAttributeNames: {
+					'#type': 'type',
+					'#status': 'status'
+				},
+				ScanIndexForward: false, // Most recent first
+				Limit: 1
+			}));
+
+			if (result.Items && result.Items.length > 0) {
+				const existingTransaction = result.Items[0] as Transaction;
+				// Return existing transaction ID instead of creating a duplicate
+				return existingTransaction.transactionId;
+			}
+		} catch (err: any) {
+			// If query fails, log but continue with creating new transaction
+			// This ensures we don't block transaction creation if there's a DynamoDB issue
+			console.warn('Failed to check for existing transaction, creating new one', {
+				error: err?.message,
+				userId,
+				type
+			});
+		}
 	}
 
 	const now = new Date().toISOString();

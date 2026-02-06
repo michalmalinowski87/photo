@@ -332,7 +332,7 @@ T+6s:  Success page polls → finds payment record → redirects
 
 Check Lambda logs for event processing:
 ```bash
-aws logs tail /aws/lambda/PhotoHub-dev-PaymentsWebhookFn --follow
+aws logs tail /aws/lambda/dev-paymentsWebhook --follow
 ```
 
 Look for:

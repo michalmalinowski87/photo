@@ -19,7 +19,7 @@ This script will check:
 
 ```bash
 aws dynamodb get-item \
-  --table-name PhotoHub-dev-Users \
+  --table-name dev-users \
   --key '{"userId": {"S": "YOUR_USER_ID"}}' \
   --query 'Item' \
   --output json
@@ -47,7 +47,7 @@ If schedule doesn't exist:
 ```bash
 # Get recent logs from the API Lambda (which handles trigger-deletion endpoint)
 aws logs filter-log-events \
-  --log-group-name /aws/lambda/PhotoHub-dev-ApiFn \
+  --log-group-name /aws/lambda/dev-apiLambda \
   --filter-pattern "trigger-deletion YOUR_USER_ID" \
   --start-time $(($(date +%s) - 3600))000 \
   --region YOUR_REGION
@@ -85,7 +85,7 @@ Look for:
 
 ```bash
 aws sqs receive-message \
-  --queue-url https://sqs.YOUR_REGION.amazonaws.com/YOUR_ACCOUNT/PhotoHub-dev-UserDeletionDLQ \
+  --queue-url https://sqs.YOUR_REGION.amazonaws.com/YOUR_ACCOUNT/PixiProof-dev-UserDeletionDLQ \
   --max-number-of-messages 10 \
   --region YOUR_REGION
 ```
@@ -109,7 +109,7 @@ Failed Lambda invocations will appear here.
 ```bash
 # Check trigger Lambda logs for errors
 aws logs filter-log-events \
-  --log-group-name /aws/lambda/PhotoHub-dev-ApiFn \
+  --log-group-name /aws/lambda/dev-apiLambda \
   --filter-pattern "trigger-deletion" \
   --start-time $(($(date +%s) - 3600))000
 ```
@@ -136,7 +136,7 @@ aws logs filter-log-events \
 3. Check Dead Letter Queue for failed invocations
 4. Verify Lambda function name/ARN in SSM:
    ```bash
-   aws ssm get-parameter --name /PhotoHub/dev/UserDeletionLambdaArn
+   aws ssm get-parameter --name /PixiProof/dev/UserDeletionLambdaArn
    ```
 
 ### Issue: Lambda invocation failed
@@ -149,7 +149,7 @@ aws logs filter-log-events \
 
 1. **ResourceNotFoundException**
    - Lambda function name/ARN is incorrect
-   - Check SSM parameter: `/PhotoHub/dev/UserDeletionLambdaArn`
+   - Check SSM parameter: `/PixiProof/dev/UserDeletionLambdaArn`
    - Verify Lambda exists: `aws lambda list-functions --query 'Functions[?contains(FunctionName, `UserDeletion`)]'`
 
 2. **AccessDeniedException**
@@ -179,12 +179,12 @@ aws logs filter-log-events \
 **Debug:**
 ```bash
 # Check SSM parameters
-aws ssm get-parameter --name /PhotoHub/dev/UserDeletionScheduleRoleArn
-aws ssm get-parameter --name /PhotoHub/dev/UserDeletionDlqArn
+aws ssm get-parameter --name /PixiProof/dev/UserDeletionScheduleRoleArn
+aws ssm get-parameter --name /PixiProof/dev/UserDeletionDlqArn
 
 # Check trigger logs for schedule creation errors
 aws logs filter-log-events \
-  --log-group-name /aws/lambda/PhotoHub-dev-ApiFn \
+  --log-group-name /aws/lambda/dev-apiLambda \
   --filter-pattern "schedule" \
   --start-time $(($(date +%s) - 3600))000
 ```
@@ -255,7 +255,7 @@ If deletion still doesn't work after checking all the above:
 2. Collect relevant CloudWatch logs
 3. Check SSM parameters:
    ```bash
-   aws ssm get-parameters-by-path --path /PhotoHub/dev/ --recursive
+   aws ssm get-parameters-by-path --path /PixiProof/dev/ --recursive
    ```
 4. Verify Lambda function exists and has correct permissions
 5. Check IAM roles for both trigger and deletion Lambdas

@@ -19,7 +19,7 @@ function asNonEmptyString(value: unknown): string | undefined {
 
 /**
  * Reads a single parameter from SSM Parameter Store
- * @param parameterName - Full parameter name (e.g., /PhotoHub/dev/CognitoUserPoolId)
+ * @param parameterName - Full parameter name (e.g., /PixiProof/dev/CognitoUserPoolId)
  * @param useCache - Whether to use cached value (default: true)
  * @returns Parameter value or undefined if not found
  */
@@ -135,7 +135,7 @@ export async function getConfigFromSsm(
 	stage: string,
 	configKeys: string[]
 ): Promise<Record<string, string | undefined>> {
-	const parameterNames = configKeys.map(key => `/PhotoHub/${stage}/${key}`);
+	const parameterNames = configKeys.map(key => `/PixiProof/${stage}/${key}`);
 	const parameters = await getSsmParameters(parameterNames);
 	
 	// Map back to config keys
@@ -157,7 +157,7 @@ export async function getConfigValueFromSsm(
 	stage: string,
 	configKey: string
 ): Promise<string | undefined> {
-	const parameterName = `/PhotoHub/${stage}/${configKey}`;
+	const parameterName = `/PixiProof/${stage}/${configKey}`;
 	return getSsmParameter(parameterName);
 }
 
@@ -173,7 +173,7 @@ export type RequiredConfigOptions = {
  * Gets a required configuration value.
  *
  * Rules:
- * - In AWS Lambda: must be present in SSM (/PhotoHub/<stage>/<key>), no env fallback.
+ * - In AWS Lambda: must be present in SSM (/PixiProof/<stage>/<key>), no env fallback.
  * - Locally: must be present in process.env[envVarName] (if provided).
  */
 export async function getRequiredConfigValue(
@@ -184,7 +184,7 @@ export async function getRequiredConfigValue(
 	const envProc = (globalThis as any).process;
 
 	if (isRunningInLambda()) {
-		const parameterName = `/PhotoHub/${stage}/${configKey}`;
+		const parameterName = `/PixiProof/${stage}/${configKey}`;
 		const ssmValue = asNonEmptyString(await getSsmParameter(parameterName));
 		if (!ssmValue) {
 			throw new Error(
@@ -200,7 +200,7 @@ export async function getRequiredConfigValue(
 		if (!envValue) {
 			throw new Error(
 				`Missing required environment variable: ${options.envVarName}. ` +
-					`This is required for local development. (SSM key: /PhotoHub/${stage}/${configKey})`
+					`This is required for local development. (SSM key: /PixiProof/${stage}/${configKey})`
 			);
 		}
 		return envValue;
@@ -208,7 +208,7 @@ export async function getRequiredConfigValue(
 
 	throw new Error(
 		`Missing required configuration for local development: env var not specified. ` +
-			`(SSM key: /PhotoHub/${stage}/${configKey})`
+			`(SSM key: /PixiProof/${stage}/${configKey})`
 	);
 }
 

@@ -133,9 +133,6 @@ export default function UndoDeletion() {
       <div className="flex items-center w-full py-8 border-b border-border/80 mb-8">
         <Link href="/login" className="flex flex-col items-start gap-1">
           <span className="text-2xl font-bold text-brand-500">PixiProof</span>
-          <span className="text-xs text-gray-600 font-medium tracking-wide">
-            Your photos. Their stories.
-          </span>
         </Link>
       </div>
 

@@ -13,6 +13,15 @@ let stripePaymentMethodsCacheTimestamp = 0;
 const PAYMENT_METHODS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
 /**
+ * Clear payment methods cache (useful for testing or when SSM parameter is updated)
+ */
+export function clearStripePaymentMethodsCache(): void {
+	stripePaymentMethodsCache = null;
+	stripePaymentMethodsCacheTimestamp = 0;
+	stripePaymentMethodsPromise = null;
+}
+
+/**
  * Gets Stripe secret key from SSM Parameter Store with fallback to environment variable
  * Uses caching to avoid repeated SSM calls
  */
@@ -107,7 +116,9 @@ export async function getStripePaymentMethods(): Promise<string[]> {
 	}
 
 	// Default payment methods (backward compatibility)
-	const defaultPaymentMethods = ['card', 'blik', 'p24'];
+	// Note: apple_pay and google_pay are not valid payment method types for Stripe Checkout
+	// They are automatically available when using 'card' if the customer's browser supports them
+	const defaultPaymentMethods = ['card', 'blik', 'p24', 'paypal'];
 
 	// Load from SSM with env var fallback
 	const stage = process.env.STAGE || 'dev';

@@ -207,9 +207,6 @@ const Footer = () => {
             <p className="text-sm text-muted-foreground">
               &copy; {new Date().getFullYear()} PixiProof. Wszelkie prawa zastrzeżone.
             </p>
-            <p className="text-xs text-muted-foreground mt-1 font-medium tracking-wide">
-              Your photos. Their stories.
-            </p>
             {company && (
               <div className="mt-3 text-xs text-muted-foreground text-center md:text-left">
                 <p className="mb-1">

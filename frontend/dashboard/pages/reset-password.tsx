@@ -177,9 +177,6 @@ export default function ResetPassword() {
           <span className="text-2xl font-bold" style={{ color: "#465fff" }}>
             PixiProof
           </span>
-          <span className="text-xs text-gray-600 font-medium tracking-wide">
-            Your photos. Their stories.
-          </span>
         </Link>
       </div>
 

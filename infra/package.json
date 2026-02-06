@@ -10,7 +10,10 @@
     "synth": "cdk synth",
     "diff": "cdk diff",
     "deploy": "cdk deploy",
-    "deploy:auto": "./deploy.sh"
+    "deploy:auto": "./deploy.sh",
+    "deploy:dev": "./deploy.sh dev",
+    "deploy:staging": "./deploy.sh staging",
+    "deploy:prod": "./deploy.sh prod"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.154.0",

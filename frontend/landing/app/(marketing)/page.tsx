@@ -46,9 +46,6 @@ export default function HomePage() {
             <div className="col-lg-6 col-md-12 col-12">
               <div className="header-content">
                 <h1>PixiProof - Intuicyjne udostępnianie zdjęć, które działa dla Ciebie</h1>
-                <p className="text-base text-gray-600 mt-2 font-medium italic">
-                  Your photos. Their stories.
-                </p>
                 <p>
                   Zaprojektowany przez fotografów z ponad 15-letnim doświadczeniem, z naciskiem na
                   prostotę i funkcjonalność. Oszczędzaj czas i poprawiaj interakcje z klientami

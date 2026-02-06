@@ -1,7 +1,11 @@
 import { getJWTFromEvent } from './jwt';
 
 export function getUserIdFromEvent(event: any): string {
-	const claims = event?.requestContext?.authorizer?.jwt?.claims || {};
+	// HTTP API v2 JWT authorizers put claims directly at authorizer.claims
+	// (not authorizer.jwt.claims like REST API)
+	const claims = event?.requestContext?.authorizer?.jwt?.claims || 
+	               event?.requestContext?.authorizer?.claims || 
+	               {};
 	return claims.sub || claims.username || '';
 }
 

@@ -163,7 +163,7 @@ export const handler = lambdaLogger(async (event: LambdaEvent, context: LambdaCo
 					body: JSON.stringify({
 						error: 'Missing GalleryPasswordEncryptionSecret',
 						message:
-							'Gallery password encryption secret is not configured. Set SSM /PhotoHub/<stage>/GalleryPasswordEncryptionSecret or env GALLERY_PASSWORD_ENCRYPTION_SECRET.',
+							'Gallery password encryption secret is not configured. Set SSM /PixiProof/<stage>/GalleryPasswordEncryptionSecret or env GALLERY_PASSWORD_ENCRYPTION_SECRET.',
 					}),
 				};
 			}

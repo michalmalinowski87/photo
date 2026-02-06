@@ -3,7 +3,7 @@
  * Script to manually mark a gallery as "Sent To Client"
  * 
  * Usage:
- *   STAGE=dev GALLERIES_TABLE=PhotoHub-dev-GalleriesTable ORDERS_TABLE=PhotoHub-dev-OrdersTable \
+ *   STAGE=dev GALLERIES_TABLE=dev-galleries ORDERS_TABLE=dev-orders \
  *   node -r ts-node/register scripts/mark-gallery-sent.ts <galleryId> [clientEmail] [password]
  * 
  * If clientEmail and password are not provided, they will be set to defaults:
@@ -19,8 +19,8 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 async function markGalleryAsSent(galleryId: string, clientEmail?: string, password?: string) {
 	const stage = process.env.STAGE || 'dev';
-	const galleriesTable = process.env.GALLERIES_TABLE || `PhotoHub-${stage}-GalleriesTable`;
-	const ordersTable = process.env.ORDERS_TABLE || `PhotoHub-${stage}-OrdersTable`;
+	const galleriesTable = process.env.GALLERIES_TABLE || `${stage}-galleries`;
+	const ordersTable = process.env.ORDERS_TABLE || `${stage}-orders`;
 	
 	const defaultEmail = clientEmail || 'client@example.com';
 	const defaultPassword = password || 'password123';

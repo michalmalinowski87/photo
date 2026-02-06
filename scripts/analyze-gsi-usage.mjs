@@ -33,10 +33,28 @@ const cloudWatch = new CloudWatchClient({});
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-// Table name patterns - CDK generates names like PhotoHub-{stage}-GalleriesTableXXXXXXXX
+// Table name patterns - CDK generates names like {stage}-galleries
 function tableNamePattern(logicalName) {
-	// Match both AppStack-TableName-XXX and PhotoHub-{stage}-TableName patterns
-	return new RegExp(`(AppStack|PhotoHub)[-\\w]*${logicalName}`);
+	// Match both AppStack-TableName-XXX and {stage}-TableName patterns
+	// Note: With prefixes, tables are named like dev-galleries, staging-galleries, etc.
+	const logicalToPrefix = {
+		'GalleriesTable': 'galleries',
+		'OrdersTable': 'orders',
+		'PaymentsTable': 'payments',
+		'WalletsTable': 'wallets',
+		'WalletLedgerTable': 'wallet-ledger',
+		'TransactionsTable': 'transactions',
+		'ClientsTable': 'clients',
+		'PackagesTable': 'packages',
+		'NotificationsTable': 'notifications',
+		'UsersTable': 'users',
+		'SubdomainsTable': 'subdomains',
+		'EmailCodeRateLimitTable': 'email-code-rate-limit',
+		'ReferralCodeValidationTable': 'referral-code-validation',
+		'ImagesTable': 'images'
+	};
+	const prefixName = logicalToPrefix[logicalName] || logicalName.toLowerCase();
+	return new RegExp(`${STAGE}-${prefixName}`);
 }
 
 const GSI_DEFINITIONS = [

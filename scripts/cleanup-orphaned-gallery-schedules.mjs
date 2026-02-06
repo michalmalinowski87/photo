@@ -38,7 +38,7 @@ const ddb = DynamoDBDocumentClient.from(ddbClient);
 const scheduler = new SchedulerClient({ region });
 
 // Table names based on stage
-const galleriesTable = `PhotoHub-${stage}-Galleries`;
+const galleriesTable = `${stage}-galleries`;
 
 // Schedule name prefix for gallery expiration schedules
 const GALLERY_SCHEDULE_PREFIX = 'gallery-expiry-';

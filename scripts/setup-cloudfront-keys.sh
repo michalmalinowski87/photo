@@ -68,7 +68,7 @@ if ! grep -q "BEGIN RSA PRIVATE KEY\|BEGIN PRIVATE KEY" "$PRIVATE_KEY_FILE"; the
 fi
 
 # Set SSM parameter paths
-SSM_PREFIX="/PhotoHub/$STAGE"
+SSM_PREFIX="/PixiProof/$STAGE"
 PRIVATE_KEY_PARAM="$SSM_PREFIX/CloudFrontPrivateKey"
 KEY_PAIR_ID_PARAM="$SSM_PREFIX/CloudFrontKeyPairId"
 

@@ -3,7 +3,7 @@ import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { encryptClientGalleryPassword, hashClientGalleryPassword } from '../backend/lib/src/client-gallery-password';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'eu-west-1' }));
-const galleriesTable = 'PhotoHub-dev-GalleriesTable3EDF46DA-1484QIJYZKFE';
+const galleriesTable = 'dev-galleries'; // Update with actual table name if needed
 const galleryId = 'gal_1765569706203_4r1z52';
 const originalEmail = 'm.d.malinowski87@gmail.com';
 const password = 'password123';

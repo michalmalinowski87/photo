@@ -66,7 +66,7 @@ async function findUsersTable() {
   console.log('🔍 Finding Users table...');
   try {
     const result = await ddbClient.send(new ListTablesCommand({}));
-    const tablePattern = `PhotoHub-${stage}-UsersTable`;
+    const tablePattern = `${stage}-users`;
     const matchingTables = result.TableNames?.filter(name => 
       name.startsWith(tablePattern)
     ) || [];

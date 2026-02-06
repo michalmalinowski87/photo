@@ -11,7 +11,6 @@
     }
   },
   "references": [
-    { "path": "packages/tsconfig" },
     { "path": "packages/config" },
     { "path": "packages/logger" },
     { "path": "packages/posthog-types" },

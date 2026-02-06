@@ -48,7 +48,7 @@ router.post('/request-deletion', async (req: Request, res: Response) => {
 		return res.status(500).json({
 			error: 'Missing deletion scheduler configuration',
 			message:
-				`Missing one or more required SSM parameters under /PhotoHub/${stage}: ` +
+				`Missing one or more required SSM parameters under /PixiProof/${stage}: ` +
 				'UserDeletionLambdaArn, UserDeletionScheduleRoleArn, UserDeletionDlqArn',
 		});
 	}

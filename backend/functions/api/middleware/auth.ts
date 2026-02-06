@@ -21,9 +21,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 	const userId = getUserIdFromRequest(req);
 	const requestContext = (req as any).requestContext || {};
 	const hasAuthorizer = !!requestContext.authorizer;
+	// HTTP API v2 JWT authorizers put claims directly at authorizer.claims (not authorizer.jwt.claims)
 	const hasJWT = !!requestContext.authorizer?.jwt;
-	const hasClaims = !!requestContext.authorizer?.jwt?.claims;
+	const hasClaims = !!(requestContext.authorizer?.jwt?.claims || requestContext.authorizer?.claims);
 	
+	// Debug: Log full requestContext structure for troubleshooting
 	if (!userId) {
 		const logger = (req as any).logger;
 		logger?.warn('Auth check failed', {
@@ -34,6 +36,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 			hasJWT,
 			hasClaims,
 			authorizerKeys: requestContext.authorizer ? Object.keys(requestContext.authorizer) : [],
+			requestContextKeys: Object.keys(requestContext),
+			// Log full authorizer structure (sanitized - no sensitive data)
+			authorizerStructure: requestContext.authorizer ? JSON.stringify({
+				hasJwt: !!requestContext.authorizer.jwt,
+				jwtKeys: requestContext.authorizer.jwt ? Object.keys(requestContext.authorizer.jwt) : [],
+				hasClaims: !!requestContext.authorizer.jwt?.claims,
+				claimKeys: requestContext.authorizer.jwt?.claims ? Object.keys(requestContext.authorizer.jwt.claims) : []
+			}) : 'no authorizer',
 			ip: req.ip || req.headers['x-forwarded-for']
 		});
 		return res.status(401).json({ 

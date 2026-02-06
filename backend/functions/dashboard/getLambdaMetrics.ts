@@ -42,7 +42,7 @@ export const handler = lambdaLogger(async (event: any, context: any) => {
 	try {
 		// List all Lambda functions for this stack
 		const listFunctionsResponse = await lambda.send(new ListFunctionsCommand({}));
-		const functionPrefix = `PhotoHub-${stage}-`;
+		const functionPrefix = `PixiProof-${stage}-`;
 		const functions = listFunctionsResponse.Functions?.filter(fn => 
 			fn.FunctionName?.startsWith(functionPrefix)
 		) || [];

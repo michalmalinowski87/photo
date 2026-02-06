@@ -138,9 +138,6 @@ export default function NavbarBusiness() {
                     <span className="brand-text-white">
                       PixiProof
                     </span>
-                    <span className="text-xs text-white/70 mt-0.5 font-medium tracking-wide">
-                      Your photos. Their stories.
-                    </span>
                   </div>
                 </Link>
                 <button
@@ -258,9 +255,6 @@ export default function NavbarBusiness() {
               <div className="flex flex-col items-start">
                 <span className="brand-text-black">
                   PixiProof
-                </span>
-                <span className="text-xs text-gray-600 mt-0.5 font-medium tracking-wide">
-                  Your photos. Their stories.
                 </span>
               </div>
             </Link>
