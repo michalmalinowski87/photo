@@ -596,28 +596,20 @@ export class AppStack extends Stack {
 			description: 'JWT secret for client gallery authentication'
 		});
 
-		// Client gallery password encryption secret (used to encrypt `clientPasswordEncrypted` in DynamoDB).
-		// NOTE: Stored as plain String to match the existing config approach in this stack.
-		// If you want stronger protection, migrate this to Secrets Manager or SecureString + kms:Decrypt permissions.
-		const galleryPasswordEncryptionSecretParam = new StringParameter(this, 'GalleryPasswordEncryptionSecretParam', {
-			parameterName: `${ssmParameterPrefix}/GalleryPasswordEncryptionSecret`,
-			stringValue: galleryPasswordEncryptionSecret,
-			description: 'Secret used to encrypt client gallery passwords stored in DynamoDB (AES-256-GCM, versioned)'
-		});
+		// Client gallery password encryption secret (used to encrypt `clientPasswordEncryptionSecret` in DynamoDB).
+		// NOTE: This parameter must be created manually as SecureString (CDK cannot create SecureString parameters).
+		// Run: ./scripts/migrate-secrets-to-secure-string.sh <stage>
+		// Or manually: aws ssm put-parameter --name "/PixiProof/{stage}/GalleryPasswordEncryptionSecret" --type "SecureString" --value "<secret>"
+		// Lambda functions use kms:Decrypt via SSM with WithDecryption=true (see kmsDecryptPolicy and ssm-config.ts).
+		// The parameter is referenced but not created by CDK (similar to CloudFrontPrivateKey).
 
-		// Stripe configuration - Using String type (SecureString deprecated in CDK)
-		// For production, consider migrating to AWS Secrets Manager
-		const stripeSecretKeyParam = new StringParameter(this, 'StripeSecretKeyParam', {
-			parameterName: `${ssmParameterPrefix}/StripeSecretKey`,
-			stringValue: stripeKeyFromEnv,
-			description: 'Stripe secret key for payment processing'
-		});
-
-		const stripeWebhookSecretParam = new StringParameter(this, 'StripeWebhookSecretParam', {
-			parameterName: `${ssmParameterPrefix}/StripeWebhookSecret`,
-			stringValue: stripeWebhookSecretFromEnv,
-			description: 'Stripe webhook secret for webhook verification'
-		});
+		// Stripe configuration - stored as SecureString in SSM (encrypted at rest).
+		// NOTE: These parameters must be created manually as SecureString (CDK cannot create SecureString parameters).
+		// Run: ./scripts/migrate-secrets-to-secure-string.sh <stage>
+		// Or manually:
+		//   aws ssm put-parameter --name "/PixiProof/{stage}/StripeSecretKey" --type "SecureString" --value "<key>"
+		//   aws ssm put-parameter --name "/PixiProof/{stage}/StripeWebhookSecret" --type "SecureString" --value "<secret>"
+		// The parameters are referenced but not created by CDK (similar to CloudFrontPrivateKey).
 
 		// Stripe payment methods configuration
 		// Default payment methods: card, blik, p24, paypal

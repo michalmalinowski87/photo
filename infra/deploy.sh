@@ -156,6 +156,27 @@ fi
 cd "$SCRIPT_DIR"
 echo "✓ Lambda layer built successfully ($(du -sh "$LAYER_DIR/nodejs/node_modules" | cut -f1))"
 
+# Migrate secrets to SecureString (if needed)
+# This ensures GalleryPasswordEncryptionSecret, StripeSecretKey, and StripeWebhookSecret
+# are stored as SecureString (encrypted at rest) rather than plain String
+echo "Migrating secrets to SecureString..."
+if [ -f "$SCRIPT_DIR/../scripts/migrate-secrets-to-secure-string.sh" ]; then
+  # Source env vars if .env file exists
+  if [ -f "$SCRIPT_DIR/.env.$STAGE.local" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env.$STAGE.local"
+    set +a
+  fi
+  # Run migration script in non-interactive mode (will use existing SSM values if env vars not set)
+  "$SCRIPT_DIR/../scripts/migrate-secrets-to-secure-string.sh" --yes "$STAGE" || {
+    echo "Warning: Secret migration had issues. Continuing deployment..."
+    echo "You may need to run: ./scripts/migrate-secrets-to-secure-string.sh $STAGE"
+  }
+else
+  echo "Warning: Migration script not found. Secrets may not be SecureString."
+  echo "Run manually: ./scripts/migrate-secrets-to-secure-string.sh $STAGE"
+fi
+
 # Check for conflicting resources before deploying
 echo "Checking for conflicting resources..."
 if ! "$SCRIPT_DIR/check-conflicting-resources.sh" "$STAGE"; then
